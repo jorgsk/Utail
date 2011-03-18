@@ -1,6 +1,8 @@
+# A comment -- dashed lines are ignored. How convenient!
 [DATASETS]
 # The read files must be either gem-files, zipped gem-files, bed-files, or
 # zipped bedfiles. The extensions must thus be either of: .map.gz, .gem.map.gz,
+#
 # .bed, or .bed.gz.
 
 # K562_Cytoplasm = /users/rg/projects/NGS/Projects/ENCODE/hg19main/GingerasCarrie/001C/genome/LID8465_FC61LTAAAXX_5_1.gem.map.gz:/users/rg/projects/NGS/Projects/ENCODE/hg19main/GingerasCarrie/001C/genome/LID8465_FC61LTAAAXX_5_2.gem.map.gz:/users/rg/projects/NGS/Projects/ENCODE/hg19main/GingerasCarrie/001C/genome/LID8465_FC61LTAAAXX_6_1.gem.map.gz:/users/rg/projects/NGS/Projects/ENCODE/hg19main/GingerasCarrie/001C/genome/LID8465_FC61LTAAAXX_6_2.gem.map.gz:/users/rg/projects/NGS/Projects/ENCODE/hg19main/GingerasCarrie/001C/genome/LID8465_FC61LTAAAXX_7_1.gem.map.gz:/users/rg/projects/NGS/Projects/ENCODE/hg19main/GingerasCarrie/001C/genome/LID8465_FC61LTAAAXX_7_2.gem.map.gz
