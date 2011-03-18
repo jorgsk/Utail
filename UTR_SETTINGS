@@ -1,0 +1,105 @@
+[DATASETS]
+# The read files must be either gem-files, zipped gem-files, bed-files, or
+# zipped bedfiles. The extensions must thus be either of: .map.gz, .gem.map.gz,
+# .bed, or .bed.gz.
+
+# K562_Cytoplasm = /users/rg/projects/NGS/Projects/ENCODE/hg19main/GingerasCarrie/001C/genome/LID8465_FC61LTAAAXX_5_1.gem.map.gz:/users/rg/projects/NGS/Projects/ENCODE/hg19main/GingerasCarrie/001C/genome/LID8465_FC61LTAAAXX_5_2.gem.map.gz:/users/rg/projects/NGS/Projects/ENCODE/hg19main/GingerasCarrie/001C/genome/LID8465_FC61LTAAAXX_6_1.gem.map.gz:/users/rg/projects/NGS/Projects/ENCODE/hg19main/GingerasCarrie/001C/genome/LID8465_FC61LTAAAXX_6_2.gem.map.gz:/users/rg/projects/NGS/Projects/ENCODE/hg19main/GingerasCarrie/001C/genome/LID8465_FC61LTAAAXX_7_1.gem.map.gz:/users/rg/projects/NGS/Projects/ENCODE/hg19main/GingerasCarrie/001C/genome/LID8465_FC61LTAAAXX_7_2.gem.map.gz
+
+# K562_Nucleus = /users/rg/projects/NGS/Projects/ENCODE/hg19main/GingerasCarrie/001N/genome/LID8556_FC62067AAXX_1_2.gem.map.gz:/users/rg/projects/NGS/Projects/ENCODE/hg19main/GingerasCarrie/001N/genome/LID8556_FC62067AAXX_3_2.gem.map.gz:/users/rg/projects/NGS/Projects/ENCODE/hg19main/GingerasCarrie/001N/genome/LID8556_FC62067AAXX_2_1.gem.map.gz:/users/rg/projects/NGS/Projects/ENCODE/hg19main/GingerasCarrie/001N/genome/LID8556_FC62067AAXX_1_1.gem.map.gz:/users/rg/projects/NGS/Projects/ENCODE/hg19main/GingerasCarrie/001N/genome/LID8556_FC62067AAXX_2_2.gem.map.gz:/users/rg/projects/NGS/Projects/ENCODE/hg19main/GingerasCarrie/001N/genome/LID8556_FC62067AAXX_3_1.gem.map.gz
+
+K562_Whole_Cell = /users/rg/projects/NGS/Projects/ENCODE/hg19main/GingerasCarrie/001WC/genome/LID16627_FC61U30AAXX_2_2.gem.map.gz:/users/rg/projects/NGS/Projects/ENCODE/hg19main/GingerasCarrie/001WC/genome/LID16627_FC61U30AAXX_1_2.gem.map.gz:/users/rg/projects/NGS/Projects/ENCODE/hg19main/GingerasCarrie/001WC/genome/LID16627_FC61U30AAXX_3_1.gem.map.gz:/users/rg/projects/NGS/Projects/ENCODE/hg19main/GingerasCarrie/001WC/genome/LID16627_FC61U30AAXX_3_2.gem.map.gz:/users/rg/projects/NGS/Projects/ENCODE/hg19main/GingerasCarrie/001WC/genome/LID16627_FC61U30AAXX_2_1.gem.map.gz:/users/rg/projects/NGS/Projects/ENCODE/hg19main/GingerasCarrie/001WC/genome/LID16627_FC61U30AAXX_1_1.gem.map.gz
+
+colon_S75 = /users/rg/projects/NGS/Projects/IlluminaHumanBodyMap/Mapping/HBM_colon_totRNAP50/genome/s_5_1_sequence.gem.map.gz
+
+# HeLa-S3_Cytoplasm = /users/rg/projects/NGS/Projects/ENCODE/hg19main/GingerasCarrie/011C/genome/LID8469_FC61AHAAAXX_1_2.gem.map.gz:/users/rg/projects/NGS/Projects/ENCODE/hg19main/GingerasCarrie/011C/genome/LID8469_FC61AHAAAXX_3_2.gem.map.gz:/users/rg/projects/NGS/Projects/ENCODE/hg19main/GingerasCarrie/011C/genome/LID8469_FC61AHAAAXX_3_1.gem.map.gz:/users/rg/projects/NGS/Projects/ENCODE/hg19main/GingerasCarrie/011C/genome/LID8469_FC61AHAAAXX_2_2.gem.map.gz:/users/rg/projects/NGS/Projects/ENCODE/hg19main/GingerasCarrie/011C/genome/LID8469_FC61AHAAAXX_2_1.gem.map.gz:/users/rg/projects/NGS/Projects/ENCODE/hg19main/GingerasCarrie/011C/genome/LID8469_FC61AHAAAXX_1_1.gem.map.gz
+
+# HeLa-S3_Nucleus = /users/rg/projects/NGS/Projects/ENCODE/hg19main/GingerasCarrie/011N/genome/LID8559_FC6207CAAXX_3_1.gem.map.gz:/users/rg/projects/NGS/Projects/ENCODE/hg19main/GingerasCarrie/011N/genome/LID8559_FC6207CAAXX_3_2.gem.map.gz:/users/rg/projects/NGS/Projects/ENCODE/hg19main/GingerasCarrie/011N/genome/LID8559_FC6207CAAXX_4_1.gem.map.gz:/users/rg/projects/NGS/Projects/ENCODE/hg19main/GingerasCarrie/011N/genome/LID8559_FC6207CAAXX_4_2.gem.map.gz:/users/rg/projects/NGS/Projects/ENCODE/hg19main/GingerasCarrie/011N/genome/LID8559_FC6207CAAXX_2_1.gem.map.gz:/users/rg/projects/NGS/Projects/ENCODE/hg19main/GingerasCarrie/011N/genome/LID8559_FC6207CAAXX_2_2.gem.map.gz
+
+# GM12878_Cytoplasm = /users/rg/projects/NGS/Projects/ENCODE/hg19main/GingerasCarrie/003C/genome/LID8467_FC61DG2AAXX_4_1.gem.map.gz:/users/rg/projects/NGS/Projects/ENCODE/hg19main/GingerasCarrie/003C/genome/LID8467_FC61DG2AAXX_5_1.gem.map.gz:/users/rg/projects/NGS/Projects/ENCODE/hg19main/GingerasCarrie/003C/genome/LID8467_FC61DG2AAXX_3_1.gem.map.gz:/users/rg/projects/NGS/Projects/ENCODE/hg19main/GingerasCarrie/003C/genome/LID8467_FC61DG2AAXX_3_2.gem.map.gz:/users/rg/projects/NGS/Projects/ENCODE/hg19main/GingerasCarrie/003C/genome/LID8467_FC61DG2AAXX_4_2.gem.map.gz:/users/rg/projects/NGS/Projects/ENCODE/hg19main/GingerasCarrie/003C/genome/LID8467_FC61DG2AAXX_5_2.gem.map.gz
+
+# GM12878_Nucleus = /users/rg/projects/NGS/Projects/ENCODE/hg19main/GingerasCarrie/003N/genome/LID8532_FC61B6KAAXX_3_2.gem.map.gz:/users/rg/projects/NGS/Projects/ENCODE/hg19main/GingerasCarrie/003N/genome/LID8532_FC61B6KAAXX_3_1.gem.map.gz:/users/rg/projects/NGS/Projects/ENCODE/hg19main/GingerasCarrie/003N/genome/LID8532_FC61B6KAAXX_1_1.gem.map.gz:/users/rg/projects/NGS/Projects/ENCODE/hg19main/GingerasCarrie/003N/genome/LID8532_FC61B6KAAXX_2_1.gem.map.gz:/users/rg/projects/NGS/Projects/ENCODE/hg19main/GingerasCarrie/003N/genome/LID8532_FC61B6KAAXX_2_2.gem.map.gz:/users/rg/projects/NGS/Projects/ENCODE/hg19main/GingerasCarrie/003N/genome/LID8532_FC61B6KAAXX_1_2.gem.map.gz
+
+
+# GM12878_Whole_Cell = /users/rg/projects/NGS/Projects/ENCODE/hg19main/GingerasCarrie/003WC/genome/LID16629_FC61U2UAAXX_1_2.gem.map.gz:/users/rg/projects/NGS/Projects/ENCODE/hg19main/GingerasCarrie/003WC/genome/LID16629_FC61U2UAAXX_2_2.gem.map.gz:/users/rg/projects/NGS/Projects/ENCODE/hg19main/GingerasCarrie/003WC/genome/LID16629_FC61U2UAAXX_2_1.gem.map.gz:/users/rg/projects/NGS/Projects/ENCODE/hg19main/GingerasCarrie/003WC/genome/LID16629_FC61U2UAAXX_3_1.gem.map.gz:/users/rg/projects/NGS/Projects/ENCODE/hg19main/GingerasCarrie/003WC/genome/LID16629_FC61U2UAAXX_1_1.gem.map.gz:/users/rg/projects/NGS/Projects/ENCODE/hg19main/GingerasCarrie/003WC/genome/LID16629_FC61U2UAAXX_3_2.gem.map.gz
+
+
+[ANNOTATION]
+# The annotation should be in the gencode format
+# Example of commented out line
+annotation = /users/rg/jskancke/phdproject/3UTR/gencode5/gencode5_annotation.gtf
+
+
+[CHROMOSOME1]
+# running the whole simulation only with chromosome 1.
+# The first time this setting is used, the chromosome 1 entries from the
+# annotation file above will be filtered out to a separate file.
+# CHR1 = true
+CHR1 = false
+
+
+[MIN_3UTR_LENGTH]
+# Set the minimum 3UTR length to grab from the annotation. Some annotated 3UTRs
+# are very short - down to 1 nucleotide. The default setting is to select only
+# 3UTRs longer than 250 nt. Setting should not be below 100 nt.
+3utrlen = default
+#3utrlen = 200
+
+
+[POLYA_READS]
+# The program can improve the detection of 3UTR ends by using reads that fall
+# across the junction between UTR and poly(A) tail, which are the poly(A)
+# reads. This takes extra time but improves the detection considearably.
+# Three settings: 
+# true : the program will attempt to get poly(A) reads from the
+# original gem-mapping. 
+# false : the program will not use poly(A) reads. 
+# /some/path : provide the path to a .bed file that contains the poly(A) reads. This
+# would be the case if you wish to extract the poly(A) reads yourself, instead
+# of using the default settings of the program.
+#
+# polya = true
+polya = false
+# polya = /path/to/bedfile/with/poly(A)/reads
+
+
+[CPU_CORES]
+# Set how many cores you wish to use. default uses system_max minus 1. For
+# example, with two processors that have two cores each, default is 4-1 = 3.
+max_cores = 3
+# max_cores = 5
+# max_cores = default
+
+
+[RESTRICT_READS]
+# Set RESTRICT_READS to the number of reads to grab from the datasets. This
+# will make the script run faster. if 'false': grab all reads.
+# restrict_reads = 10000
+restrict_reads = false
+
+
+[SUPPLIED_3UTR_BEDFILE]
+# The path to a .bed-file that contains the 3UTRS you want to investigate.
+# If 'false', a .bed file will be generated from the annotation above (the
+# first time the setting is used; later the stored .bed-file will be used).
+utr_bed_path = false
+# utr_bed_path = /users/rg/pferreira/desktop/motifsapa/data/bedannotation/hg19/3utr_hg19.selectedcases.bed
+
+
+[PERL_SCRIPT]
+# Supply the path to the perl script that fetches sequences from the genome.
+# This script is needed for getting the PAS motif at the UTR ends.
+get_seq = /users/rg/jskancke/programs/perl/get_seq_from_bed_nofasta.pl
+
+
+[HG_FASTA]
+# Supply the path to a fasta file of the entire human genome, where each fasta
+# entry is one chromosome (big 3G file). The genome version in the fasta file
+# must be the same as all the genome versions in the other files.
+hg_fasta = /users/rg/jskancke/phdproject/3UTR/hg19fasta/hg19.fa
+
+[PLOTTING]
+# List the datasets from which you wish plots to be generated
+# These datasets must at a previous point have been analyzed.
+K562_Cytoplasm = true
+K562_Nucleus = true
+K562_Whole_Cell = true
