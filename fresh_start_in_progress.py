@@ -435,7 +435,7 @@ def get_pas_list(inverted=False):
                  'AATACA', 'CATAAA', 'GATAAA', 'AATGAA', 'TTTAAA', 'ACTAAA',
                  'AATAGA']
     if inverted:
-        transl = {'A':'T', 'G':'C', 'T':'A', 'C':'G'}
+        transl = {'A':'T', 'G':'C', 'T':'A', 'C':'G', 'N':'N'}
         return [''.join([transl[letr] for letr in reversed(pas)]) for pas in
                   known_pas]
     else:
