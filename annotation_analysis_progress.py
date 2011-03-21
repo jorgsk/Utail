@@ -16,14 +16,30 @@ CDS_introns
 As well, the program has a function to get only 3UTR regions.
 
 """
+def run_from_ipython():
+    try:
+        __IPYTHON__
+        return True
+    except NameError:
+        return False
 
-from IPython.Debugger import Tracer
-debug = Tracer()
+# only get the debug functio prop
+if run_from_ipython():
+    from IPython.Debugger import Tracer
+    debug = Tracer()
+else:
+    def debug(): pass
+
 from operator import itemgetter
 from os.path import join as path_join
 import os
+here = os.path.dirname(os.path.realpath(__file__))
 import time
+import sys
 from subprocess import Popen, PIPE, call
+sys.path.append(os.path.join(here,'py_modules'))
+sys.path.append(os.path.join(here,'py_modules/pyfasta'))
+from fasta import Fasta
 
 
 class Region(object):
@@ -593,10 +609,13 @@ def get_3utr_bed(annotation, outfile_path, chr1, extendby, utrlen):
                                             '0', strand])+'\n')
     out_handle.close()
 
-def get_sequences(seq_dict, out_path, get_seq, hgfasta):
+def get_sequences_perl(seq_dict, out_path, get_seq, hgfasta):
     """Assumes a dict on the form utr[ts_ID] = (chrm, int(beg), int(end), strnd)
     and returns a dictionary on the form utr_seq[ts_ID] = 'AAAAG...GTC' using
-    only the (chrm, beg, end)-information.
+    only the (chrm, beg, end, strand)-information.
+
+    This function is now deprecated as I have foudn a bettar solution in
+    Python:)
     """
 
     out_file = open(out_path, 'wb')
@@ -616,6 +635,16 @@ def get_sequences(seq_dict, out_path, get_seq, hgfasta):
     for line in p.stdout:
         (chrm, beg, end, seq_id, d, seq) = line.split()
         seq_dict[seq_id] = seq.upper()
+
+    return seq_dict
+
+def get_sequences_python(utr_dict, hgfasta):
+    f = Fasta(hgfasta)
+    seq_dict = {}
+    for ts_id, ts_param in utr_dict.iteritems():
+        (chrm, beg, end, strand) = ts_param
+        seq_dict[ts_id] = f.sequence({'chr':chrm, 'start':beg, 'stop':end,
+                                      'strand':strand}).upper()
 
     return seq_dict
 

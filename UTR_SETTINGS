@@ -35,8 +35,8 @@ annotation = /users/rg/jskancke/phdproject/3UTR/gencode5/gencode5_annotation.gtf
 # running the whole simulation only with chromosome 1.
 # The first time this setting is used, the chromosome 1 entries from the
 # annotation file above will be filtered out to a separate file.
-# CHR1 = true
-CHR1 = false
+CHR1 = true
+# CHR1 = false
 
 
 [MIN_3UTR_LENGTH]
@@ -59,8 +59,8 @@ CHR1 = false
 # would be the case if you wish to extract the poly(A) reads yourself, instead
 # of using the default settings of the program.
 #
-# polya = true
-polya = false
+polya = true
+# polya = false
 # polya = /path/to/bedfile/with/poly(A)/reads
 
 
@@ -85,12 +85,6 @@ restrict_reads = false
 # first time the setting is used; later the stored .bed-file will be used).
 utr_bed_path = false
 # utr_bed_path = /users/rg/pferreira/desktop/motifsapa/data/bedannotation/hg19/3utr_hg19.selectedcases.bed
-
-
-[PERL_SCRIPT]
-# Supply the path to the perl script that fetches sequences from the genome.
-# This script is needed for getting the PAS motif at the UTR ends.
-get_seq = /users/rg/jskancke/programs/perl/get_seq_from_bed_nofasta.pl
 
 
 [HG_FASTA]
