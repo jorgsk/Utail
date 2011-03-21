@@ -40,12 +40,15 @@ class FinalOutput(object):
 
         # variables you have to initialize
         self.chrm = chrm
+        # Note that beg and end might be subject to extensions! See the
+        # nonextended versions further down
         self.beg = beg
         self.end = end
         self.ts_ID = ts_ID
         self.strand = strand
         self.rpkm = rpkm
         self.extendby = extendby # how far has this annotation been extended
+
 
         # variables that change depending on if reads map to this 3UTR
         self.has_PAS = 'NA'
@@ -55,33 +58,56 @@ class FinalOutput(object):
         self.ext_mean_annot = 'NA'
         self.int_mean_annot = 'NA'
         self.cuml_rel_size = 'NA'
+        self.polyA_cumul_rel_pos = 'NA'
         self.polyA_support = 0
 
         # the coverage vectors
         self.covr_vector = [first_covr]
         self.cumul_covr = [first_covr]
 
+        # Get the non-extended end as well!
+        if extendby > 0:
+            if strand == '+':
+                self.end_nonextended = self.end - extendby
+            if strand == '-':
+                self.beg_nonextended = self.beg + extendby
+
     def header_dict(self):
 
-        return dict((('chrm', self.chrm), ('beg', self.beg),
-                            ('end', self.end), ('ts_ID', self.ts_ID),
-                            ('strand', self.strand),
-                            ('cuml_rel_size', self.cuml_rel_size),
-                           ('mean_int_covrg_cuml_point', self.int_mean_99),
-                           ('mean_ext_covrg_cuml_point', self.ext_mean_99),
-                           ('mean_int_covrg_annotation', self.int_mean_annot),
-                           ('mean_int_covrg_annotation', self.int_mean_annot),
-                           ('polyA_support_for_cuml_point', self.polyA_support),
-                            ('PAS_type', self.has_PAS),
-                            ('PAS_distance_from_cuml_point', self.pas_pos),
-                            ('RPKM', self.rpkm)
-                           ))
+        return dict((('chrm', self.chrm), ('beg', self.frmt(self.beg)),
+                    ('end', self.frmt(self.end)),
+                    ('ts_ID', self.frmt(self.ts_ID)),
+                    ('strand', self.strand),
+                    ('cuml_rel_size', self.frmt(self.cuml_rel_size)),
+                    ('3utr_extended_by', self.frmt(self.extendby)),
+                    ('mean_int_covrg_cuml_point', self.frmt(self.int_mean_99)),
+                    ('mean_ext_covrg_cuml_point', self.frmt(self.ext_mean_99)),
+                    ('mean_int_covrg_annotation', self.frmt(self.int_mean_annot)),
+                    ('mean_ext_covrg_annotation', self.frmt(self.ext_mean_annot)),
+                    ('polyA_support_for_cuml_point',self.frmt(self.polyA_support)),
+                    ('cuml_point_for_polyA_site',self.frmt(self.polyA_cumul_rel_pos)),
+                    ('PAS_type', self.has_PAS),
+                    ('PAS_distance_from_cuml_point', self.frmt(self.pas_pos)),
+                    ('RPKM', self.frmt(self.rpkm))
+                     ))
+
+    def frmt(self, element):
+        """Return float objects with four decimals. Return all other objects as
+        they were"""
+
+        if type(element) is float:
+            return format(element, '.4f')
+        if type(element) is int:
+            return str(element)
+        else:
+            return element
 
     def header_order(self):
         return """
         chrm
         beg
         end
+        3utr_extended_by
         ts_ID
         strand
         cuml_rel_size
@@ -90,6 +116,7 @@ class FinalOutput(object):
         mean_int_covrg_annotation
         mean_ext_covrg_annotation
         polyA_support_for_cuml_point
+        cuml_point_for_polyA_site
         PAS_type
         PAS_distance_from_cuml_point
         RPKM
@@ -157,7 +184,7 @@ class FinalOutput(object):
             if el < 0.995:
                 rel_pos = ind
                 length = float(self.end-self.beg)
-                cuml_rel_size = (length-rel_pos)/length
+                self.cuml_rel_size = (length-rel_pos)/length
                 break
 
         # Save relative position with the object
@@ -193,7 +220,7 @@ class FinalOutput(object):
             if el < 0.995:
                 length = self.end-self.beg
                 rel_pos = length - ind
-                cuml_rel_size = rel_pos/float(length)
+                self.cuml_rel_size = rel_pos/float(length)
                 break
 
         # Save relative position with the object
@@ -228,24 +255,27 @@ class FinalOutput(object):
         # Look for polyA-read support -- and get the cumulative
         # percentage at which the majority of the polyAreads are
         # found.
-
         if ts_ID in polyA_cluster:
             # Get the absolute end position of the 99.5%
-            end_pos = utrs[ts_ID][1] + rel_pos
+            end_pos = self.beg + rel_pos
             # Check if this position has polyA reads within 50 nt
             # closeby
-            polyA_support = 0
+            self.polyA_cumul_rel_pos = 0
             for pAsite in polyA_cluster[ts_ID][0]:
-                if (end_pos > pAsite-100) and (end_pos < pAsite+100):
-                    polyA_support = 1
-                    # TODO
-                    # Calculate the cumulative value at which this pA site is
-                    # found. use self.normcuml
-                    debug()
+                if (end_pos > pAsite-75) and (end_pos < pAsite+75):
+                    # get cumulative value at the polyA site
+                    rel_polyA = pAsite - self.beg
+                    # If the polyA is outside the end, report it as the last
+                    # value.
+                    if rel_polyA > self.end_nonextended - self.beg:
+                        self.polyA_cumul_rel_pos = self.norm_cuml[-1]
+                    else:
+                        self.polyA_cumul_rel_pos = self.norm_cuml[rel_polyA]
+
+                    # A general marker for polyA close to end_pos
+                    self.polyA_support = 1
+
                     break
-
-            self.polyA_support = polyA_support
-
 
     def pasYpolyA_minus(self, pas_list, utrs, utr_seqs, polyA_cluster, transl):
 
@@ -266,7 +296,6 @@ class FinalOutput(object):
         # Look for polyA-read support -- and get the cumulative
         # percentage at which the majority of the polyAreads are
         # found.
-
         if ts_ID in polyA_cluster:
             # Get the absolute end position of the 99.5%
             end_pos = utrs[ts_ID][1] + rel_pos # assuming rel_pos is rel to beg
@@ -274,37 +303,30 @@ class FinalOutput(object):
             # closeby
             for pAsite in polyA_cluster[ts_ID][0]:
                 if (end_pos > pAsite-50) and (end_pos < pAsite+50):
-                    polyA_support = 1
+                    # Relative polyA site -- considering non-extended UTR!
+                    rel_polyA = pAsite - self.beg_nonextended
+                    # If the polyA is before the beg, report it as the last
+                    # value.
+                    if rel_polyA < self.extendby:
+                        self.polyA_cumul_rel_pos = self.norm_cuml[0]
+                    else:
+                        self.polyA_cumul_rel_pos = self.norm_cuml[rel_polyA]
+
+                    # A general marker for polyA close to end_pos
+                    self.polyA_support = 1
+
                     break
-
-            self.polyA_support = polyA_support
-            if polyA_support:
-                debug()
-
-            # Check the relative distance of the latest polyA
 
     def write_output(self, outobject):
         """Format the output as desired, then save"""
-        pass
-    ## Format rel_size and the means
-    #if type(cuml_rel_size) is float:
-        #cuml_rel_size = format(cuml_rel_size, '.4f')
 
-    #if type(ext_mean_99) is float:
-        #ext_mean_99 = format(ext_mean_99, '.4f')
-    #if type(int_mean_99) is float:
-        #int_mean_99 = format(int_mean_99, '.4f')
-    #if type(ext_mean_annot) is float:
-        #ext_mean_annot = format(ext_mean_annot, '.4f')
-    #if type(int_mean_annot) is float:
-        #int_mean_annot = format(int_mean_annot, '.4f')
+        # Create a list of formatted output
+        output_order = self.header_order()
+        output_dict = self.header_dict()
 
-    #RPKM = rpkm[ID_keeper]
-    #outfile.write('\t'.join([chrm, str(beg), str(end), ID_keeper,
-                             #strand, cuml_rel_size, str(int_mean_99),
-                             #str(ext_mean_99), str(int_mean_annot),
-                             #str(ext_mean_annot), str(has_PAS),
-                             #str(pas_pos), str(RPKM)]) + '\n')
+        output = [output_dict[hedr] for hedr in output_order]
+
+        outobject.write('\t'.join(output) + '\n')
 
 
 def zcat_wrapper(bed_reads, read_limit, out_path, polyA, polyA_path):
@@ -462,7 +484,7 @@ def ends_wrapper(dset_id, coverage, utrs, utr_seqs, rpkm, extendby,
     this_utr = FinalOutput(chrm, int(beg), int(end), strand, ts_ID, rpkm[ts_ID],
                            extendby, int(covr))
 
-    outfile.write('\t'.join(this_utr.header_order()))
+    outfile.write('\t'.join(this_utr.header_order()) + '\n')
 
     # Assert that the file information is the same as you started with
     assert utrs[ts_ID] == (chrm, int(beg), int(end), strand), 'Mismatch'
@@ -1543,10 +1565,10 @@ if __name__ == '__main__':
 # filtering.
 
 # IDEA: when you merge the 3utrs together, can you keep the annotated 3utr ends?
+# This list needs to be checked against he poly(As) you discover. How many are
+# novel? How many are predicted?
 
 # TODO for meeting with Roderic:
-# NOTE READ: you have two days, tuesday and wednesday, to produce some results.
-# what should you focus on?
 # 1) Point 1 from below
 # 2) Pictures from the genome-browser with the poly(A) reads
 
@@ -1566,15 +1588,5 @@ if __name__ == '__main__':
 # Then do intersectBed on the poly(A) reads. Then you can read the file and for
 # each TS_ID (which, remember, is only the longest transcript), you can get an
 # overview over how many poly(A) reads land here.
-
-# 2) Use the poly(A) reads to get more confident about the pTTS site.
-# However, first just add the 'if-poly(A)-read' to the 99.5% marker output.
-# Implement your ideas about a poly(A) site scoring system by looking for the
-# PAS and the upstream sequences and all that. This can be used as a measure to
-# determine which gives the most reliable PAS: last read, 99.5, or poly(A)-read.
-
-# 3) What about the splice-reads? They would tell us which exons in the 3utr are
-# being used. The whole splice-part of the pipeline could give us some
-# information.
 
 #* ways to visualize the 3'utr and the PAS motif; similar to what I've done with PERL; if python does not have a similar library we can implement this in a perl script;
