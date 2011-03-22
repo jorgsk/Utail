@@ -40,6 +40,7 @@ from subprocess import Popen, PIPE, call
 sys.path.append(os.path.join(here,'py_modules'))
 sys.path.append(os.path.join(here,'py_modules/pyfasta'))
 from fasta import Fasta
+import math
 
 
 class Region(object):
@@ -501,7 +502,7 @@ def merge_output(bed_dir, output):
 
         for merged_entry in p.stdout:
             (chrm, beg, end, strand) = merged_entry.split()
-            out_file.write('\t'.join([chrm, beg, end,'.','.', strand]) + '\n')
+            out_file.write('\t'.join([chrm, beg, end, '.', '.', strand]) + '\n')
 
         out_file.close()
 
@@ -565,6 +566,7 @@ def cluster_by_utrbeg(transcripts):
 
     # Now select from the tsdict clusters only the ts with the longest utr
     new_ts = {}
+
     for chrm, strand_dict in tsdict.items():
         for strand, cluster_dict in strand_dict.items():
             for cluster, ids in cluster_dict.items():
@@ -578,13 +580,13 @@ def cluster_by_utrbeg(transcripts):
 
     return new_ts
 
-def get_3utr_bed(annotation, outfile_path, chr1, extendby, utrlen):
+def get_3utr_bed(annotation_path, outfile_path, settings):
     """Get the annotated regions of 3UTRs that have only one exon. Save these
     regions to a bedfile in outfile_path"""
 
     out_handle = open(outfile_path, 'wb')
     # Get transcripts from annotation
-    transcripts = make_transcripts(annotation)
+    transcripts = make_transcripts(annotation_path)
 
     # Only get the longest of the 3UTRs when they overlap
     new_transcripts = cluster_by_utrbeg(transcripts)
@@ -595,50 +597,92 @@ def get_3utr_bed(annotation, outfile_path, chr1, extendby, utrlen):
             (chrm, beg, end, strand) = ts_obj.three_utr.exons[0]
 
             # Skip the utrs shorter than utrlen
-            if end-beg < utrlen:
+            if end-beg < settings.min_utrlen:
                 continue
 
             # If extendby, extend the 3UTR in the direction of extendby
-            if extendby:
+            if settings.extendby:
                 if strand == '+':
-                    end = end + extendby
+                    end = end + settings.extendby
                 if strand == '-':
-                    beg = beg - extendby
+                    beg = beg - settings.extendby
 
             out_handle.write('\t'.join([chrm, str(beg), str(end), ts_obj.ID,
                                             '0', strand])+'\n')
     out_handle.close()
 
-def get_sequences_perl(seq_dict, out_path, get_seq, hgfasta):
-    """Assumes a dict on the form utr[ts_ID] = (chrm, int(beg), int(end), strnd)
-    and returns a dictionary on the form utr_seq[ts_ID] = 'AAAAG...GTC' using
-    only the (chrm, beg, end, strand)-information.
+def get_polyA_sites_bed(annotation_path, outfile_path, settings):
+    """Get the annotated regions of 3UTRs that have only one exon. Save these
+    regions to a bedfile in outfile_path"""
 
-    This function is now deprecated as I have foudn a bettar solution in
-    Python:)
-    """
+    out_handle = open(outfile_path, 'wb')
+    # Get transcripts from annotation
+    transcripts = make_transcripts(annotation_path)
 
-    out_file = open(out_path, 'wb')
-    # 1) Write a bed_file based on seq_dict -- ignoring the strand
-    for seq_ID, seq_param in seq_dict.iteritems():
-        (chrm, beg, end, strnd) = seq_param
-        out_file.write('\t'.join([chrm, str(beg), str(end), seq_ID, '0', '.']) +
-                       '\n')
-    out_file.close()
+    # Only get the longest of the 3UTRs when they overlap
+    chrms = ['chr' + str(nr) for nr in range(1,23) + ['X','Y','M']]
+    tsdict = dict((chrm, dict((('+', []), ('-', [])))) for chrm in chrms)
 
-    # 2) Call the perl script on the .bed-file
-    p = Popen(['perl', get_seq, '-g', hgfasta, out_path], shell=False,
-              stdout=PIPE, stderr=PIPE)
+    for ts_id, ts_obj in transcripts.iteritems():
+        # Only deal with the ones with one utr exon
+        if len(ts_obj.three_utr.exons) == 1:
+            # The the chrm, beg, end, and strand of the transcripts
+            (chrm, beg, end, strand) = ts_obj.three_utr.exons[0]
 
-    # 3) From stdout, read the output into a dictionary.
-    seq_dict = {}
-    for line in p.stdout:
-        (chrm, beg, end, seq_id, d, seq) = line.split()
-        seq_dict[seq_id] = seq.upper()
+            # Skip the utrs shorter than utrlen
+            if end-beg < settings.min_utrlen:
+                continue
 
-    return seq_dict
+            if strand == '+':
+                tsdict[chrm][strand].append(end)
+            if strand == '-':
+                tsdict[chrm][strand].append(beg)
 
-def get_sequences_python(utr_dict, hgfasta):
+    # go through the annotated 3UTR ends and cluster them
+    for chrm, strand_dict in tsdict.items():
+        for strand, ends in strand_dict.items():
+            # Skip empty ones; could be that chr1 only is run
+            if ends == []:
+                continue
+            clustsum = 0
+            clustcount = 0
+            this_cluster = []
+            clusters = []
+            for indx, val in enumerate(sorted(ends)):
+                ival = int(val)
+
+                clustsum = clustsum + ival
+                clustcount += 1
+                mean = clustsum/clustcount
+
+                # If dist between new entry and cluster mean is < 40, keep in cluster
+                if abs(ival - mean) < 40:
+                    this_cluster.append(ival)
+                else: # If not, start a new cluster, and save the old one
+                    clusters.append(this_cluster)
+                    clustsum = ival
+                    clustcount = 1
+                    this_cluster = [ival]
+
+            # Append the last cluster
+            clusters.append(this_cluster)
+            # Get the mean of the clusters with length greater than one
+            cl_means = [int(math.floor(sum(clu)/len(clu))) for clu in clusters]
+
+            # Save the means to the output file. write polyA site 'toward' ts.
+            if strand == '-':
+                for m in cl_means:
+                    out_handle.write('\t'.join([chrm, str(m), str(m+1), '0',
+                                                '0', '-']) + '\n')
+            if strand == '+':
+                for m in cl_means:
+                    out_handle.write('\t'.join([chrm, str(m-1), str(m), '0',
+                                                '0', '+']) + '\n')
+    out_handle.close()
+
+def get_seqs(utr_dict, hgfasta):
+    """Use the pyfasta module to get sequences quickly from an indexed version
+    of the human genome fasta file"""
     f = Fasta(hgfasta)
     seq_dict = {}
     for ts_id, ts_param in utr_dict.iteritems():

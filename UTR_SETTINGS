@@ -78,6 +78,10 @@ max_cores = 3
 # restrict_reads = 10000
 restrict_reads = false
 
+[DELETE_READS]
+# If reads were unpackaged from zip, delete reads after? Source reads are
+# never deleted.
+delete_reads = false
 
 [SUPPLIED_3UTR_BEDFILE]
 # The path to a .bed-file that contains the 3UTRS you want to investigate.
@@ -86,6 +90,10 @@ restrict_reads = false
 utr_bed_path = false
 # utr_bed_path = /users/rg/pferreira/desktop/motifsapa/data/bedannotation/hg19/3utr_hg19.selectedcases.bed
 
+[EXTEND]
+# By how much should the annotated 3UTRs be extended (in the 3' direction...)?
+# It is recommended to let the default setting stay
+extend_by = 100
 
 [HG_FASTA]
 # Supply the path to a fasta file of the entire human genome, where each fasta

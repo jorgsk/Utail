@@ -42,6 +42,37 @@ import matplotlib.pyplot as plt
 # Your own imports
 import annotation_analysis_progress as genome
 
+class Settings(object):
+    """Store the settings obtained from file"""
+    def __init__(self, datasets, annotation_path, utrfile_provided, read_limit,
+                 max_cores, chr1, hgfasta_path, polyA, min_utrlen, extendby,
+                 del_reads):
+
+        self.datasets = datasets
+        self.annotation_path = annotation_path
+        self.utrfile_provided = utrfile_provided
+        self.read_limit = read_limit
+        self.max_cores = max_cores
+        self.chr1 = chr1
+        self.hgfasta_path = hgfasta_path
+        self.polyA = polyA
+        self.min_utrlen = min_utrlen
+        self.extendby = int(extendby)
+        self.del_reads = del_reads
+
+class Annotation(object):
+    """A convenience class that holds the files and data structures relevant to
+    the annotation that has been supplied."""
+
+    def __init__(self, annotation_path):
+        """Initiate as empty strings and fill in as they are being created."""
+        self.path = annotation_path
+        self.utr_bed_path = ''
+        self.utr_bed_dict = ''
+        self.annotated_polyA_path = ''
+        self.annotated_polyA_dict = ''
+        self.utr_seq_dict = ''
+
 class FinalOutput(object):
     """This class takes care of writing output to file. Avoids passing a million
     parameters here and there."""
@@ -542,7 +573,8 @@ def read_settings(settings_file):
 
     expected_fields = ['DATASETS', 'ANNOTATION', 'CPU_CORES', 'RESTRICT_READS',
                        'CHROMOSOME1', 'SUPPLIED_3UTR_BEDFILE', 'HG_FASTA',
-                       'POLYA_READS', 'MIN_3UTR_LENGTH', 'PLOTTING']
+                       'POLYA_READS', 'MIN_3UTR_LENGTH', 'EXTEND', 'PLOTTING',
+                       'DELETE_READS']
 
     missing = set(conf.sections()) - set(expected_fields)
     if len(missing) == 0:
@@ -559,9 +591,9 @@ def read_settings(settings_file):
 
     # set minimum length of 3 utr
     try:
-        utrlen = conf.getint('MIN_3UTR_LENGTH', '3utrlen')
+        min_utrlen = conf.getint('MIN_3UTR_LENGTH', '3utrlen')
     except ValueError:
-        utrlen = 100
+        min_utrlen = 100
 
     # cpu cores
     try:
@@ -573,7 +605,7 @@ def read_settings(settings_file):
     try:
         read_limit = conf.getint('RESTRICT_READS', 'restrict_reads')
     except ValueError:
-        read_limit = conf.getboolean('RESTRICT_READS','restrict_reads')
+        read_limit = conf.getboolean('RESTRICT_READS', 'restrict_reads')
 
     # supplied 3utr bedfile
     try:
@@ -589,6 +621,12 @@ def read_settings(settings_file):
     # human genome fasta file
     hg_fasta = conf.get('HG_FASTA', 'hg_fasta')
 
+    # by how much should the 3utrs be extended?
+    extendby = conf.get('EXTEND', 'extend_by')
+
+    # should you delete reads?
+    del_reads = conf.getboolean('DELETE_READS', 'delete_reads')
+
     # poly(A) reads -- get them / dont get them / supply them
     try:
         polyA = conf.getboolean('POLYA_READS', 'polya')
@@ -597,7 +635,7 @@ def read_settings(settings_file):
         verify_access(polyA) # Check if is a file
 
     return(datasets, annotation, utr_bedfile_path, read_limit, max_cores, chr1,
-          hg_fasta, polyA, utrlen)
+          hg_fasta, polyA, min_utrlen, extendby, del_reads)
 
 
 def get_chromosome1(annotation, beddir):
@@ -624,50 +662,88 @@ def get_chromosome1(annotation, beddir):
 
     return out_path
 
-def get_3utr_bedpath(annotation, beddir, chr1, utrlen, extendby,
-                     utrfile_provided):
-
-    """Get 3utr file path from annotation via genome module"""
-    # Make the beddir if it doesn't exist
-    if not os.path.exists(beddir):
-        os.makedirs(beddir)
+def get_polyA_sites_path(settings, beddir):
+    """Get polyA_sites_file path from annotation via genome module"""
 
     # If options are not set, make them a 0-string define options
-    if extendby:
-        ext = '_extendby_'+str(extendby)
-    else:
-        ext = ''
-
-    if chr1:
+    if settings.chr1:
         chrm = '_chr1'
     else:
         chrm = ''
 
-    if utrfile_provided:
+    if settings.utrfile_provided:
         user_provided = '_user_provided'
     else:
         user_provided = ''
 
-    filename = '3utrs' + chrm + ext + user_provided + '.bed'
-    utr_bed_path = os.path.join(beddir, filename)
+    # utr path
+    polyA_sites_filename = 'polyA_sites' + chrm + user_provided + '.bed'
+    polyA_site_bed_path = os.path.join(beddir, polyA_sites_filename)
+
+    ## If the file already exists, don't make it again
+    if os.path.isfile(polyA_site_bed_path):
+        return polyA_site_bed_path
+
+    # If a utrfile is provided, never re-make from annotation
+    if settings.utrfile_provided:
+        polyA_site_bed_path = shape_provided_bed(polyA_site_bed_path, settings)
+
+    # If utrfile is not provided, get it yourself from a provided annotation
+    if not settings.utrfile_provided:
+        if settings.chr1:
+            # path or dict?
+            annotation_path = get_chr1_annotation(settings.annotation_path, beddir)
+
+        t1 = time.time()
+        print('polyA sites bedfile not found. Generating from annotation ...')
+        reload(genome)
+        genome.get_polyA_sites_bed(annotation_path, polyA_site_bed_path, settings)
+
+        print('\tTime taken to generate polyA-bedfile: {0}\n'\
+              .format(time.time()-t1))
+
+    return polyA_site_bed_path
+
+def get_utr_path(settings, beddir):
+    """Get 3utr-file path from annotation via genome module"""
+
+    # If options are not set, make them a 0-string define options
+    if settings.extendby:
+        ext = '_extendby_'+str(settings.extendby)
+    else:
+        ext = ''
+
+    if settings.chr1:
+        chrm = '_chr1'
+    else:
+        chrm = ''
+
+    if settings.utrfile_provided:
+        user_provided = '_user_provided'
+    else:
+        user_provided = ''
+
+    # utr path
+    utr_filename = '3utrs' + chrm + ext + user_provided + '.bed'
+    utr_bed_path = os.path.join(beddir, utr_filename)
 
     # If the file already exists, don't make it again
     if os.path.isfile(utr_bed_path):
         return utr_bed_path
 
-    # If an utrfile is provided, never re-make from annotation
-    if utrfile_provided:
-        utr_bed_path = shape_provided_bed(utrfile_provided, utr_bed_path, chr1,
-                                          extendby, utrlen)
+    # If a utrfile is provided, never re-make from annotation
+    if settings.utrfile_provided:
+        utr_bed_path = shape_provided_bed(utr_bed_path, settings)
 
     # If utrfile is not provided, get it yourself from a provided annotation
-    if not utrfile_provided:
-        if chr1:
-            annotation = get_chr1_annotation(annotation, beddir)
+    if not settings.utrfile_provided:
+        if settings.chr1:
+            # path or dict?
+            annotation_path = get_chr1_annotation(settings.annotation, beddir)
 
         t1 = time.time()
         print('3UTR-bedfile not found. Generating from annotation ...')
-        genome.get_3utr_bed(annotation, utr_bed_path, chr1, extendby, utrlen)
+        genome.get_3utr_bed(annotation_path, utr_bed_path, settings)
 
         print('\tTime taken to generate 3UTR-bedfile: {0}\n'\
               .format(time.time()-t1))
@@ -700,33 +776,33 @@ def get_chr1_annotation(annotation, beddir):
 
     return outpath
 
-def shape_provided_bed(utrfile_provided, utr_bed_path, chr1, extendby, utrlen):
+def shape_provided_bed(utr_bed_path, settings):
     """Go through provided bedfile and shape it according to settings. Save in
     local directory of this script"""
 
     outfile = open(utr_bed_path, 'wb')
 
-    for line in open(utrfile_provided, 'rb'):
+    for line in open(settings.utrfile_provided, 'rb'):
         (chrm, beg, end, name, val, strand) = line.split()[:6]
 
         end = int(end)
         beg = int(beg)
 
         # Skip lines that are not chrm1 if option is set
-        if chr1:
+        if settings.chr1:
             if chrm not in ['chr1', 'Chr1']:
                 continue
 
         # Skip short utrs
-        if end - beg < utrlen:
+        if end - beg < settings.utrlen:
             continue
 
         # Extend by the nr of nucleotides specified
-        if extendby:
+        if settings.extendby:
             if strand == '+':
-                end = end + extendby
+                end = end + settings.extendby
             if strand == '-':
-                beg = beg - extendby
+                beg = beg - settings.extendby
 
         outfile.write('\t'.join([chrm, str(beg), str(end), name, val,
                                  strand])+'\n')
@@ -1032,20 +1108,25 @@ def cluster_polyAs(utr_polyAs, utrs):
     return polyA_cluster
 
 
-def pipeline(dset_id, dset_reads, tempdir, output_dir, read_limit, utrfile_path,
-             utrs, utr_seqs, polyA, del_reads, extendby):
+def pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs, settings,
+             annotation):
+    """Get reads, get polyA reads, cluster polyA reads, get coverage, do
+    calculations, write to output... this is where it all happens"""
 
     t0 = time.time()
+    # Set some settings for brievity
+    read_limit = settings.read_limit
+    polyA = settings.polyA
     # Get the reads in bed format. And the polyA reads if this option is set.
     # As well get the total number of reads for getting RPKM later.
-    bed_reads, polyA_bed, total_nr_reads = get_bed_reads(dset_reads, dset_id,
+    (bed_reads, polyA_bed, total_nr_reads) = get_bed_reads(dset_reads, dset_id,
                                                       read_limit, tempdir,
                                                       polyA)
 
     # If polyA is a string, it is a string to polyA sequences in bed-format
     if type(polyA) == str:
         polyA_bed_path = polyA
-        utr_polyAs = get_polyAutr(polyA_bed_path, utrfile_path)
+        utr_polyAs = get_polyAutr(polyA_bed_path, annotation.utrfile_path)
 
     elif polyA == True:
         # Do the polyA: extract, trim, remap, and -> .bed-format.
@@ -1058,36 +1139,32 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, read_limit, utrfile_path,
         # run overlap-bed or something similar
         # To verify the correctness of your polyA reads, to a quick check on the
         # genome browser. If you have no overlaps, then something is wrong.
-        utr_polyAs = get_polyAutr(polyA_bed_path, utrfile_path)
+        utr_polyAs = get_polyAutr(polyA_bed_path, settings.utrfile_path)
 
     # Cluster the poly(A) reads for each ts_id
-    polyA_cluster = cluster_polyAs(utr_polyAs, utrs)
+    polyA_cluster = cluster_polyAs(utr_polyAs, annotation.utrs)
 
     #debug()
     # Get the RPKM by running intersect-bed of the reads on the 3utr
     print('Obtaining RPKM for {0} ...\n'.format(dset_id))
-    rpkm = get_rpkm(bed_reads, utrfile_path, total_nr_reads, utrs, extendby)
+    rpkm = get_rpkm(bed_reads, annotation.utrfile_path, total_nr_reads,
+                    annotation.utrs, settings.extendby)
 
     # Cover the annotated 3UTR with the reads
     print('Getting read-coverage for the 3UTRs for {0} ...\n'.format(dset_id))
     options = '-d'
-    coverage = coverage_wrapper(dset_id, bed_reads, utrfile_path, options)
+    coverage = coverage_wrapper(dset_id, bed_reads, annotation.utrfile_path, options)
     # Add coverage file_locations to dict
 
     print('Using coverage to get 3UTR ends for {0} ...\n'.format(dset_id))
     # Get transcript 3utr endings as determined by read coverage
-    # TODO send polyA_cluster to ends_wrapper, and document if the ts_id in
-    # question has got a poly(A) read near the end. Better evidence than the
-    # has_PAS.
-    # After that, make a totally new function where all the poly(A)s in a ts are
-    # identified. This should go to a new file.
-    utr_ends = ends_wrapper(dset_id, coverage, utrs, utr_seqs, rpkm, extendby,
-                            polyA_cluster)
+    utr_ends = ends_wrapper(dset_id, coverage, annotation.utrs, utr_seqs, rpkm,
+                            settings.extendby, polyA_cluster)
 
     print('Total time for {0}: {1}\n'.format(dset_id, time.time() - t0))
 
     # If requested, delete the reads in .bed format after use
-    if del_reads:
+    if settings.del_reads:
         os.remove(bed_reads)
 
     # Return a list with the salient file paths of output files
@@ -1391,31 +1468,49 @@ def get_no_overlaps(exons, utrs):
 
     return no_overlaps
 
+def get_polyA_dict(utr_path, polyA_path):
+    polyA_dict = {}
+
+    cmd = ['intersectBed', '-s', '-wb', '-a', polyA_path , '-b', utr_path]
+
+    # Run the above command -- outside the shell -- and loop through output
+    f = Popen(cmd, stdout=PIPE)
+    for line in f.stdout:
+
+        (chrm, beg, end, d, d, strnd, d, d, d, ts_id, d, d) = line.split()
+
+        if ts_id in polyA_dict:
+            polyA_dict[ts_id].append((chrm, beg, end, strnd))
+        else:
+            polyA_dict[ts_id] = [(chrm, beg, end, strnd)]
+
+    return polyA_dict
 
 def main():
 
-    # Delete reads after pipeline has finished
-    del_reads = False
-
+    # The path to the directory the script is located in
     here = os.path.dirname(os.path.realpath(__file__))
+
     # For storing temporary files
     tempdir = os.path.join(here, 'temp_files')
     if not os.path.exists(tempdir):
         os.makedirs(tempdir)
+
     # For storing the 3utr_annotation-bedfile if none is provided
     beddir = os.path.join(here, 'source_bedfiles')
     if not os.path.exists(beddir):
         os.makedirs(beddir)
+
     # Output directory
     output_dir = os.path.join(here, 'output')
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
+
     # Location of settings file
     settings_file = os.path.join(here, 'UTR_SETTINGS')
 
     # Get the necessary variables from the settings file
-    (datasets, annotation, utrfile_provided, read_limit, max_cores, chr1,
-     hgfasta, polyA, utrlen) = read_settings(settings_file)
+    settings = Settings(*read_settings(settings_file))
 
     # Whether to re-simulate or to get results from pickle
     #simulate = False
@@ -1424,31 +1519,37 @@ def main():
     DEBUGGING = True
     #DEBUGGING = False
     if DEBUGGING:
-        chr1 = True
-        read_limit = 100000
+        settings.chr1 = True
+        settings.read_limit = 100000
         #read_limit = False
-        max_cores = 3
+        settings.max_cores = 3
         #polyA = False
         #polyA = True
-        polyA = '/users/rg/jskancke/phdproject/3UTR/Characterizer/'\
+        settings.polyA = '/users/rg/jskancke/phdproject/3UTR/Characterizer/'\
                 'Work_in_progress/temp_files/polyA_reads_k562_whole_cell_'\
                 'processed_mapped_in_3utr.bed'
 
-    # Do you want to extend the end of the 3UTR? (False or some value)
-    extendby = 100
-    #extendby = False
-    proj_dir = '__'.join(datasets.keys()+['Chr1'+str(chr1)]+['Reads'+str(read_limit)])
-    if not os.path.exists(proj_dir):
-        os.makedirs(proj_dir)
+    #proj_dir = '__'.join(datasets.keys()+['Chr1'+str(chr1)]+['Reads'+str(read_limit)])
+    #if not os.path.exists(proj_dir):
+        #os.makedirs(proj_dir)
 
-    utrfile_path = get_3utr_bedpath(annotation, beddir, chr1, utrlen,
-                                    extendby, utrfile_provided)
+    # the Annotation instance that holds file-paths and datastructures obtained
+    # from the annotation
+    annotation = Annotation(settings.annotation_path)
 
-    #Get dictionary with utr-info
+    annotation.utrfile_path = get_utr_path(settings, beddir)
+    # Get dictionary with utr-info
     print('Making 3UTR data structures ...\n')
-    utrs = get_utrdict(utrfile_path)
+    annotation.utrs = get_utrdict(annotation.utrfile_path)
 
-    #Pickle the final results
+    # file path to annotated polyA sites as obtained form annotation
+    annotation.polyA_sites_path = get_polyA_sites_path(settings, beddir)
+    # Get dictionary with polyA sites by intersecting with utr-bed
+    print('Making polyA_sites data structures ...\n')
+    annotation.polyA_sites_dict = get_polyA_dict(annotation.utrfile_path,
+                                                annotation.polyA_sites_path)
+
+    # Pickle the final results. Initiate the pickle object.
     pickled_final = os.path.join(output_dir, 'pickled_result_paths')
 
     ##################################################################
@@ -1456,38 +1557,37 @@ def main():
         #Get dictionary of fasta-sequences from 'utrs'
         tx = time.time()
         fasta_bed = os.path.join(tempdir, 'bed_for_fasta.bed')
-
         print('Fetching the sequences of the annotated 3UTRs ...')
-        utr_seqs = genome.get_sequences_python(utrs, hgfasta)
+        utr_seqs = genome.get_seqs(annotation.utrs, settings.hgfasta_path)
         print('\tTime to get sequences: {0}\n'.format(time.time() - tx))
 
         # Create a pool of processes; one dataset will take up one process.
-        my_pool = Pool(processes = max_cores)
+        my_pool = Pool(processes = settings.max_cores)
         results = []
 
         # Apply all datasets to the pool
         t1 = time.time()
-        for dset_id, dset_reads in datasets.items():
 
-            arguments = (dset_id, dset_reads, tempdir, output_dir, read_limit,
-                         utrfile_path, utrs, utr_seqs, polyA, del_reads,
-                         extendby)
+        for dset_id, dset_reads in settings.datasets.items():
+
+            arguments = (dset_id, dset_reads, tempdir, output_dir, utr_seqs,
+                         settings, annotation)
 
             ###### WORK IN PROGRESS
-            akk = pipeline(dset_id, dset_reads, tempdir, output_dir,
-                           read_limit, utrfile_path, utrs, utr_seqs, polyA,
-                           del_reads, extendby)
-            debug()
+            #akk = pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs,
+                           #settings, annotation)
 
-            #result = my_pool.apply_async(pipeline, arguments)
-            #results.append(result)
+            #debug()
+
+            result = my_pool.apply_async(pipeline, arguments)
+            results.append(result)
 
         # Wait for all procsses to finish
         my_pool.close()
         my_pool.join()
 
         # Get the paths from the final output
-        dsets = datasets.keys()
+        dsets = settings.datasets.keys()
         outp = [result.get() for result in results]
         print('Total elapsed time: {0}\n'.format(time.time()-t1))
 
@@ -1527,13 +1627,15 @@ def main():
 if __name__ == '__main__':
     main()
 
-# It is clear that the 99.5% marker is decent, however the 'noisy' coverage
-# makes it difficult to use this measure.
-# When you do the average 100 before and after: consider that if the read
-# coverage goes down around the 99.5% mark, and up after, you'll have the
-# after-coverage higher than the before-coverage. You also need to include the
-# before/after coverage of the annotated poly(A) site. Like you had in the
-# beginning...
+# You're going about this the wrong way. Here's how to get a good marker for
+# 3UTR end.
+# 1) Get all the annotated polyA sites (determined by 3UTR end) from gencode.
+# 2) Get the self.polyA_cluster
+# 3) Get the self.coverage diff on both sides of polyA_cluster sites
+# 4) Get the cumul value and relative_pos value for each polyA site
+# 5) For each gene, output the above variables to a file
+# 5) Use that information to get a better cumul value cutoff for when a gene is
+# finished
 
 # NOTE from Friday: the GENCODE poly(A) reads are good and plentiful. You can
 # rely on them,
@@ -1569,9 +1671,5 @@ if __name__ == '__main__':
 # Implement the python solution for getting sequences fast
 # 1) Put the temp poly(A) reads in a different folder. Thus you can re-obtain
 # them easily, because it takes so much time (and RAM) to remap them.
-# As well, get the poly(A) reads in .bed format.
-# Then do intersectBed on the poly(A) reads. Then you can read the file and for
-# each TS_ID (which, remember, is only the longest transcript), you can get an
-# overview over how many poly(A) reads land here.
 
 #* ways to visualize the 3'utr and the PAS motif; similar to what I've done with PERL; if python does not have a similar library we can implement this in a perl script;
