@@ -82,7 +82,20 @@ First, an outline of the tool as it stands today.
 
 Unresolved issues: 
 1) Paired end vs. non-paired. Should we use the information?
-	Difficulty: Medium
+	Status: I'm using it! Now I just have to 'not use' not paired end!
 2) The 30% of 3UTRs that have multiple exons. Should we include them?
 	Difficulty: Hard
 3) Graphical output. Should I make a nice one?
+	Status: Roderic says it's not worth it, unless it's really fast
+
+
+# NOTES FROM MEETING WITH RODERIC
+1) He wants to include all the 3UTR exons
+2) There should be an obvious way to detect novel poly(A) sites
+3) The 'input' part will take 2 weeks
+4) The flux capacitor can be used to get the relative isoform usage
+5) The flux capacitor would do away with the rpkm and coverage change
+6) When introducing multiple-exon utrs, remember that coverage change and
+distance to PAS is not so trivial anymore
+7) SVM and polyAdb are only for human. what about mouse and horse?
+
