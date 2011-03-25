@@ -26,7 +26,7 @@ def run_from_ipython():
     except NameError:
         return False
 
-# only get the debug functio prop
+# only get the debug function if run from Ipython
 if run_from_ipython():
     from IPython.Debugger import Tracer
     debug = Tracer()
@@ -41,6 +41,7 @@ import matplotlib.pyplot as plt
 
 # Your own imports
 import annotation_analysis_progress as genome
+
 
 class Settings(object):
     """Store the settings obtained from file"""
@@ -60,6 +61,7 @@ class Settings(object):
         self.extendby = int(extendby)
         self.del_reads = del_reads
 
+
 class Annotation(object):
     """A convenience class that holds the files and data structures relevant to
     the annotation that has been supplied."""
@@ -73,12 +75,13 @@ class Annotation(object):
         self.annotated_polyA_dict = ''
         self.utr_seq_dict = ''
 
-class FinalOutput(object):
+
+class UTR(object):
     """This class takes care of writing output to file. Avoids passing a million
     parameters here and there."""
 
     def __init__(self, chrm, beg, end, strand, ts_ID, rpkm, extendby,
-                 first_covr, sequence, polyA_cluster):
+                 first_covr, sequence, polyA_cluster, polyA_sites):
 
         # variables you have to initialize
         self.chrm = chrm
@@ -86,14 +89,62 @@ class FinalOutput(object):
         # nonextended versions further down
         self.beg = beg
         self.end = end
+        self.length = end-beg
         self.ts_ID = ts_ID
         self.strand = strand
         self.rpkm = rpkm
         self.extendby = extendby # how far has this annotation been extended
         self.sequence = sequence
-        self.polyA_cluster = polyA_cluster
+        self.polyA_reads = polyA_cluster # the polyA reads
+        self.polyA_sites = (int(site[1]) for site in polyA_sites) # annotated sites
 
-        # variables that change depending on if reads map to this 3UTR
+        # the coverage vectors
+        self.covr_vector = [first_covr]
+        self.cumul_covr = [first_covr]
+
+        # a short one for often used information
+        self.utr_info = (chrm, beg, end, strand)
+
+        # Get the non-extended begs and ends as well!
+        if extendby > 0:
+            if strand == '+':
+                self.end_nonextended = self.end - extendby
+            if strand == '-':
+                self.beg_nonextended = self.beg + extendby
+
+    def is_empty(self):
+        """Determine if non-extended coverage vector is empty"""
+
+        if self.strand == '-':
+            covr_slice = iter(self.covr_vector[self.extendby:])
+        elif self.strand == '+':
+            covr_slice = iter(self.covr_vector[:-self.extendby])
+
+        # Check if covr_vector is non-empty in non-extended 3UTR
+        for val in covr_slice:
+            if val > 0:
+                return False
+
+        return True
+
+def frmt(self, element):
+    """Return float objects with four decimals. Return all other objects as
+    they were"""
+
+    if type(element) is float:
+        return format(element, '.4f')
+    if type(element) is int:
+        return str(element)
+    else:
+        return element
+
+class FullLength(object):
+    """Class for writing the UTR end file"""
+
+    def __init__(self, ts_ID):
+        self.ts_ID = ts_ID
+
+        # variables that change depending on if reads map to 3UTR
         self.has_PAS = 'NA'
         self.pas_pos ='NA'
         self.ext_mean_99 = 'NA'
@@ -101,37 +152,24 @@ class FinalOutput(object):
         self.ext_mean_annot = 'NA'
         self.int_mean_annot = 'NA'
         self.cuml_rel_size = 'NA'
-        self.polyA_cumul_rel_pos = 'NA'
-        self.polyA_support = 0
+        self.polyA_support = 'NA'
 
-        # the coverage vectors
-        self.covr_vector = [first_covr]
-        self.cumul_covr = [first_covr]
-
-        # Get the non-extended end as well!
-        if extendby > 0:
-            if strand == '+':
-                self.end_nonextended = self.end - extendby
-            if strand == '-':
-                self.beg_nonextended = self.beg + extendby
-
-    def header_dict(self):
-
-        return dict((('chrm', self.chrm), ('beg', self.frmt(self.beg)),
-                    ('end', self.frmt(self.end)),
-                    ('ts_ID', self.frmt(self.ts_ID)),
-                    ('strand', self.strand),
-                    ('cuml_rel_size', self.frmt(self.cuml_rel_size)),
-                    ('3utr_extended_by', self.frmt(self.extendby)),
-                    ('mean_int_covrg_cuml_point', self.frmt(self.int_mean_99)),
-                    ('mean_ext_covrg_cuml_point', self.frmt(self.ext_mean_99)),
-                    ('mean_int_covrg_annotation', self.frmt(self.int_mean_annot)),
-                    ('mean_ext_covrg_annotation', self.frmt(self.ext_mean_annot)),
-                    ('polyA_support_for_cuml_point',self.frmt(self.polyA_support)),
-                    ('cuml_point_for_polyA_site',self.frmt(self.polyA_cumul_rel_pos)),
-                    ('PAS_type', self.has_PAS),
-                    ('PAS_distance_from_cuml_point', self.frmt(self.pas_pos)),
-                    ('RPKM', self.frmt(self.rpkm))
+    def header_dict(self, this_utr):
+        """Return  """
+        return dict((('chrm', this_utr.chrm), ('beg', self.frmt(this_utr.beg)),
+                    ('end', self.frmt(this_utr.end)),
+                    ('ts_ID', self.frmt(this_utr.ts_ID)),
+                    ('strand', this_utr.strand),
+                    ('3utr_extended_by', self.frmt(this_utr.extendby)),
+                    ('cuml_point_rel_size', self.frmt(self.cuml_rel_size)),
+                    ('cuml_point_mean_int_covrg', self.frmt(self.int_mean_99)),
+                    ('cuml_point_mean_ext_covrg', self.frmt(self.ext_mean_99)),
+                    ('annotation_mean_int_covrg', self.frmt(self.int_mean_annot)),
+                    ('annotation_mean_ext_covrg', self.frmt(self.ext_mean_annot)),
+                    ('cuml_point_polyA_support', self.frmt(self.polyA_support)),
+                    ('cuml_point_PAS_type', self.has_PAS),
+                    ('cuml_point_PAS_distance', self.frmt(self.pas_pos)),
+                    ('3utr_RPKM', self.frmt(this_utr.rpkm))
                      ))
 
     def frmt(self, element):
@@ -153,88 +191,75 @@ class FinalOutput(object):
         3utr_extended_by
         ts_ID
         strand
-        cuml_rel_size
-        mean_int_covrg_cuml_point
-        mean_ext_covrg_cuml_point
-        mean_int_covrg_annotation
-        mean_ext_covrg_annotation
-        polyA_support_for_cuml_point
-        cuml_point_for_polyA_site
-        PAS_type
-        PAS_distance_from_cuml_point
-        RPKM
+        cuml_point_rel_size
+        cuml_point_mean_int_covrg
+        cuml_point_mean_ext_covrg
+        annotation_mean_int_covrg
+        annotation_mean_ext_covrg
+        cuml_point_polyA_support
+        cuml_point_PAS_type
+        cuml_point_PAS_distance
+        3utr_RPKM
         """.split()
 
+    def write_header(self, outfile):
+        outfile.write('\t'.join(self.header_order()) + '\n')
 
-    def is_empty(self):
-        """Determine if non-extended coverage vector is empty"""
-
-        if self.strand == '-':
-            covr_slice = iter(self.covr_vector[self.extendby:])
-        elif self.strand == '+':
-            covr_slice = iter(self.covr_vector[:-self.extendby])
-
-        # Check if covr_vector is non-empty in non-extended 3UTR
-        for val in covr_slice:
-            if val > 0:
-                return False
-
-        return True
-
-    def calculate_output(self, pas_list, utrs, transl):
+    def calculate_output(self, pas_list, this_utr):
         # Don't do anything if coverage vector is empty
-        if self.is_empty():
+        if this_utr.is_empty():
             return
 
         # Call different strand-specific functions
-        if self.strand == '-':
+        if this_utr.strand == '-':
             # calculate the cumulative values
-            self.cumul_minus()
-            # calculate has_polyA values
-            self.polyA_minus(pas_list, utrs)
+            self.cumul_minus(this_utr)
 
-        if self.strand == '+':
+        if this_utr.strand == '+':
             # calculate the cumulative values
-            self.cumul_plus()
-            # calculate has_polyA values
-            self.polyA_plus(pas_list, utrs)
+            self.cumul_plus(this_utr)
 
-        # calculate the PAS and pas distance
-        self.set_pas(pas_list, utrs)
+        # see if the end position has polyA support (if polyA reads are given)
+        if this_utr.polyA_reads != []:
+            self.get_polyA_support(this_utr)
 
-    def cumul_minus(self):
+        # calculate the PAS and pas distance for 'length'
+        self.get_pas(pas_list, this_utr)
+
+
+    def cumul_minus(self, this_utr):
         """Note that rel_pos is relative to the un-extended 3UTR. Thus, a
         rel_pos value of 3 here would be the same as self.beg + extension + 3."""
-        covr_vector = self.covr_vector
-        extendby = self.extendby
-        cumul_covr = self.cumul_covr
+        covr_vector = this_utr.covr_vector
+        extendby = this_utr.extendby
+        cumul_covr = this_utr.cumul_covr
         # get the cumulated coverage resulting from the extension
-        ext_cumul = self.cumul_covr[extendby-1]
+        ext_cumul = cumul_covr[extendby-1]
         # subtract this from extension
         if ext_cumul > 0:
             cumul_covr = [val-ext_cumul for val in cumul_covr[extendby:]]
         else:
             cumul_covr = cumul_covr[extendby:]
 
-        # Get normalized cuml-coverage of non-extended 3UTR
+        # Get normalized cuml-coverage of non-extended 3UTR. save to this_utr
         covr_sum = sum(covr_vector[extendby:])
-        self.norm_cuml = [1-val/covr_sum for val in cumul_covr]
+        this_utr.norm_cuml = [1-val/covr_sum for val in cumul_covr]
 
         # Test for a special case where only last entry has value
         if covr_sum == covr_vector[-1]:
             rel_pos = 1
-            cuml_rel_size = rel_pos/float(self.end-self.beg)
+            self.cuml_rel_size = rel_pos/float(this_utr.end-this_utr.beg)
 
-        # Get the point where 99.5% of reads have landed
-        for ind, el in enumerate(self.norm_cuml):
+        # Get the utr-relative position where 99.5% of reads have landed
+        for ind, el in enumerate(this_utr.norm_cuml):
             if el < 0.995:
                 rel_pos = ind
-                length = float(self.end-self.beg)
+                length = float(this_utr.end-this_utr.beg)
                 self.cuml_rel_size = (length-rel_pos)/length
                 break
 
-        # Save relative position with the object
-        self.rel_pos = rel_pos
+        # Save relative position with the this utr for later usage
+        this_utr.rel_pos = rel_pos
 
         # rel_pos according to extended 3utr
         ext_rel_pos = rel_pos + extendby
@@ -248,30 +273,29 @@ class FinalOutput(object):
         self.ext_mean_annot = sum(covr_vector[:extendby])/extendby
         self.int_mean_annot = sum(covr_vector[extendby: 2*extendby])/extendby
 
-    def cumul_plus(self):
-        covr_vector = self.covr_vector
-        extendby = self.extendby
+    def cumul_plus(self, this_utr):
+        covr_vector = this_utr.covr_vector
+        extendby = this_utr.extendby
         # Get normalized cuml-coverage of un-extended 3UTR
-        cumul_covr = self.cumul_covr[:-extendby]
+        cumul_covr = this_utr.cumul_covr[:-extendby]
         covr_sum = sum(covr_vector[:-extendby])
-        self.norm_cuml = [val/covr_sum for val in cumul_covr]
+        this_utr.norm_cuml = [val/covr_sum for val in cumul_covr]
 
         # Test special case where only first entry has value
         if covr_sum == covr_vector[0]:
             rel_pos = 1
-            cuml_rel_size = rel_pos/float((self.end-self.beg))
+            self.cuml_rel_size = rel_pos/float((this_utr.end-this_utr.beg))
 
         # Get the point where 99.5% of reads have landed
-        for ind, el in enumerate(reversed(self.norm_cuml)):
+        for ind, el in enumerate(reversed(this_utr.norm_cuml)):
             if el < 0.995:
-                length = self.end-self.beg
+                length = this_utr.end-this_utr.beg
                 rel_pos = length - ind
                 self.cuml_rel_size = rel_pos/float(length)
                 break
 
-        # Save relative position with the object
-        # This relative position is 
-        self.rel_pos = rel_pos
+        # Save relative position (relative to extended 3utr) with the object
+        this_utr.rel_pos = rel_pos
 
         # rel_pos according to extended 3utr
         ext_rel_pos = rel_pos - extendby
@@ -286,18 +310,18 @@ class FinalOutput(object):
         self.int_mean_annot = sum(covr_vector[-2*extendby:-extendby])/extendby
 
 
-    def set_pas(self, pas_list, utrs):
+    def get_pas(self, pas_list, this_utr):
 
-        ts_ID = self.ts_ID
+        ts_ID = this_utr.ts_ID
 
         # rel pos is different depending on strand because we are dealing with a
         # reverse-complemented sequence that has been extended
-        if self.strand == '+':
-            rel_pos = self.rel_pos
-        if self.strand == '-':
-            rel_pos = len(self.sequence) - self.extendby - self.rel_pos
+        if this_utr.strand == '+':
+            rel_pos = this_utr.rel_pos
+        if this_utr.strand == '-':
+            rel_pos = len(this_utr.sequence) - this_utr.extendby - this_utr.rel_pos
 
-        rel_seq = self.sequence[rel_pos-40:rel_pos+10]
+        rel_seq = this_utr.sequence[rel_pos-40:rel_pos]
         for pas in pas_list:
             try:
                 (self.has_PAS, pas_indx) = (pas, rel_seq.index(pas))
@@ -307,63 +331,294 @@ class FinalOutput(object):
                 (self.has_PAS, self.pas_pos) = ('NA', 'NA')
 
 
-    def polyA_plus(self, pas_list, utrs):
-        # Look for polyA-read support -- and get the cumulative
-        # percentage at which the majority of the polyAreads are
-        # found.
+    def get_polyA_support(self, this_utr):
+        """ Look for polyA-read support -- and get the cumulative
+         percentage at which the majority of the polyAreads are
+         found.
+         """
 
-        # Get the absolute end-position of the 99.5%
-        end_pos = self.beg + self.rel_pos
+        # Get the absolute end-position of the 99.5% 
+        if this_utr.strand == '+':
+            end_pos = this_utr.beg + this_utr.rel_pos
+        if this_utr.strand == '-':
+            end_pos = this_utr.beg_nonextended + this_utr.rel_pos
+
         # Check if this position has polyA reads within 50 nt
-        self.polyA_cumul_rel_pos = 0
-        for pAsite in self.polyA_cluster[0]:
-            if (end_pos > pAsite-75) and (end_pos < pAsite+75):
-                # get cumulative value at the polyA site
-                rel_polyA = pAsite - self.beg
-                # If the polyA is outside the end, report it as the last
-                # value.
-                if rel_polyA > self.end_nonextended - self.beg:
-                    self.polyA_cumul_rel_pos = self.norm_cuml[-1]
-                else:
-                    self.polyA_cumul_rel_pos = self.norm_cuml[rel_polyA]
-
+        for pAsite in this_utr.polyA_reads[0]:
+            if pAsite-40 < end_pos < pAsite+40:
                 # A general marker for polyA close to end_pos
                 self.polyA_support = 1
-
                 break
 
-    def polyA_minus(self, pas_list, utrs):
-
-        # Get the absolute end position of the 99.5%
-        # self.rel_pos is relative the non-extended utr.
-        end_pos = self.beg_nonextended + self.rel_pos
-        # Check if this position has polyA reads within 50 nt
-        for pAsite in self.polyA_cluster[0]:
-            if (end_pos > pAsite-75) and (end_pos < pAsite+75):
-                # Relative polyA site -- considering non-extended UTR!
-                rel_polyA = pAsite - self.beg_nonextended
-                # If the polyA is in the extension, report it as the last value
-                if rel_polyA < 0:
-                    self.polyA_cumul_rel_pos = self.norm_cuml[0]
-                else:
-                    self.polyA_cumul_rel_pos = self.norm_cuml[rel_polyA]
-
-                # A general marker for polyA close to end_pos
-                self.polyA_support = 1
-
-                break
-
-    def write_output(self, outobject):
+    def write_output(self, outobject, this_utr):
         """Format the output as desired, then save"""
 
         # Create a list of formatted output
         output_order = self.header_order()
-        output_dict = self.header_dict()
+        output_dict = self.header_dict(this_utr)
 
         output = [output_dict[hedr] for hedr in output_order]
 
         outobject.write('\t'.join(output) + '\n')
 
+class PolyAReads(object):
+
+    def __init__(self, ts_ID):
+        self.ts_ID = ts_ID
+
+        # variables to be printed
+        self.polyRead_sites = 'NA'
+        self.rel_polyRead_sites = 'NA'
+        self.read_coverage_change = 'NA'
+        self.annotation_support = 'NA'
+        self.PAS_list = 'NA'
+        self.rel_sizes = 'NA'
+        self.cumul_rel_sizes = 'NA'
+
+
+    def write_header(self, outfile):
+        outfile.write('\t'.join(self.header_order()) + '\n')
+
+    def frmt(self, element):
+        """Return float objects with four decimals. Return all other objects as
+        they were"""
+
+        if type(element) is float:
+            return format(element, '.4f')
+        if type(element) is int:
+            return str(element)
+        else:
+            return element
+
+
+    def header_dict(self, this_utr, polA_nr, pAcoord, nr_supp_pA, covR, covL,
+                    annotpA_dist, nearbyPAS, PAS_dist, rel_size, norm_cuml_val):
+
+        return dict((
+                    ('ts_ID', this_utr.ts_ID),
+                    ('polyA_number', self.frmt(polA_nr)),
+                    ('strand', this_utr.strand),
+                    ('polyA_coordinate', self.frmt(pAcoord)),
+                    ('number_supporting_reads', self.frmt(nr_supp_pA)),
+                    ('coverage_50nt_downstream', self.frmt(covR)),
+                    ('coverage_50nt_upstream', self.frmt(covL)),
+                    ('annotated_polyA_distance', self.frmt(annotpA_dist)),
+                    ('nearby_PAS', nearbyPAS),
+                    ('PAS_distance', self.frmt(PAS_dist)),
+                    ('rel_size', self.frmt(rel_size)),
+                    ('norm_cuml_read_value', self.frmt(norm_cuml_val))
+                    ))
+
+    def header_order(self):
+        return """
+        ts_ID
+        polyA_number
+        strand
+        polyA_coordinate
+        number_supporting_reads
+        coverage_50nt_downstream
+        coverage_50nt_upstream
+        annotated_polyA_distance
+        nearby_PAS
+        PAS_distance
+        rel_size
+        norm_cuml_read_value
+        """.split()
+
+    def write_output(self, outobject, this_utr):
+        """Now there is 0 or > 1 output for each UTR. Need to loop through the
+        number of pA sites and write output for each loop"""
+
+        # Don't write for utrs without polyA-reads
+        if self.polyRead_sites == 'NA':
+            return
+
+        # The column-order in which the output should be printed
+        output_order = self.header_order()
+
+        # The output relies on that the calculations have all been 'in correct
+        # order' in calculated_output()
+        for indx, site in enumerate(self.polyRead_sites):
+            polAnr = indx + 1
+            pAcord = site
+            nr_supp_pA = len(this_utr.polyA_reads[1][indx])
+            (covL, covR) = self.read_coverage_change[indx]
+            annotpA_dist = self.annotation_support[indx]
+            # One site might have several PAS of several creeds
+            (nearbyPAS, PAS_dist) = self.select_PAS(indx)
+            # STATUS: self.rel_sizes is [] while should have len=4
+            rel_size = self.rel_sizes[indx]
+            norm_cuml_val = self.cumul_rel_sizes[indx]
+
+            # Get the output dictionary with updated values
+            output_dict = self.header_dict(this_utr, polAnr, pAcord, nr_supp_pA,
+                                           covR, covL, annotpA_dist, nearbyPAS,
+                                           PAS_dist, rel_size, norm_cuml_val)
+
+            output = [output_dict[hedr] for hedr in output_order]
+
+            outobject.write('\t'.join(output) + '\n')
+
+
+    def select_PAS(self, index):
+        if self.PAS_list[index] == []:
+            return ('NA', 'NA')
+        # If not, choose the best PAS
+        if len(self.PAS_list[index]) == 1:
+            return self.PAS_list[index][0]
+        else:
+            # Go through pas-list from best to worst. take the first you get
+            paslist = get_pas_list()
+            for pas in paslist:
+                for this_pas, pasdist in self.PAS_list[index]:
+                    if pas == this_pas:
+                        return (this_pas, pasdist)
+
+    def calculate_output(self, pas_list, this_utr):
+        """
+        For each reported polyA site as determined by poly(A) reads, check if
+        1) The coverage changes 50nt on both sides of the site
+        2) If there is an annotated polyA site nearby
+        3) If there is a PAS nearby
+        4) The relative length of the 3UTR at this site
+        5) The normalized cumulative read value at this site
+
+        And if the user supplies the information:
+
+        6) SVM nearby?
+        7) polyADB nearby?
+        """
+
+        # Don't do anything if coverage vector is empty
+        if this_utr.is_empty():
+            return
+
+        self.polyRead_sites = this_utr.polyA_reads[0]
+        # If there are no polyA reads in the UTR, pass on
+        if self.polyRead_sites == []:
+            return
+        # Get the relative (relative to extended utr!) location of the polyA sites.
+        self.rel_polyRead_sites = [pos-this_utr.beg for pos in
+                                       self.polyRead_sites]
+
+        ############# TEST #################
+        # for a test, print the distance from the end of the polyA reads as well
+        # as their abundance
+        #polyRead_sites_count = [len(sites) for sites in this_utr.polyA_reads[1]]
+
+        #if self.strand  == '+':
+            #end_dist = [self.end_nonextended - pos for pos in polyRead_sites]
+            #print (self.strand, sorted(zip(end_dist, polyRead_sites_count)))
+
+        #if self.strand == '-':
+            #end_dist = [pos - self.beg_nonextended for pos in polyRead_sites]
+            #print (self.strand, sorted(zip(end_dist, polyRead_sites_count)))
+        ###################################
+
+        #1) Get coverage on both sides of polyA read
+        # This variable should be printed relative to polyA_read count divided
+        # by the rpkm
+        rccp = [(sum(this_utr.covr_vector[point:point-50])/50,
+                  sum(this_utr.covr_vector[point:point+50])/50) for point in
+                 self.rel_polyRead_sites]
+
+        self.read_coverage_change = rccp
+
+        #2) Is there an annotated polyA site nearby?
+        # Report if there is one within +/- 40 nt and report the distance. Also
+        # report if no distance is found.
+        self.annotation_support = self.read_annotation_support(this_utr)
+        # Result: a lot of support for the final site; less support for 'within'
+        # sites
+
+        #3) If there is a PAS nearby? This is secondary information. Look 40 nt
+        #downstream and look for PAS. The SVM is a better indicator.
+        self.PAS_list = self.get_PAS(pas_list, this_utr)
+
+        #4) The relative length of the 3UTR at the polyA_read sites
+        self.rel_sizes = self.get_rel_len(this_utr)
+
+        #5) The normalized cumulative read value at this site
+        self.cumul_rel_sizes = self.get_cumul_rel_len(this_utr)
+        # TODO IDEA: plot the rel_size against length; but only include those longer
+        # than 0.99. Interpolate against this value
+
+    def get_cumul_rel_len(self, this_utr):
+        rel_lens = []
+        # Get the cumulative read coverage at the polyA sites. If the polyA
+        # Now, it's relative to the un-extended sequence.
+        if this_utr.strand == '+':
+            for rpoint in self.rel_polyRead_sites:
+                if rpoint > this_utr.length - this_utr.extendby:
+                    rel_lens.append(1)
+                else:
+                    rel_lens.append(this_utr.norm_cuml[rpoint-1])
+
+        if this_utr.strand == '-':
+            for rpoint in self.rel_polyRead_sites:
+                if rpoint < this_utr.extendby:
+                    rel_lens.append(1)
+                else:
+                    rel_lens.append(this_utr.norm_cuml[rpoint-this_utr.extendby])
+
+        return rel_lens
+
+    def get_rel_len(self, this_utr):
+        """For each polyA_read site, get the relative length of the 3UTR at this
+        point"""
+        # Get the relative point to the extended sequence. It's OK. Won't be
+        # much in the end.
+        rel_lens = []
+
+        if this_utr.strand == '+':
+            for rpoint in self.rel_polyRead_sites:
+                rel_lens.append(rpoint/(this_utr.length-this_utr.extendby))
+        if this_utr.strand == '-':
+            for rpoint in self.rel_polyRead_sites:
+                rel_lens.append(1-rpoint/(this_utr.length-this_utr.extendby))
+
+        return rel_lens
+
+    def get_PAS(self, pas_list, this_utr):
+        """Go through the -40 from the polyA read average. Collect any PAS you
+        find."""
+        pA_read_PAS = []
+        for rpoint in self.rel_polyRead_sites:
+            rel_seq = this_utr.sequence[rpoint-40:rpoint]
+            found = False
+            thispoint = []
+            for pas in pas_list:
+                try:
+                    (PAS_type, pas_indx) = (pas, rel_seq.index(pas))
+                    pas_rel_pos = 40 - pas_indx # AAT-FROMHERE-AAA
+                    thispoint.append((PAS_type, pas_rel_pos))
+                    found = True
+                    # is this biased by finding the first? let's say there are
+                    # two TATAAA -- now you only find the most distant one
+                except ValueError:
+                    (PAS_type, pas_rel_pos) = ('NA', 'NA')
+            pA_read_PAS.append(thispoint)
+
+        return pA_read_PAS
+
+
+    def read_annotation_support(self, this_utr):
+        """Check if the read polyA points have annotated points near to them"""
+        supp = []
+        for rpoint in self.polyRead_sites:
+            found = False
+            for apoint in this_utr.polyA_sites:
+                if rpoint-40 < apoint < rpoint+40:
+                    found = True
+                    found_point = apoint
+                    found_distance = rpoint-apoint
+                    break
+            if found:
+                supp.append(found_distance)
+            if not found:
+                supp.append('NA')
+
+        return supp
 
 def zcat_wrapper(bed_reads, read_limit, out_path, polyA, polyA_path):
     """Function run by processes. Get only uniquely mapped reads with up to two
@@ -487,43 +742,48 @@ def coverage_wrapper(dset_id, filtered_reads, utrfile_path, options):
 
     return out_path
 
-def get_pas_list(inverted=False):
+def get_pas_list():
     # The known PAS in order of common appearance
-    known_pas = ['AATAAA', 'ATTAAA', 'TATAAA', 'AGTAAA', 'AAGAAA', 'AATATA',
-                 'AATACA', 'CATAAA', 'GATAAA', 'AATGAA', 'TTTAAA', 'ACTAAA',
-                 'AATAGA']
-    if inverted:
-        transl = {'A':'T', 'G':'C', 'T':'A', 'C':'G', 'N':'N'}
-        return [''.join([transl[letr] for letr in reversed(pas)]) for pas in
-                  known_pas]
-    else:
-        return known_pas
+    return ['AATAAA', 'ATTAAA', 'TATAAA', 'AGTAAA', 'AAGAAA', 'AATATA',
+            'AATACA', 'CATAAA', 'GATAAA', 'AATGAA', 'TTTAAA', 'ACTAAA',
+            'AATAGA']
 
+def output_writer(dset_id, coverage, utrs, utr_seqs, rpkm, extendby,
+                 polyA_cluster, polyA_sites_dict):
 
-def ends_wrapper(dset_id, coverage, utrs, utr_seqs, rpkm, extendby,
-                 polyA_cluster):
-    """Putting together all the info on the 3UTRs and writing it to file"""
+    """Putting together all the info on the 3UTRs and writing to files. Write
+    one file mainly about the length of the 3UTR, and write another file about
+    the polyA sites found in the 3UTR."""
 
-    # Renaming paths for the output file
     (dirpath, basename) = os.path.split(coverage)
-    out_path = os.path.join(dirpath, 'utr_'+dset_id)
-    outfile = open(out_path, 'wb')
 
-    pas_list = get_pas_list(inverted = False)
-    transl = {'A':'T', 'G':'C', 'T':'A', 'C':'G'}
+    # list of PAS hexamers
+    pas_list = get_pas_list()
 
     # First get line 1 as something to start from
     read_from = open(coverage, 'rb')
     line1 = read_from.next()
     (chrm, beg, end, ts_ID, d, strand, rel_pos, covr) = line1.split()
 
-    # Create an output-instance
-    this_utr = FinalOutput(chrm, int(beg), int(end), strand, ts_ID, rpkm[ts_ID],
-                           extendby, int(covr), utr_seqs[ts_ID],
-                           polyA_cluster[ts_ID])
+    # Create a UTR-instance
+    this_utr = UTR(chrm, int(beg), int(end), strand, ts_ID, rpkm[ts_ID],
+                   extendby, int(covr), utr_seqs[ts_ID], polyA_cluster[ts_ID],
+                   polyA_sites_dict[ts_ID])
 
-    # Write the header of the file
-    outfile.write('\t'.join(this_utr.header_order()) + '\n')
+
+    # Paths and file objects for the two output files (length and one polyA)
+    length_outpath = os.path.join(dirpath, 'utr_'+dset_id)
+    polyA_outpath = os.path.join(dirpath, 'polyA_'+dset_id)
+    length_outfile = open(length_outpath, 'wb')
+    polyA_outfile = open(polyA_outpath, 'wb')
+
+    # Create instances for writing to two output files
+    length_output = FullLength(ts_ID)
+    pAread_output = PolyAReads(ts_ID)
+
+    # Write the headers of the length and polyA output files
+    length_output.write_header(length_outfile)
+    pAread_output.write_header(polyA_outfile)
 
     # Assert that the file information is the same as you started with
     assert utrs[ts_ID] == (chrm, int(beg), int(end), strand), 'Mismatch'
@@ -539,30 +799,38 @@ def ends_wrapper(dset_id, coverage, utrs, utr_seqs, rpkm, extendby,
             this_utr.covr_vector.append(covr) # add coverage and continue
             this_utr.cumul_covr.append(this_utr.cumul_covr[-1] + covr)
 
-        # Ooops, this is the first line of a new UTR
+        # if not, this is the first line of a new UTR
         else:
-            # Calculate output values like cumulative coverage, polyA sites, etc..
-            this_utr.calculate_output(pas_list, utrs, transl)
-            # Save output to file
-            this_utr.write_output(outfile)
+            # Calculate output values like 99.5% length, cumulative coverage, etc
+            length_output.calculate_output(pas_list, this_utr)
+            pAread_output.calculate_output(pas_list, this_utr)
+            # Save output to files
+            length_output.write_output(length_outfile, this_utr)
+            pAread_output.write_output(polyA_outfile, this_utr)
 
             # Update to the new utr and start the loop from scratch
-            this_utr = FinalOutput(chrm, int(beg), int(end), strand, ts_ID,
-                                   rpkm[ts_ID], extendby, int(covr),
-                                   utr_seqs[ts_ID], polyA_cluster[ts_ID])
+            this_utr = UTR(chrm, int(beg), int(end), strand, ts_ID, rpkm[ts_ID],
+                           extendby, int(covr), utr_seqs[ts_ID],
+                           polyA_cluster[ts_ID], polyA_sites_dict[ts_ID])
+
+            # Create instances for writing to two output files
+            length_output = FullLength(ts_ID)
+            pAread_output = PolyAReads(ts_ID)
 
             # Assert that the next utr has correct info
             assert utrs[ts_ID] == (chrm, int(beg), int(end), strand), 'Mismatch'
 
-    outfile.close()
+    length_outfile.close()
+    polyA_outfile.close()
 
-    return out_path
+    return (polyA_outpath, length_outpath)
 
 def verify_access(f):
     try:
         open(f, 'rb')
     except:
-        print('Could not access {0}'.format(f))
+        print('Could not access {0}.\nCheck if file exists, and if it exists '\
+              'check permissions'.format(f))
         sys.exit()
 
 def read_settings(settings_file):
@@ -1076,18 +1344,18 @@ def cluster_polyAs(utr_polyAs, utrs):
             minus_values['-'].append(minus_ratio)
 
         # For + strands, choose beg as polyA_site; choose end for - strands.
+        # Select only the reads with opposite strand! Make use of bias :)
+        # TODO do statistics on how many in which strand; count the number
+        # depending on direction so you can justify removing those with only one
+        # read. This will help you screening out fake poly(A)s for non-stranded
+        # data as well :)
+
         if real_strand == '+':
-            #ends = [tup[1] for tup in polyAs]
-            ends = sorted([tup[1] for tup in polyAs if tup[5] == '-'])
+            ends = sorted([tup[2] for tup in polyAs if tup[5] == '-'])
         if real_strand == '-':
-            #ends = [tup[2] for tup in polyAs]
-            ends = sorted([tup[2] for tup in polyAs if tup[5] == '+'])
+            ends = sorted([tup[1] for tup in polyAs if tup[5] == '+'])
 
         # Getting the actual clusters
-        # TODO you can get statistics from these clusters to make a
-        # distance-distribution figure.
-        # This figure shows that your method is sound because it looks like
-        # all the other polyA-distribution figures.
         polyA_cluster[ts_id] = cluster_loop(ends)
 
     # For those ts_id that don't have a cluster, give them an empty list; ad hoc
@@ -1112,6 +1380,9 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs, settings,
              annotation):
     """Get reads, get polyA reads, cluster polyA reads, get coverage, do
     calculations, write to output... this is where it all happens"""
+    # Define some parameters to shorted some lines...
+    utrfile_path = annotation.utrfile_path
+    extendby = settings.extendby
 
     t0 = time.time()
     # Set some settings for brievity
@@ -1126,7 +1397,7 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs, settings,
     # If polyA is a string, it is a string to polyA sequences in bed-format
     if type(polyA) == str:
         polyA_bed_path = polyA
-        utr_polyAs = get_polyAutr(polyA_bed_path, annotation.utrfile_path)
+        utr_polyAs = get_polyAutr(polyA_bed_path, utrfile_path)
 
     elif polyA == True:
         # Do the polyA: extract, trim, remap, and -> .bed-format.
@@ -1137,29 +1408,26 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs, settings,
 
         # If polyA, find where the polyAs overlap with the 3UTR in the first place
         # run overlap-bed or something similar
-        # To verify the correctness of your polyA reads, to a quick check on the
-        # genome browser. If you have no overlaps, then something is wrong.
-        utr_polyAs = get_polyAutr(polyA_bed_path, settings.utrfile_path)
+        utr_polyAs = get_polyAutr(polyA_bed_path, utrfile_path)
 
     # Cluster the poly(A) reads for each ts_id
     polyA_cluster = cluster_polyAs(utr_polyAs, annotation.utrs)
 
-    #debug()
     # Get the RPKM by running intersect-bed of the reads on the 3utr
     print('Obtaining RPKM for {0} ...\n'.format(dset_id))
-    rpkm = get_rpkm(bed_reads, annotation.utrfile_path, total_nr_reads,
-                    annotation.utrs, settings.extendby)
+    rpkm = get_rpkm(bed_reads, utrfile_path, total_nr_reads, annotation.utrs,
+                    extendby)
 
     # Cover the annotated 3UTR with the reads
     print('Getting read-coverage for the 3UTRs for {0} ...\n'.format(dset_id))
     options = '-d'
-    coverage = coverage_wrapper(dset_id, bed_reads, annotation.utrfile_path, options)
+    coverage = coverage_wrapper(dset_id, bed_reads, utrfile_path, options)
     # Add coverage file_locations to dict
 
     print('Using coverage to get 3UTR ends for {0} ...\n'.format(dset_id))
     # Get transcript 3utr endings as determined by read coverage
-    utr_ends = ends_wrapper(dset_id, coverage, annotation.utrs, utr_seqs, rpkm,
-                            settings.extendby, polyA_cluster)
+    utr_ends = output_writer(dset_id, coverage, annotation.utrs, utr_seqs, rpkm,
+                             extendby, polyA_cluster, annotation.polyA_sites_dict)
 
     print('Total time for {0}: {1}\n'.format(dset_id, time.time() - t0))
 
@@ -1574,10 +1842,10 @@ def main():
                          settings, annotation)
 
             ###### WORK IN PROGRESS
-            #akk = pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs,
-                           #settings, annotation)
+            akk = pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs,
+                           settings, annotation)
 
-            #debug()
+            debug()
 
             result = my_pool.apply_async(pipeline, arguments)
             results.append(result)
@@ -1629,29 +1897,10 @@ if __name__ == '__main__':
 
 # You're going about this the wrong way. Here's how to get a good marker for
 # 3UTR end.
-# 1) Get all the annotated polyA sites (determined by 3UTR end) from gencode.
-# 2) Get the self.polyA_cluster
-# 3) Get the self.coverage diff on both sides of polyA_cluster sites
 # 4) Get the cumul value and relative_pos value for each polyA site
 # 5) For each gene, output the above variables to a file
 # 5) Use that information to get a better cumul value cutoff for when a gene is
 # finished
-
-# NOTE from Friday: the GENCODE poly(A) reads are good and plentiful. You can
-# rely on them,
-# how many 'novel' poly(A) sites can we reliably verify?
-# "poly(A) reads as a marker for RNA 3' ends"
-# You can download the SVM and polyDB tracks from the browser. You can check of
-# your putative transcript ends fall on these, close to these, or not close to
-# these. Based on the coverage around the site, you can make a conclusion about
-# the 3'UTR end at this point..
-
-# The first thing to do with your reads is to go through some rounds of
-# filtering.
-
-# IDEA: when you merge the 3utrs together, can you keep the annotated 3utr ends?
-# This list needs to be checked against he poly(As) you discover. How many are
-# novel? How many are predicted?
 
 # TODO for meeting with Roderic:
 # 1) Point 1 from below
@@ -1672,4 +1921,22 @@ if __name__ == '__main__':
 # 1) Put the temp poly(A) reads in a different folder. Thus you can re-obtain
 # them easily, because it takes so much time (and RAM) to remap them.
 
-#* ways to visualize the 3'utr and the PAS motif; similar to what I've done with PERL; if python does not have a similar library we can implement this in a perl script;
+# 2) BEAR IN MIND that some of your poly(A) reads that are not supported by the
+# annotation COULD BE some other annotated end. You could get the total set of
+# annotated end by not restricting yourself to the 3UTRs of length 1. You can
+# use this set to 'explain' away some false positive putative polyA sites. Then what
+# remains should be pretty solid.
+
+#* ways to visualize the 3'utr and the PAS motif; similar to what I've done with
+#PERL; if python does not have a similar library we can implement this in a perl
+#script;
+
+# PAPER IDEAS:
+    # 1) Reproduce everything they have done with ESTs. This shows that detailed
+    # sequencing now gives the same results as all the ESTs combined! :)
+    # 2) Compare with the nature paper with 36bp reads. Even if they have many
+    # more unmapped reads, the read length is critical to get good information.
+    # Run the whole pipelien with _JUST_THE_EXTENSIOSN! you can make an
+    # extension.bed file and mark it with the gene you extend from. extend until
+    # you meet another annotated object, and at most a certain distance.
+
