@@ -61,6 +61,18 @@ class Settings(object):
         self.extendby = int(extendby)
         self.del_reads = del_reads
 
+    def DEBUGGING(self):
+
+        self.chr1 = True
+        self.read_limit = 100000
+        #self.read_limit = False
+        self.max_cores = 3
+        #self.polyA = False
+        #self.polyA = True
+        self.polyA = '/users/rg/jskancke/phdproject/3UTR/Characterizer/'\
+                'Work_in_progress/temp_files/polyA_reads_k562_whole_cell_'\
+                'processed_mapped_in_3utr.bed'
+
 
 class Annotation(object):
     """A convenience class that holds the files and data structures relevant to
@@ -71,8 +83,8 @@ class Annotation(object):
         self.path = annotation_path
         self.utr_bed_path = ''
         self.utr_bed_dict = ''
-        self.annotated_polyA_path = ''
-        self.annotated_polyA_dict = ''
+        self.a_polyA_path = ''
+        self.a_polyA_dict = ''
         self.utr_seq_dict = ''
 
 
@@ -601,7 +613,6 @@ class PolyAReads(object):
 
         return pA_read_PAS
 
-
     def read_annotation_support(self, this_utr):
         """Check if the read polyA points have annotated points near to them"""
         supp = []
@@ -744,9 +755,9 @@ def coverage_wrapper(dset_id, filtered_reads, utrfile_path, options):
 
 def get_pas_list():
     # The known PAS in order of common appearance
-    return ['AATAAA', 'ATTAAA', 'TATAAA', 'AGTAAA', 'AAGAAA', 'AATATA',
+    return set(['AATAAA', 'ATTAAA', 'TATAAA', 'AGTAAA', 'AAGAAA', 'AATATA',
             'AATACA', 'CATAAA', 'GATAAA', 'AATGAA', 'TTTAAA', 'ACTAAA',
-            'AATAGA']
+            'AATAGA'])
 
 def output_writer(dset_id, coverage, utrs, utr_seqs, rpkm, extendby,
                  polyA_reads, a_polyA_sites_dict):
@@ -959,12 +970,12 @@ def get_a_polyA_sites_path(settings, beddir):
     # If utrfile is not provided, get it yourself from a provided annotation
     if not settings.utrfile_provided:
         if settings.chr1:
-            annotation_path = get_chr1_annotation(settings.annotation_path, beddir)
+            settings.annotation_path = get_chr1_annotation(settings, beddir)
 
         t1 = time.time()
-        print('polyA sites bedfile not found. Generating from annotation ...')
+        print('Annotated polyA sites-file not found. Generating from annotation ...')
         #reload(genome)
-        genome.get_a_polyA_sites_bed(annotation_path, polyA_site_bed_path, settings)
+        genome.get_a_polyA_sites_bed(settings, polyA_site_bed_path)
 
         print('\tTime taken to generate polyA-bedfile: {0}\n'\
               .format(time.time()-t1))
@@ -972,9 +983,12 @@ def get_a_polyA_sites_path(settings, beddir):
     return polyA_site_bed_path
 
 def get_utr_path(settings, beddir):
-    """Get 3utr-file path from annotation via genome module"""
+    """Get 3utr-file path from annotation via genome module. In the genome
+    module, a bedfile is made from the annotation."""
 
-    # If options are not set, make them a 0-string define options
+    # Put together the name of the output file. The name depends on the options
+    # that were used to get it.
+    # If options are not set, make them a 0-string
     if settings.extendby:
         ext = '_extendby_'+str(settings.extendby)
     else:
@@ -995,32 +1009,34 @@ def get_utr_path(settings, beddir):
     utr_bed_path = os.path.join(beddir, utr_filename)
 
     # If the file already exists, don't make it again
-    if os.path.isfile(utr_bed_path):
-        return utr_bed_path
+    # TODO REMEMBER TO UNCOMMENT AND REMOVE RELOAD GENOME
+    #if os.path.isfile(utr_bed_path):
+        #return utr_bed_path
 
-    # If a utrfile is provided, never re-make from annotation
+    # If a utrfile is provided, never re-make from annotation, but shape it to
+    # your needs? This is a bit unfinished.
     if settings.utrfile_provided:
         utr_bed_path = shape_provided_bed(utr_bed_path, settings)
 
     # If utrfile is not provided, get it yourself from a provided annotation
     if not settings.utrfile_provided:
         if settings.chr1:
-            # path or dict?
-            annotation_path = get_chr1_annotation(settings.annotation, beddir)
+            settings.annotation_path = get_chr1_annotation(settings, beddir)
 
         t1 = time.time()
         print('3UTR-bedfile not found. Generating from annotation ...')
-        genome.get_3utr_bed(annotation_path, utr_bed_path, settings)
+        reload(genome)
+        genome.get_3utr_bed_all_exons(settings, utr_bed_path)
 
         print('\tTime taken to generate 3UTR-bedfile: {0}\n'\
               .format(time.time()-t1))
 
     return utr_bed_path
 
-def get_chr1_annotation(annotation, beddir):
+def get_chr1_annotation(settings, beddir):
     """Split the original (GENCODE) annotation into one with only chrm1 """
 
-    (name, suffix) = os.path.splitext(os.path.basename(annotation))
+    (name, suffix) = os.path.splitext(os.path.basename(settings.annotation_path))
     filename = name + '_chr1' + suffix
     outpath = os.path.join(beddir, filename)
 
@@ -1028,12 +1044,11 @@ def get_chr1_annotation(annotation, beddir):
     if os.path.isfile(outpath):
         return outpath
 
-
     t1 = time.time()
     print('Separating chr1 from the annotation ...')
     outhandle = open(outpath, 'wb')
 
-    for line in open(annotation, 'rd'):
+    for line in open(settings.annotation_path, 'rd'):
         if line[:5] == 'chr1\t':
             outhandle.write(line)
 
@@ -1424,7 +1439,7 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs, settings,
     # Add coverage file_locations to dict
 
     print('Using coverage to get 3UTR ends for {0} ...\n'.format(dset_id))
-    # Get transcript 3utr endings as determined by read coverage
+    # Go through the coverage file and compute all stats on a utr-by-utr basis
     utr_ends = output_writer(dset_id, coverage, annotation.utrs, utr_seqs, rpkm,
                              extendby, polyA_reads, annotation.a_polyA_sites_dict)
 
@@ -1783,18 +1798,12 @@ def main():
     #simulate = False
     simulate = True
 
+    # This option should be set only in case of debugging
     DEBUGGING = True
     #DEBUGGING = False
     if DEBUGGING:
-        settings.chr1 = True
-        settings.read_limit = 100000
-        #read_limit = False
-        settings.max_cores = 3
-        #polyA = False
-        #polyA = True
-        settings.polyA = '/users/rg/jskancke/phdproject/3UTR/Characterizer/'\
-                'Work_in_progress/temp_files/polyA_reads_k562_whole_cell_'\
-                'processed_mapped_in_3utr.bed'
+        settings.DEBUGGING()
+    #DEBUGGING = False
 
     #proj_dir = '__'.join(datasets.keys()+['Chr1'+str(chr1)]+['Reads'+str(read_limit)])
     #if not os.path.exists(proj_dir):
@@ -1804,6 +1813,7 @@ def main():
     # from the annotation
     annotation = Annotation(settings.annotation_path)
 
+    # Check if 3utrfile has been made or provided; if not, get it from annotation
     annotation.utrfile_path = get_utr_path(settings, beddir)
     # Get dictionary with utr-info
     print('Making 3UTR data structures ...\n')
@@ -1835,6 +1845,7 @@ def main():
         # Apply all datasets to the pool
         t1 = time.time()
 
+        debug()
         for dset_id, dset_reads in settings.datasets.items():
 
             arguments = (dset_id, dset_reads, tempdir, output_dir, utr_seqs,
@@ -1846,8 +1857,8 @@ def main():
 
             debug()
 
-            result = my_pool.apply_async(pipeline, arguments)
-            results.append(result)
+            #result = my_pool.apply_async(pipeline, arguments)
+            #results.append(result)
 
         # Wait for all procsses to finish
         my_pool.close()
@@ -1873,7 +1884,11 @@ def main():
 
         # Copy output from temp-dir do output-dir
         save_output(final_output, output_dir)
+
     ##################################################################
+    # NOTE TO SELF: everything starting from there should be in a separate
+    # script: utr_output_analysis.py or smth similar. It's only been put here
+    # for conveniece for checking the output during work.
 
     if not simulate:
 
@@ -1895,23 +1910,10 @@ if __name__ == '__main__':
     main()
 
 # TODO
-
-# 1) Remove false friends: Some of your poly(A) reads that are not supported by the
-# annotation COULD BE some other annotated end. You could get the total set of
-# annotated end by not restricting yourself to the 3UTRs of length 1. You can
-# use this set to 'explain' away some false positive putative polyA sites. Then what
-# remains should be pretty solid.
-
-# NOTE when you have done 1), you'll have a pretty decent working program -- 
-# save it as version 1.0.
+# You are now on the n_exon_3utrs branch.
+# go back to the master branch and save it in a separate folder 1.0
 # Version 1.1 should be exactly the same but with multiple exons in 3UTR
 # (in this case, the problem from 1) should be gone...)
-# Version 1.2 should be with flux capacitor
-
-
-#* ways to visualize the 3'utr and the PAS motif; similar to what I've done with
-#PERL; if python does not have a similar library we can implement this in a perl
-#script;
 
 # 1) Put the temp poly(A) reads in a different folder. Thus you can re-obtain
 # them easily, because it takes so much time (and RAM) to remap them.

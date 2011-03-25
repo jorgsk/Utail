@@ -34,16 +34,15 @@ annotation = /users/rg/jskancke/phdproject/3UTR/gencode5/gencode5_annotation.gtf
 # running the whole simulation only with chromosome 1.
 # The first time this setting is used, the chromosome 1 entries from the
 # annotation file above will be filtered out to a separate file.
-CHR1 = true
-# CHR1 = false
+# CHR1 = true
+CHR1 = false
 
 
 [MIN_3UTR_LENGTH]
 # Set the minimum 3UTR length to grab from the annotation. Some annotated 3UTRs
 # are very short - down to 1 nucleotide. The default setting is to select only
 # 3UTRs longer than 250 nt. Setting should not be below 100 nt.
-3utrlen = default
-#3utrlen = 200
+3utrlen = 200
 
 
 [POLYA_READS]

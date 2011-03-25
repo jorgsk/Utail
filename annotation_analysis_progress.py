@@ -589,7 +589,9 @@ def get_3utr_bed(annotation_path, outfile_path, settings):
     transcripts = make_transcripts(annotation_path)
 
     # Only get the longest of the 3UTRs when they overlap
+    # THIS IS THE FILTERING STEP -- REDUNDANT 3UTRs ARE REMOVED
     new_transcripts = cluster_by_utrbeg(transcripts)
+    # THIS IS THE FILTERING STEP -- REDUNDANT 3UTRs ARE REMOVED
     transcripts = new_transcripts
 
     for ts_id, ts_obj in transcripts.items():
@@ -611,20 +613,55 @@ def get_3utr_bed(annotation_path, outfile_path, settings):
                                             '0', strand])+'\n')
     out_handle.close()
 
-def get_a_polyA_sites_bed(annotation_path, outfile_path, settings):
+def get_3utr_bed_all_exons(settings, outfile_path):
+    """Get the regions of all 3UTRs in the annotation. Cluster them by the
+    UTR-beg, and save for each cluster a 'super-UTR' that contains all the
+    exons in that cluster. Save these regions to a bedfile in outfile_path"""
+
+    out_handle = open(outfile_path, 'wb')
+    # Get transcripts from annotation
+    transcripts = make_transcripts(settings.annotation_path)
+
+    # Only get the longest of the 3UTRs when they overlap
+    # THIS IS THE FILTERING STEP -- REDUNDANT 3UTRs ARE REMOVED
+    new_transcripts = cluster_by_utrbeg(transcripts)
+    # THIS IS THE FILTERING STEP -- REDUNDANT 3UTRs ARE REMOVED
+    transcripts = new_transcripts
+
+    for ts_id, ts_obj in transcripts.items():
+        if len(ts_obj.three_utr.exons) == 1:
+            (chrm, beg, end, strand) = ts_obj.three_utr.exons[0]
+
+            # Skip the utrs shorter than utrlen
+            if end-beg < settings.min_utrlen:
+                continue
+
+            # If extendby, extend the 3UTR in the direction of extendby
+            if settings.extendby:
+                if strand == '+':
+                    end = end + settings.extendby
+                if strand == '-':
+                    beg = beg - settings.extendby
+
+            out_handle.write('\t'.join([chrm, str(beg), str(end), ts_obj.ID,
+                                            '0', strand])+'\n')
+    out_handle.close()
+
+def get_a_polyA_sites_bed(settings, outfile_path):
     """Get the polyA sites (end position of last exon) of annotated 3UTRs.
     Save these positions to a bedfile in outfile_path. Cluster the polyA sites
     and return the averages of the clusters."""
 
     out_handle = open(outfile_path, 'wb')
     # Get transcripts from annotation
-    transcripts = make_transcripts(annotation_path)
+    transcripts = make_transcripts(settings.annotation_path)
 
     # Only get the longest of the 3UTRs when they overlap
     chrms = ['chr' + str(nr) for nr in range(1,23) + ['X','Y','M']]
     tsdict = dict((chrm, dict((('+', []), ('-', [])))) for chrm in chrms)
 
     for ts_id, ts_obj in transcripts.iteritems():
+        # Don't consider utrs without exons
         if ts_obj.three_utr.exons != []:
 
             # The the chrm, beg, end, and strand of the first and last exon
