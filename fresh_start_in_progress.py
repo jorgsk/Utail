@@ -61,6 +61,16 @@ class Settings(object):
         self.extendby = int(extendby)
         self.del_reads = del_reads
 
+    def DEBUGGING(self):
+        self.chr1 = True
+        self.read_limit = 100000
+        #self.read_limit = False
+        self.max_cores = 3
+        #self.polyA = False
+        #self.polyA = True
+        self.polyA = '/users/rg/jskancke/phdproject/3UTR/Characterizer/'\
+                'Work_in_progress/temp_files/polyA_reads_k562_whole_cell_'\
+                'processed_mapped_in_3utr.bed'
 
 class Annotation(object):
     """A convenience class that holds the files and data structures relevant to
@@ -959,7 +969,7 @@ def get_a_polyA_sites_path(settings, beddir):
     # If utrfile is not provided, get it yourself from a provided annotation
     if not settings.utrfile_provided:
         if settings.chr1:
-            annotation_path = get_chr1_annotation(settings.annotation_path, beddir)
+            annotation_path = get_chr1_annotation(settings, beddir)
 
         t1 = time.time()
         print('polyA sites bedfile not found. Generating from annotation ...')
@@ -1006,7 +1016,7 @@ def get_utr_path(settings, beddir):
     if not settings.utrfile_provided:
         if settings.chr1:
             # path or dict?
-            annotation_path = get_chr1_annotation(settings.annotation, beddir)
+            annotation_path = get_chr1_annotation(settings, beddir)
 
         t1 = time.time()
         print('3UTR-bedfile not found. Generating from annotation ...')
@@ -1017,10 +1027,10 @@ def get_utr_path(settings, beddir):
 
     return utr_bed_path
 
-def get_chr1_annotation(annotation, beddir):
+def get_chr1_annotation(settings, beddir):
     """Split the original (GENCODE) annotation into one with only chrm1 """
 
-    (name, suffix) = os.path.splitext(os.path.basename(annotation))
+    (name, suffix) = os.path.splitext(os.path.basename(settings.annotation))
     filename = name + '_chr1' + suffix
     outpath = os.path.join(beddir, filename)
 
@@ -1033,7 +1043,7 @@ def get_chr1_annotation(annotation, beddir):
     print('Separating chr1 from the annotation ...')
     outhandle = open(outpath, 'wb')
 
-    for line in open(annotation, 'rd'):
+    for line in open(settings.annotation, 'rd'):
         if line[:5] == 'chr1\t':
             outhandle.write(line)
 
@@ -1786,15 +1796,7 @@ def main():
     DEBUGGING = True
     #DEBUGGING = False
     if DEBUGGING:
-        settings.chr1 = True
-        settings.read_limit = 100000
-        #read_limit = False
-        settings.max_cores = 3
-        #polyA = False
-        #polyA = True
-        settings.polyA = '/users/rg/jskancke/phdproject/3UTR/Characterizer/'\
-                'Work_in_progress/temp_files/polyA_reads_k562_whole_cell_'\
-                'processed_mapped_in_3utr.bed'
+        settings.DEBUGGING()
 
     #proj_dir = '__'.join(datasets.keys()+['Chr1'+str(chr1)]+['Reads'+str(read_limit)])
     #if not os.path.exists(proj_dir):
