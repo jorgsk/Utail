@@ -611,9 +611,10 @@ def get_3utr_bed(annotation_path, outfile_path, settings):
                                             '0', strand])+'\n')
     out_handle.close()
 
-def get_polyA_sites_bed(annotation_path, outfile_path, settings):
-    """Get the annotated regions of 3UTRs that have only one exon. Save these
-    regions to a bedfile in outfile_path"""
+def get_a_polyA_sites_bed(annotation_path, outfile_path, settings):
+    """Get the polyA sites (end position of last exon) of annotated 3UTRs.
+    Save these positions to a bedfile in outfile_path. Cluster the polyA sites
+    and return the averages of the clusters."""
 
     out_handle = open(outfile_path, 'wb')
     # Get transcripts from annotation
@@ -624,19 +625,21 @@ def get_polyA_sites_bed(annotation_path, outfile_path, settings):
     tsdict = dict((chrm, dict((('+', []), ('-', [])))) for chrm in chrms)
 
     for ts_id, ts_obj in transcripts.iteritems():
-        # Only deal with the ones with one utr exon
-        if len(ts_obj.three_utr.exons) == 1:
-            # The the chrm, beg, end, and strand of the transcripts
-            (chrm, beg, end, strand) = ts_obj.three_utr.exons[0]
+        if ts_obj.three_utr.exons != []:
+
+            # The the chrm, beg, end, and strand of the first and last exon
+            # if only one exon, they will be the same
+            (chrm, first_beg, first_end, strand) = ts_obj.three_utr.exons[0]
+            (chrm, last_beg, last_end, strand) = ts_obj.three_utr.exons[-1]
 
             # Skip the utrs shorter than utrlen
-            if end-beg < settings.min_utrlen:
+            if last_end-first_beg < settings.min_utrlen:
                 continue
 
             if strand == '+':
-                tsdict[chrm][strand].append(end)
+                tsdict[chrm][strand].append(last_end)
             if strand == '-':
-                tsdict[chrm][strand].append(beg)
+                tsdict[chrm][strand].append(first_beg)
 
     # go through the annotated 3UTR ends and cluster them
     for chrm, strand_dict in tsdict.items():

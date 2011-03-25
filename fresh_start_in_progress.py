@@ -81,7 +81,7 @@ class UTR(object):
     parameters here and there."""
 
     def __init__(self, chrm, beg, end, strand, ts_ID, rpkm, extendby,
-                 first_covr, sequence, polyA_cluster, polyA_sites):
+                 first_covr, sequence, polyA_reads, a_polyA_sites):
 
         # variables you have to initialize
         self.chrm = chrm
@@ -95,8 +95,8 @@ class UTR(object):
         self.rpkm = rpkm
         self.extendby = extendby # how far has this annotation been extended
         self.sequence = sequence
-        self.polyA_reads = polyA_cluster # the polyA reads
-        self.polyA_sites = (int(site[1]) for site in polyA_sites) # annotated sites
+        self.polyA_reads = polyA_reads # the polyA reads
+        self.a_polyA_sites = (int(site[1]) for site in a_polyA_sites) # annotated sites
 
         # the coverage vectors
         self.covr_vector = [first_covr]
@@ -607,7 +607,7 @@ class PolyAReads(object):
         supp = []
         for rpoint in self.polyRead_sites:
             found = False
-            for apoint in this_utr.polyA_sites:
+            for apoint in this_utr.a_polyA_sites:
                 if rpoint-40 < apoint < rpoint+40:
                     found = True
                     found_point = apoint
@@ -749,7 +749,7 @@ def get_pas_list():
             'AATAGA']
 
 def output_writer(dset_id, coverage, utrs, utr_seqs, rpkm, extendby,
-                 polyA_cluster, polyA_sites_dict):
+                 polyA_reads, a_polyA_sites_dict):
 
     """Putting together all the info on the 3UTRs and writing to files. Write
     one file mainly about the length of the 3UTR, and write another file about
@@ -767,8 +767,8 @@ def output_writer(dset_id, coverage, utrs, utr_seqs, rpkm, extendby,
 
     # Create a UTR-instance
     this_utr = UTR(chrm, int(beg), int(end), strand, ts_ID, rpkm[ts_ID],
-                   extendby, int(covr), utr_seqs[ts_ID], polyA_cluster[ts_ID],
-                   polyA_sites_dict[ts_ID])
+                   extendby, int(covr), utr_seqs[ts_ID], polyA_reads[ts_ID],
+                   a_polyA_sites_dict[ts_ID])
 
 
     # Paths and file objects for the two output files (length and one polyA)
@@ -811,7 +811,7 @@ def output_writer(dset_id, coverage, utrs, utr_seqs, rpkm, extendby,
             # Update to the new utr and start the loop from scratch
             this_utr = UTR(chrm, int(beg), int(end), strand, ts_ID, rpkm[ts_ID],
                            extendby, int(covr), utr_seqs[ts_ID],
-                           polyA_cluster[ts_ID], polyA_sites_dict[ts_ID])
+                           polyA_reads[ts_ID], a_polyA_sites_dict[ts_ID])
 
             # Create instances for writing to two output files
             length_output = FullLength(ts_ID)
@@ -930,8 +930,8 @@ def get_chromosome1(annotation, beddir):
 
     return out_path
 
-def get_polyA_sites_path(settings, beddir):
-    """Get polyA_sites_file path from annotation via genome module"""
+def get_a_polyA_sites_path(settings, beddir):
+    """Get a_polyA_sites_file path from annotation via genome module"""
 
     # If options are not set, make them a 0-string define options
     if settings.chr1:
@@ -945,8 +945,8 @@ def get_polyA_sites_path(settings, beddir):
         user_provided = ''
 
     # utr path
-    polyA_sites_filename = 'polyA_sites' + chrm + user_provided + '.bed'
-    polyA_site_bed_path = os.path.join(beddir, polyA_sites_filename)
+    a_polyA_sites_filename = 'a_polyA_sites' + chrm + user_provided + '.bed'
+    polyA_site_bed_path = os.path.join(beddir, a_polyA_sites_filename)
 
     ## If the file already exists, don't make it again
     if os.path.isfile(polyA_site_bed_path):
@@ -959,13 +959,12 @@ def get_polyA_sites_path(settings, beddir):
     # If utrfile is not provided, get it yourself from a provided annotation
     if not settings.utrfile_provided:
         if settings.chr1:
-            # path or dict?
             annotation_path = get_chr1_annotation(settings.annotation_path, beddir)
 
         t1 = time.time()
         print('polyA sites bedfile not found. Generating from annotation ...')
-        reload(genome)
-        genome.get_polyA_sites_bed(annotation_path, polyA_site_bed_path, settings)
+        #reload(genome)
+        genome.get_a_polyA_sites_bed(annotation_path, polyA_site_bed_path, settings)
 
         print('\tTime taken to generate polyA-bedfile: {0}\n'\
               .format(time.time()-t1))
@@ -1325,7 +1324,7 @@ def cluster_polyAs(utr_polyAs, utrs):
     plus_values = {'+': [], '-':[]}
     minus_values = {'+': [], '-':[]}
 
-    polyA_cluster = {}
+    polyA_reads = {}
 
     for ts_id, polyAs in utr_polyAs.iteritems():
         ts_info = utrs[ts_id]
@@ -1356,12 +1355,12 @@ def cluster_polyAs(utr_polyAs, utrs):
             ends = sorted([tup[1] for tup in polyAs if tup[5] == '+'])
 
         # Getting the actual clusters
-        polyA_cluster[ts_id] = cluster_loop(ends)
+        polyA_reads[ts_id] = cluster_loop(ends)
 
     # For those ts_id that don't have a cluster, give them an empty list; ad hoc
     for ts_id in utrs:
-        if ts_id not in polyA_cluster:
-            polyA_cluster[ts_id] = [[],[]]
+        if ts_id not in polyA_reads:
+            polyA_reads[ts_id] = [[],[]]
 
     # Statistics on the ratio of + and - mapped reads for the genes that are in
     # the positive or negative strand. RESULT: for paired end reads, the polyA
@@ -1373,7 +1372,7 @@ def cluster_polyAs(utr_polyAs, utrs):
     minus_avrg = {'+': sum(minus_values['+'])/len(minus_values['+']),
                  '-': sum(minus_values['-'])/len(minus_values['-'])}
 
-    return polyA_cluster
+    return polyA_reads
 
 
 def pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs, settings,
@@ -1411,7 +1410,7 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs, settings,
         utr_polyAs = get_polyAutr(polyA_bed_path, utrfile_path)
 
     # Cluster the poly(A) reads for each ts_id
-    polyA_cluster = cluster_polyAs(utr_polyAs, annotation.utrs)
+    polyA_reads = cluster_polyAs(utr_polyAs, annotation.utrs)
 
     # Get the RPKM by running intersect-bed of the reads on the 3utr
     print('Obtaining RPKM for {0} ...\n'.format(dset_id))
@@ -1427,7 +1426,7 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs, settings,
     print('Using coverage to get 3UTR ends for {0} ...\n'.format(dset_id))
     # Get transcript 3utr endings as determined by read coverage
     utr_ends = output_writer(dset_id, coverage, annotation.utrs, utr_seqs, rpkm,
-                             extendby, polyA_cluster, annotation.polyA_sites_dict)
+                             extendby, polyA_reads, annotation.a_polyA_sites_dict)
 
     print('Total time for {0}: {1}\n'.format(dset_id, time.time() - t0))
 
@@ -1811,11 +1810,11 @@ def main():
     annotation.utrs = get_utrdict(annotation.utrfile_path)
 
     # file path to annotated polyA sites as obtained form annotation
-    annotation.polyA_sites_path = get_polyA_sites_path(settings, beddir)
+    annotation.a_polyA_sites_path = get_a_polyA_sites_path(settings, beddir)
     # Get dictionary with polyA sites by intersecting with utr-bed
-    print('Making polyA_sites data structures ...\n')
-    annotation.polyA_sites_dict = get_polyA_dict(annotation.utrfile_path,
-                                                annotation.polyA_sites_path)
+    print('Making a_polyA_sites data structures ...\n')
+    annotation.a_polyA_sites_dict = get_polyA_dict(annotation.utrfile_path,
+                                                annotation.a_polyA_sites_path)
 
     # Pickle the final results. Initiate the pickle object.
     pickled_final = os.path.join(output_dir, 'pickled_result_paths')
@@ -1895,41 +1894,27 @@ def main():
 if __name__ == '__main__':
     main()
 
-# You're going about this the wrong way. Here's how to get a good marker for
-# 3UTR end.
-# 4) Get the cumul value and relative_pos value for each polyA site
-# 5) For each gene, output the above variables to a file
-# 5) Use that information to get a better cumul value cutoff for when a gene is
-# finished
+# TODO
 
-# TODO for meeting with Roderic:
-# 1) Point 1 from below
-# 2) Pictures from the genome-browser with the poly(A) reads
-
-    # For future:
-    # 1) whole-cell, nucleus, cytosol 3utr lengths. Don't you always expect the
-    # whole-cell to have the same length as the longest length of nucleus and
-    # cytocol? Do some numbers on this.
-    # 2) Can we identify some 3utrs that are longer than the annotation?
-    # 3) A list of candidate genes that have different length (AND where the
-    # result from 1) holds true? AND they have the highest rpkms?)
-    # 4) You can evaluate the accuracy of the polyA reads by checking the
-    # coverage before and after them.
-
-# TODO AFTER meeting:
-# Implement the python solution for getting sequences fast
-# 1) Put the temp poly(A) reads in a different folder. Thus you can re-obtain
-# them easily, because it takes so much time (and RAM) to remap them.
-
-# 2) BEAR IN MIND that some of your poly(A) reads that are not supported by the
+# 1) Remove false friends: Some of your poly(A) reads that are not supported by the
 # annotation COULD BE some other annotated end. You could get the total set of
 # annotated end by not restricting yourself to the 3UTRs of length 1. You can
 # use this set to 'explain' away some false positive putative polyA sites. Then what
 # remains should be pretty solid.
 
+# NOTE when you have done 1), you'll have a pretty decent working program -- 
+# save it as version 1.0.
+# Version 1.1 should be exactly the same but with multiple exons in 3UTR
+# (in this case, the problem from 1) should be gone...)
+# Version 1.2 should be with flux capacitor
+
+
 #* ways to visualize the 3'utr and the PAS motif; similar to what I've done with
 #PERL; if python does not have a similar library we can implement this in a perl
 #script;
+
+# 1) Put the temp poly(A) reads in a different folder. Thus you can re-obtain
+# them easily, because it takes so much time (and RAM) to remap them.
 
 # PAPER IDEAS:
     # 1) Reproduce everything they have done with ESTs. This shows that detailed
