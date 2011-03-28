@@ -64,7 +64,7 @@ class Settings(object):
     def DEBUGGING(self):
 
         self.chr1 = True
-        self.read_limit = 100000
+        self.read_limit = 1000000
         #self.read_limit = False
         self.max_cores = 3
         #self.polyA = False
@@ -1439,8 +1439,8 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs, settings,
     # Add coverage file_locations to dict
 
     print('Using coverage to get 3UTR ends for {0} ...\n'.format(dset_id))
-    # Go through the coverage file and compute all stats on a utr-by-utr basis
-    utr_ends = output_writer(dset_id, coverage, annotation.utrs, utr_seqs, rpkm,
+    # Get transcript 3utr endings as determined by read coverage
+    output = output_writer(dset_id, coverage, annotation.utrs, utr_seqs, rpkm,
                              extendby, polyA_reads, annotation.a_polyA_sites_dict)
 
     print('Total time for {0}: {1}\n'.format(dset_id, time.time() - t0))
@@ -1449,8 +1449,12 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs, settings,
     if settings.del_reads:
         os.remove(bed_reads)
 
+    # Split output
+    (length_output, polyA_output) = output
+
     # Return a list with the salient file paths of output files
-    return {dset_id: {'coverage': coverage, 'utr_ends': utr_ends}}
+    return {dset_id: {'coverage': coverage, 'length': length_output,
+                      'polyA':polyA_output}}
 
 def remove_directory(some_dir):
     try:
@@ -1768,6 +1772,9 @@ def get_polyA_dict(utr_path, polyA_path):
 
     return polyA_dict
 
+def polyA_analysis(final_outp_polyA):
+    pass
+
 def main():
 
     # The path to the directory the script is located in
@@ -1852,10 +1859,10 @@ def main():
                          settings, annotation)
 
             ###### WORK IN PROGRESS
-            akk = pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs,
-                           settings, annotation)
+            #akk = pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs,
+                           #settings, annotation)
 
-            debug()
+            #debug()
 
             #result = my_pool.apply_async(pipeline, arguments)
             #results.append(result)
@@ -1870,21 +1877,24 @@ def main():
         print('Total elapsed time: {0}\n'.format(time.time()-t1))
 
         # create output dictionaries
-        coverage, final_output = {}, {}
+        coverage, final_outp_length, final_outp_polyA = {}, {}, {}
 
         # Fill the dicts with paths
         for line in outp:
             for key, value in line.items():
                 coverage[key] = value['coverage']
-                final_output[key] = value['utr_ends']
+                final_outp_polyA[key] = value['polyA']
+                final_outp_length[key] = value['length']
 
         # Put these dicts in a dict again and pickle for future use
-        dumpme = {'coverage': coverage, 'final_output': final_output}
+        dumpme = {'coverage': coverage, 'final_output_polyA':
+                  final_outp_polyA, 'final_output_length': final_outp_length}
+
         cPickle.dump(dumpme, open(pickled_final, 'wb'))
 
         # Copy output from temp-dir do output-dir
-        save_output(final_output, output_dir)
-
+        save_output(final_outp_polyA, output_dir)
+        save_output(final_outp_length, output_dir)
     ##################################################################
     # NOTE TO SELF: everything starting from there should be in a separate
     # script: utr_output_analysis.py or smth similar. It's only been put here
@@ -1894,11 +1904,14 @@ def main():
 
         file_path_dict = cPickle.load(open(pickled_final, 'rb'))
 
-        final_output = file_path_dict['final_output']
+        final_outp_polyA = file_path_dict['final_output_polyA']
+        final_outp_length = file_path_dict['final_output_length']
         coverage = file_path_dict['coverage']
 
     # Present output graphically
     #output_analyzer(final_output, utrs, utrfile_path)
+    polyA_analysis(final_outp_polyA)
+    debug()
 
     # Make some plots that compare utr_ends between tissues
     #make_utr_plots(final_output, utrs, coverage)
@@ -1926,4 +1939,3 @@ if __name__ == '__main__':
     # Run the whole pipelien with _JUST_THE_EXTENSIOSN! you can make an
     # extension.bed file and mark it with the gene you extend from. extend until
     # you meet another annotated object, and at most a certain distance.
-
