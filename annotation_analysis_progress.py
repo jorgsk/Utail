@@ -580,39 +580,6 @@ def cluster_by_utrbeg(transcripts):
 
     return new_ts
 
-def get_3utr_bed(annotation_path, outfile_path, settings):
-    """Get the annotated regions of 3UTRs that have only one exon. Save these
-    regions to a bedfile in outfile_path"""
-
-    out_handle = open(outfile_path, 'wb')
-    # Get transcripts from annotation
-    transcripts = make_transcripts(annotation_path)
-
-    # Only get the longest of the 3UTRs when they overlap
-    # THIS IS THE FILTERING STEP -- REDUNDANT 3UTRs ARE REMOVED
-    new_transcripts = cluster_by_utrbeg(transcripts)
-    # THIS IS THE FILTERING STEP -- REDUNDANT 3UTRs ARE REMOVED
-    transcripts = new_transcripts
-
-    for ts_id, ts_obj in transcripts.items():
-        if len(ts_obj.three_utr.exons) == 1:
-            (chrm, beg, end, strand) = ts_obj.three_utr.exons[0]
-
-            # Skip the utrs shorter than utrlen
-            if end-beg < settings.min_utrlen:
-                continue
-
-            # If extendby, extend the 3UTR in the direction of extendby
-            if settings.extendby:
-                if strand == '+':
-                    end = end + settings.extendby
-                if strand == '-':
-                    beg = beg - settings.extendby
-
-            out_handle.write('\t'.join([chrm, str(beg), str(end), ts_obj.ID,
-                                            '0', strand])+'\n')
-    out_handle.close()
-
 def get_3utr_bed_all_exons(settings, outfile_path):
     """Get the regions of all 3UTRs in the annotation. Cluster them by the
     UTR-beg, and save for each cluster a 'super-UTR' that contains all the
@@ -623,28 +590,41 @@ def get_3utr_bed_all_exons(settings, outfile_path):
     transcripts = make_transcripts(settings.annotation_path)
 
     # Only get the longest of the 3UTRs when they overlap
-    # THIS IS THE FILTERING STEP -- REDUNDANT 3UTRs ARE REMOVED
-    new_transcripts = cluster_by_utrbeg(transcripts)
-    # THIS IS THE FILTERING STEP -- REDUNDANT 3UTRs ARE REMOVED
-    transcripts = new_transcripts
+    chrms = ['chr' + str(nr) for nr in range(1,23) + ['X','Y','M']]
+    tsdict = dict((chrm, dict((('+', []), ('-', [])))) for chrm in chrms)
 
-    for ts_id, ts_obj in transcripts.items():
-        if len(ts_obj.three_utr.exons) == 1:
-            (chrm, beg, end, strand) = ts_obj.three_utr.exons[0]
+    # TODO you just copied this code from the method in the window above. you
+    # need to adapt this to your new problem.
+
+    for ts_id, ts_obj in transcripts.iteritems():
+        # Don't consider utrs without exons
+        if ts_obj.three_utr.exons != []:
+
+            # The the chrm, beg, end, and strand of the first and last exon
+            # if only one exon, they will be the same
+            (chrm, first_beg, first_end, strand) = ts_obj.three_utr.exons[0]
+            (chrm, last_beg, last_end, strand) = ts_obj.three_utr.exons[-1]
 
             # Skip the utrs shorter than utrlen
-            if end-beg < settings.min_utrlen:
+            if last_end-first_beg < settings.min_utrlen:
                 continue
 
-            # If extendby, extend the 3UTR in the direction of extendby
-            if settings.extendby:
-                if strand == '+':
-                    end = end + settings.extendby
-                if strand == '-':
-                    beg = beg - settings.extendby
+            if strand == '+':
+                tsdict[chrm][strand].append(last_end)
+            if strand == '-':
+                tsdict[chrm][strand].append(first_beg)
 
-            out_handle.write('\t'.join([chrm, str(beg), str(end), ts_obj.ID,
-                                            '0', strand])+'\n')
+    # go through the annotated 3UTR ends and cluster them
+    for chrm, strand_dict in tsdict.items():
+        for strand, ends in strand_dict.items():
+            # Skip empty ones; could be that chr1 only is run
+            if ends == []:
+                continue
+            clustsum = 0
+            clustcount = 0
+            this_cluster = []
+            clusters = []
+
     out_handle.close()
 
 def get_a_polyA_sites_bed(settings, outfile_path):
