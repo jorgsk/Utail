@@ -64,7 +64,7 @@ class Settings(object):
     def DEBUGGING(self):
 
         self.chr1 = True
-        self.read_limit = 1000000
+        self.read_limit = 10000
         #self.read_limit = False
         self.max_cores = 3
         #self.polyA = False
@@ -1450,7 +1450,7 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs, settings,
         os.remove(bed_reads)
 
     # Split output
-    (length_output, polyA_output) = output
+    (polyA_output, length_output) = output
 
     # Return a list with the salient file paths of output files
     return {dset_id: {'coverage': coverage, 'length': length_output,
@@ -1773,6 +1773,10 @@ def get_polyA_dict(utr_path, polyA_path):
     return polyA_dict
 
 def polyA_analysis(final_outp_polyA):
+    myfile = final_outp_polyA['k562_whole_cell']
+    for line in myfile:
+        debug()
+
     pass
 
 def main():
