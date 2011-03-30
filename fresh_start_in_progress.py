@@ -1027,6 +1027,7 @@ def get_utr_path(settings, beddir):
         print('3UTR-bedfile not found. Generating from annotation ...')
         reload(genome)
         genome.get_3utr_bed_all_exons(settings, utr_bed_path)
+        debug()
 
         print('\tTime taken to generate 3UTR-bedfile: {0}\n'\
               .format(time.time()-t1))
@@ -1814,7 +1815,6 @@ def main():
     #DEBUGGING = False
     if DEBUGGING:
         settings.DEBUGGING()
-    #DEBUGGING = False
 
     #proj_dir = '__'.join(datasets.keys()+['Chr1'+str(chr1)]+['Reads'+str(read_limit)])
     #if not os.path.exists(proj_dir):
