@@ -1027,7 +1027,6 @@ def get_utr_path(settings, beddir):
         print('3UTR-bedfile not found. Generating from annotation ...')
         reload(genome)
         genome.get_3utr_bed_all_exons(settings, utr_bed_path)
-        debug()
 
         print('\tTime taken to generate 3UTR-bedfile: {0}\n'\
               .format(time.time()-t1))
@@ -1828,6 +1827,11 @@ def main():
     annotation.utrfile_path = get_utr_path(settings, beddir)
     # Get dictionary with utr-info
     print('Making 3UTR data structures ...\n')
+    # NOTE now it is not clear how you should index the utr dict that you use
+    # for so many things. the 1ts-1utr link is gone. I think how you should deal
+    # with this depends on downstream analysis, so you have to see what's
+    # happening further down before you make a decision on what to do.
+    # DOUBLENOTE you 
     annotation.utrs = get_utrdict(annotation.utrfile_path)
 
     # file path to annotated polyA sites as obtained form annotation

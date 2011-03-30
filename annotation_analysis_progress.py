@@ -51,16 +51,7 @@ class Region(object):
         # Note exons and introns should be on the form
         # (chr1, beg, end, strand), and sorted.
         self.exons = []
-
-
-class Gene(object):
-
-    def __init__(self, chrm, beg, end, strand):
-        self.chrm = chrm
-        self.beg = beg
-        self.end = end
-        self.strand = strand
-
+        self.length = 0
 
 class Transcript(object):
 
@@ -134,10 +125,12 @@ class Transcript(object):
                 self.five_utr.exons.append(utr)
             if utr_beg >= cds_beg:
                 self.three_utr.exons.append(utr)
+                self.three_utr.length = self.three_utr.length + utr[2]-utr[1]
 
         if self.strand == '-':
             if utr_beg <= cds_beg:
                 self.three_utr.exons.append(utr)
+                self.three_utr.length = self.three_utr.length + utr[2]-utr[1]
             if utr_beg >= cds_beg:
                 self.five_utr.exons.append(utr)
 
@@ -606,6 +599,21 @@ def get_3utr_bed_all_exons(settings, outfile_path):
     # Get transcripts and genes from annotation
     (transcripts, genes) = make_transcripts(settings.annotation_path)
 
+    # Prune the genes transcripts for short transcripts
+
+    transcripts = dict((ts, ts_obj) for (ts, ts_obj) in transcripts.iteritems() if
+                       ts_obj.three_utr.length > settings.min_utrlen)
+
+    # Prune the genes for short transcripts
+    genes = {}
+    for (ts_id, ts_obj) in transcripts.iteritems():
+        gene_id = ts_obj.gene_id
+        if gene_id in genes:
+            genes[gene_id].append(ts_id)
+        else:
+            genes[gene_id] = [ts_id]
+
+
     # 1) single out the transcripts that belong to genes with only 1-exon
     # 3UTRS. Give them the old clustering treatment.
     one_exon_transcripts = {}
@@ -622,14 +630,6 @@ def get_3utr_bed_all_exons(settings, outfile_path):
 
             if len(ts_obj.three_utr.exons) == 1:
 
-                # Get beg and end to see the length
-                (chrm, beg, end, strand) = ts_obj.three_utr.exons[0]
-
-                # Skip the utrs shorter than utrlen
-                if end-beg < settings.min_utrlen:
-                    continue
-                # If you passed this, the utr is long enough
-
                 keeper = True
                 # see if all other transcripts of this gene also has only one exon
                 for other_id in genes[ts_obj.gene_id]:
@@ -639,36 +639,72 @@ def get_3utr_bed_all_exons(settings, outfile_path):
                         if len(other_obj.three_utr.exons) != 1:
                             keeper = False
 
-                # It has only 1 exon and so do all other utrs for this gene
+                # If it has only 1 exon and so do all other utrs for this gene
                 if keeper:
                     one_exon_transcripts[ts_id] = ts_obj
 
-                # It has only 1 exon -- but others in the family have more
+                # If it has only 1 exon -- but others in the family have more
                 else:
                     multi_exon_transcripts[ts_id] = ts_obj
 
-            # It has more than 1 exon
+            # If it has more than 1 exon
             else:
-
-                # The the chrm, beg, end, and strand of the first and last exon
-                # if only one exon, they will be the same
-                (chrm, first_beg, first_end, strand) = ts_obj.three_utr.exons[0]
-                (chrm, last_beg, last_end, strand) = ts_obj.three_utr.exons[-1]
-
-                # Skip the utrs shorter than utrlen
-                if last_end-first_beg < settings.min_utrlen:
-                    continue
-
-                # It has more than 1 exon and is long enough
                 multi_exon_transcripts[ts_id] = ts_obj
 
     # Cluster and write the one-exon buggers to file
     cluster_by_utrbeg_one_exon(one_exon_transcripts, out_handle)
 
     # Make mega-utrs from multi-exon buggers and write them to file
-    cluster_by_utrbeg_multi_exon(multi_exon_transcripts, genes, out_handle)
+    # This option has one-gene -> multi-utrs
+    #cluster_by_utrbeg_multi_exon(multi_exon_transcripts, genes, out_handle)
+
+    # Make mega-merged-utr from genes with multiple exons
+    # This option has one-gene -> one utr
+    merge_all_exons(multi_exon_transcripts, genes, out_handle)
 
     out_handle.close()
+
+def merge_all_exons(multi_exon_transcripts, genes, out_handle):
+    # Go through all the multi-exon transcripts; get all the transcripts for
+    # that gene; merge the 3UTR exons of all those transcripts together; write
+    # to file. Add those transcripts to a set of completed transcripts. Check
+    # all multi exon transcripts against this set before starting the process.
+
+    ts_written = set()
+    #genes = dict((gene, tscripts) for gene, tscripts in genes.iteritems() if )
+    for ts_id in multi_exon_transcripts:
+
+        # Skip ts if you have already processed it
+        if ts_id in ts_written:
+            continue
+
+        # Get all the transcripts of this transcripts' gene
+        ts_obj = multi_exon_transcripts[ts_id]
+        gene_id = ts_obj.gene_id
+        ts_list = genes[gene_id]
+
+        # Get a super utr from all these transcripts
+        # BUG a transcript in the multi_exon group shares transcripts that are
+        # not it that group. that should be impossible. something is thus wrong
+        # with the screening in the previous function. OR! that is a short one
+        # :)
+        super_utr = get_super_utr(ts_list, multi_exon_transcripts)
+
+        # Add the transcripts to the 'dunnit' set
+        for ts_id in ts_list:
+            ts_written.add(ts_id)
+
+        # Write the super-exon
+        chrm = ts_obj.chrm
+        strand = ts_obj.strand
+
+        # Write each exon to the bed-file
+        for nr, exon in enumerate(super_utr):
+            beg = str(exon[0])
+            end = str(exon[1])
+            e_nr = '1_'+str(nr+1)
+            out_handle.write('\t'.join([chrm, beg, end, gene_id, e_nr, strand])
+                             + '\n')
 
 def cluster_by_utrbeg_multi_exon(multi_exon_transcripts, genes, out_handle):
     """Cluster multi exon transcripts by their utr-start sites. From the utrs
@@ -729,7 +765,7 @@ def cluster_by_utrbeg_multi_exon(multi_exon_transcripts, genes, out_handle):
                     for nr, exon in enumerate(super_utr):
                         beg = str(exon[0])
                         end = str(exon[1])
-                        e_nr = str(nr+1)+'_'+ str(gene_utrcount[gene_id])
+                        e_nr = str(gene_utrcount[gene_id])+ '_'+str(nr+1)
                         out_handle.write('\t'.join([chrm, beg, end, gene_id,
                                                     e_nr, strand]) + '\n')
 
