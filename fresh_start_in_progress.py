@@ -1009,7 +1009,6 @@ def get_utr_path(settings, beddir):
     utr_bed_path = os.path.join(beddir, utr_filename)
 
     # If the file already exists, don't make it again
-    # TODO REMEMBER TO UNCOMMENT AND REMOVE RELOAD GENOME
     #if os.path.isfile(utr_bed_path):
         #return utr_bed_path
 
@@ -1236,7 +1235,7 @@ def get_bed_reads(dset_reads, dset_id, read_limit, tempdir, polyA):
     ok_sufx = ['gem', 'map', 'gz', 'bed']
 
     nr_files = len(dset_reads)
-    # more robust way of building a suffix. Start with a '.' separated list of
+    # Building a suffix: Start with a '.' separated list of
     # the file name. Proceed backwards, adding to reverese_suffix if the entry
     # is in the allowed group.
     dotsplit = os.path.basename(dset_reads[0]).split('.')
@@ -1334,7 +1333,7 @@ def cluster_loop(ends):
     return (mixed_cluster, res_clus)
 
 def cluster_polyAs(utr_polyAs, utrs):
-    """Cluster the poly(A) reads for each ts_id. Choose the pTTS site depending
+    """Cluster the poly(A) reads for each gene. Choose the pTTS site depending
     on the strand of the ts."""
     plus_values = {'+': [], '-':[]}
     minus_values = {'+': [], '-':[]}
@@ -1424,8 +1423,10 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs, settings,
         # run overlap-bed or something similar
         utr_polyAs = get_polyAutr(polyA_bed_path, utrfile_path)
 
-    # Cluster the poly(A) reads for each ts_id
-    polyA_reads = cluster_polyAs(utr_polyAs, annotation.utrs)
+    # Cluster the poly(A) reads for each gene_id
+    if polyA:
+        polyA_reads = cluster_polyAs(utr_polyAs, annotation.utr_exons)
+        debug()
 
     # Get the RPKM by running intersect-bed of the reads on the 3utr
     print('Obtaining RPKM for {0} ...\n'.format(dset_id))
@@ -1832,7 +1833,21 @@ def main():
     # with this depends on downstream analysis, so you have to see what's
     # happening further down before you make a decision on what to do.
     # DOUBLENOTE you 
-    annotation.utrs = get_utrdict(annotation.utrfile_path)
+    # TODO! You have to check out the single-exons again. Now you might produce
+    # several of them if there is no overlap. That seems unfair against the
+    # full-mergers no? :/ maybe you can investigate the extend of such cases.
+    # If there are not too many... nooo! if they overlap you should report them!
+    # :S if they don't overlap they can be separate.
+    # maybe you should do this for your multi exons too? But how to do that? As
+    # well, maybe these things change more in the cell than we realize? Further,
+    # for a comparative approach maybe it doesn't matter.
+    # For now: proceed to cover the new exons and combine them into a single
+    # coverage thing.
+
+    # At the moment it is not clear how the utr-dict should be.
+    # Aha. At least you need this dict to get sequences. Thus you need to make a
+    # utr_exon dict.
+    annotation.utr_exons = get_utrdict(annotation.utrfile_path)
 
     # file path to annotated polyA sites as obtained form annotation
     annotation.a_polyA_sites_path = get_a_polyA_sites_path(settings, beddir)
@@ -1850,7 +1865,7 @@ def main():
         tx = time.time()
         fasta_bed = os.path.join(tempdir, 'bed_for_fasta.bed')
         print('Fetching the sequences of the annotated 3UTRs ...')
-        utr_seqs = genome.get_seqs(annotation.utrs, settings.hgfasta_path)
+        utr_seqs = genome.get_seqs(annotation.utr_exons, settings.hgfasta_path)
         print('\tTime to get sequences: {0}\n'.format(time.time() - tx))
 
         # Create a pool of processes; one dataset will take up one process.
@@ -1860,17 +1875,16 @@ def main():
         # Apply all datasets to the pool
         t1 = time.time()
 
-        debug()
         for dset_id, dset_reads in settings.datasets.items():
 
             arguments = (dset_id, dset_reads, tempdir, output_dir, utr_seqs,
                          settings, annotation)
 
             ###### WORK IN PROGRESS
-            #akk = pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs,
-                           #settings, annotation)
+            akk = pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs,
+                           settings, annotation)
 
-            #debug()
+            debug()
 
             #result = my_pool.apply_async(pipeline, arguments)
             #results.append(result)

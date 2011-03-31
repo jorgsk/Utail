@@ -515,7 +515,7 @@ def merge_output(bed_dir, output):
 
     return output
 
-def cluster_by_utrbeg_one_exon(transcripts, out_handle):
+def cluster_by_utrbeg_one_exon(transcripts, genes, extendby, out_handle):
     """Takes a set of Transcript objects whose genes should only have UTRs with
     one exon. It then clusters the UTRs of the transcripts together by their
     UTR start sites. It returns the subset of the original Transcript objects
@@ -523,6 +523,9 @@ def cluster_by_utrbeg_one_exon(transcripts, out_handle):
 
     chrms = ['chr'+str(nr) for nr in range(1,23) + ['X','Y','M']]
     tsdict = dict((chrm, {'+':{(0,0):[]},'-':{(0,0):[]}}) for chrm in chrms)
+
+    # you need to count how many times the gene has been used
+    gene_utrcount = dict((gene_id, 0) for gene_id in genes)
 
     for ts_id, ts_obj in transcripts.iteritems():
         # Only deal with the ones with one utr exon
@@ -573,6 +576,8 @@ def cluster_by_utrbeg_one_exon(transcripts, out_handle):
     # Now select from the tsdict clusters only the ts with the longest utr
     new_ts = {}
 
+    # TODO
+    # 1) Get the extension going on#
     for chrm, strand_dict in tsdict.items():
         for strand, cluster_dict in strand_dict.items():
             for cluster, ids in cluster_dict.items():
@@ -581,20 +586,29 @@ def cluster_by_utrbeg_one_exon(transcripts, out_handle):
                 [(feature_length(transcripts[ts_id].three_utr.exons[0]), ts_id)
                  for ts_id in ids]
                 longest_length, longest_id = sorted(utr_lens, reverse=True)[0]
+
                 # Choose only the ts with the longest 3UTR
                 beg = str(transcripts[longest_id].three_utr.exons[0][1])
                 end = str(transcripts[longest_id].three_utr.exons[0][2])
-                # Write to file
+
                 gene_id = transcripts[longest_id].gene_id
-                out_handle.write('\t'.join([chrm, beg, end, gene_id, '1_1',
+                # Keep count of how many clusters have been written from this
+                # gene
+                gene_utrcount[gene_id] += 1
+                name = '_'.join([gene_id, str(gene_utrcount[gene_id]),'1'])
+                # Write to file
+                out_handle.write('\t'.join([chrm, beg, end, name, '0',
                                             strand]) + '\n')
 
 def get_3utr_bed_all_exons(settings, outfile_path):
     """Get the regions of all 3UTRs in the annotation. Cluster them by the
     UTR-beg, and save for each cluster a 'super-UTR' that contains all the
-    exons in that cluster. Save these regions to a bedfile in outfile_path"""
+    exons in that cluster. Save these regions to a bedfile in outfile_path.
+    Make sure that the last exon in each UTR is extended by the value set in
+    settings.extendby"""
 
     out_handle = open(outfile_path, 'wb')
+    extendby = settings.extendby
 
     # Get transcripts and genes from annotation
     (transcripts, genes) = make_transcripts(settings.annotation_path)
@@ -612,7 +626,6 @@ def get_3utr_bed_all_exons(settings, outfile_path):
             genes[gene_id].append(ts_id)
         else:
             genes[gene_id] = [ts_id]
-
 
     # 1) single out the transcripts that belong to genes with only 1-exon
     # 3UTRS. Give them the old clustering treatment.
@@ -651,20 +664,37 @@ def get_3utr_bed_all_exons(settings, outfile_path):
             else:
                 multi_exon_transcripts[ts_id] = ts_obj
 
-    # Cluster and write the one-exon buggers to file
-    cluster_by_utrbeg_one_exon(one_exon_transcripts, out_handle)
+    # NOTE you seem to end up with 4 different methods for determining the 3UTR
+    # tail. I have a suggestion for determining the 3UTR tail in the
+    # mega-merged ones that should leave you happy.
+    # When merging, include in the 3UTR the most-downstream UTR-start and the
+    # most-downstream UTR-end! This way you will never confound your results
+    # with CDS exons!
+
+    # Cluster and write the one-exon utrs to file. Return several utrs per
+    # gene. One utr returned per cluster.
+    cluster_by_utrbeg_one_exon(one_exon_transcripts, genes, extendby, out_handle)
+
+    # Return a single utr from the one-exon transcripts; for each gene, this
+    # should be the UTR that has the last UTR-start and the last UTR-end. This
+    # ensures that no CDS exons interferes with UTR investigation.
+    merge_one_exon(one_exon_transcripts, genes, extendby, out_handle)
 
     # Make mega-utrs from multi-exon buggers and write them to file
     # This option has one-gene -> multi-utrs
-    #cluster_by_utrbeg_multi_exon(multi_exon_transcripts, genes, out_handle)
+    #cluster_by_utrbeg_multi_exon(multi_exon_transcripts, genes, extendby, out_handle)
 
     # Make mega-merged-utr from genes with multiple exons
-    # This option has one-gene -> one utr
-    merge_all_exons(multi_exon_transcripts, genes, out_handle)
+    # This option has one-gene -> one utr. Chooses for each gene the
+    # downstream-most UTR-start and the downstream-most UTR-end
+    merge_all_exons(multi_exon_transcripts, genes, extendby, out_handle)
 
     out_handle.close()
 
-def merge_all_exons(multi_exon_transcripts, genes, out_handle):
+def merge_one_exon(one_exon_transcripts, genes, extendby, out_handle):
+    pass
+
+def merge_all_exons(multi_exon_transcripts, genes, extendby, out_handle):
     # Go through all the multi-exon transcripts; get all the transcripts for
     # that gene; merge the 3UTR exons of all those transcripts together; write
     # to file. Add those transcripts to a set of completed transcripts. Check
@@ -702,8 +732,8 @@ def merge_all_exons(multi_exon_transcripts, genes, out_handle):
         for nr, exon in enumerate(super_utr):
             beg = str(exon[0])
             end = str(exon[1])
-            e_nr = '1_'+str(nr+1)
-            out_handle.write('\t'.join([chrm, beg, end, gene_id, e_nr, strand])
+            e_nr = '_1_'+str(nr+1)
+            out_handle.write('\t'.join([chrm, beg, end, gene_id+e_nr, '0', strand])
                              + '\n')
 
 def cluster_by_utrbeg_multi_exon(multi_exon_transcripts, genes, out_handle):
@@ -765,9 +795,9 @@ def cluster_by_utrbeg_multi_exon(multi_exon_transcripts, genes, out_handle):
                     for nr, exon in enumerate(super_utr):
                         beg = str(exon[0])
                         end = str(exon[1])
-                        e_nr = str(gene_utrcount[gene_id])+ '_'+str(nr+1)
-                        out_handle.write('\t'.join([chrm, beg, end, gene_id,
-                                                    e_nr, strand]) + '\n')
+                        e_nr = '_'+str(gene_utrcount[gene_id])+ '_'+str(nr+1)
+                        out_handle.write('\t'.join([chrm, beg, end, gene_id +
+                                                    e_nr, '0', strand])+'\n')
 
                     # Get the values for the new cluster
                     clustsum = val
