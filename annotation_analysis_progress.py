@@ -597,9 +597,10 @@ def get_3utr_bed_all_exons(settings, outfile_path):
 
     # Cluster and write the one-exon utrs to file. Return several utrs per
     # gene. One utr returned per cluster. UTRs don't overlap CDS.
-    cluster_by_utrbeg_one_exon(one_exon_transcripts, genes, extendby, out_handle)
+    # However, this leaves the issue that individual utrs may overlap....
+    cluster_by_utrbeg_one_exon_no_final_merge(one_exon_transcripts, genes,
+                                              extendby, out_handle)
     debug()
-
 
     # Make mega-utrs from multi-exon buggers and write them to file
     # This option has one-gene -> multi-utrs
@@ -612,7 +613,8 @@ def get_3utr_bed_all_exons(settings, outfile_path):
 
     out_handle.close()
 
-def cluster_by_utrbeg_one_exon(one_exon_transcripts, genes, extendby, out_handle):
+def cluster_by_utrbeg_one_exon_no_final_merge(one_exon_transcripts, genes,
+                                              extendby, out_handle):
     """Takes a set of Transcript objects whose genes should only have UTRs with
     one exon. Clusters the UTRs of the transcripts together by their
     UTR start sites. Removes or trims UTRs that overlap CDS exons for that
@@ -679,13 +681,13 @@ def cluster_by_utrbeg_one_exon(one_exon_transcripts, genes, extendby, out_handle
                     # of course! These are the one-exon utrs. you cluster them,
                     # therefore you will only get the ones one 'super'-utr out.
 
-                    # check for redundancy with the coding sequence exons of
+                    # getting gene_id from just one of the ts in the cluster
                     gene_id = one_exon_transcripts[this_cluster_ids[0]].gene_id
 
+                    # check for redundancy with the coding sequence exons of
                     stripped_utr = strip_set(genes[gene_id], strand,
                                              one_exon_transcripts, super_utr)
 
-                    # getting gene_id from just one of the ts in the cluster
                     gene_utrcount[gene_id] += 1
 
                     exon_nr = len(super_utr)
@@ -720,6 +722,11 @@ def strip_set(ts_ids, strand, single_exon_transcripts, utr_exon_list):
     # each cds exon the utr exon can be marked as deleted or trimmed. when the
     # checking round is over the new utr exon is marked as deleted (if at least
     # one deletion mark) or trimmed (the most 3' conservative one if several).
+
+    # One caveat: if a small CDS exon is found within a huge 3UTR, that exon is
+    # thusly ignored. The exon needs to be larger than 30% of the UTR to
+    # warrant a trimming of the utr. This applies only if the CDS exon lands in
+    # the middle of the UTR.
     new_exon_list = []
 
     # Does it make sense it works if two cds fall across a single 3UTR?
@@ -738,9 +745,13 @@ def strip_set(ts_ids, strand, single_exon_transcripts, utr_exon_list):
 
                         # If the CDS-end lands in the UTR too
                         if utr_ex[beg] < cds_ex[end] < utr_ex[end]:
-                            #if 'ENST00000449969' in ts_ids:
-                                #debug()
-                            temp_exons.append((cds_ex[end], utr_ex[end]))
+                            # If the CDS exon is very small compared to the UTR
+                            # exon, do nothing.
+                            utr_len = utr_ex[end]-utr_ex[beg]
+                            cds_len = cds_ex[end]-cds_ex[beg]
+                            if cds_len/float(utr_len) > 0.3:
+                                temp_exons.append((cds_ex[end], utr_ex[end]))
+                                continue
                             continue
                         # If the CDS-end extends beying the UTR, add empty
                         temp_exons.append((0,0)) # if encountered, scrap UTR
