@@ -1945,10 +1945,7 @@ if __name__ == '__main__':
     main()
 
 # TODO
-# You are now on the n_exon_3utrs branch.
-# go back to the master branch and save it in a separate folder 1.0
-# Version 1.1 should be exactly the same but with multiple exons in 3UTR
-# (in this case, the false positive polyA problem from 1) should be gone...)
+# Fix the 3UTR extension issue in v.1.0 as well.
 
 # 1) Put the temp poly(A) reads in a different folder. Thus you can re-obtain
 # them easily, because it takes so much time (and RAM) to remap them.
