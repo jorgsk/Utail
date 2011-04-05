@@ -1816,6 +1816,7 @@ def main():
     if DEBUGGING:
         settings.DEBUGGING()
 
+
     #proj_dir = '__'.join(datasets.keys()+['Chr1'+str(chr1)]+['Reads'+str(read_limit)])
     #if not os.path.exists(proj_dir):
         #os.makedirs(proj_dir)
@@ -1825,24 +1826,18 @@ def main():
     annotation = Annotation(settings.annotation_path)
 
     # Check if 3utrfile has been made or provided; if not, get it from annotation
+    settings.extendby = 0
     annotation.utrfile_path = get_utr_path(settings, beddir)
+    debug()
+
     # Get dictionary with utr-info
     print('Making 3UTR data structures ...\n')
+
     # NOTE now it is not clear how you should index the utr dict that you use
     # for so many things. the 1ts-1utr link is gone. I think how you should deal
     # with this depends on downstream analysis, so you have to see what's
     # happening further down before you make a decision on what to do.
-    # DOUBLENOTE you 
-    # TODO! You have to check out the single-exons again. Now you might produce
-    # several of them if there is no overlap. That seems unfair against the
-    # full-mergers no? :/ maybe you can investigate the extend of such cases.
-    # If there are not too many... nooo! if they overlap you should report them!
-    # :S if they don't overlap they can be separate.
-    # maybe you should do this for your multi exons too? But how to do that? As
-    # well, maybe these things change more in the cell than we realize? Further,
-    # for a comparative approach maybe it doesn't matter.
-    # For now: proceed to cover the new exons and combine them into a single
-    # coverage thing.
+    # DOUBLENOTE you
 
     # At the moment it is not clear how the utr-dict should be.
     # Aha. At least you need this dict to get sequences. Thus you need to make a
