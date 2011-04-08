@@ -361,10 +361,6 @@ def write_beds(transcripts, bed_dir, chr_sizes, *opts):
     ## Create the intergenic bed as the adjoint of all the bed files in output
     output = get_intergenic(bed_dir, output, chr_sizes, chr1)
 
-    # remove all lines in the output if the length is < 1
-    # THIS IS TODO -- only if you have more overlap problems and the such.
-    #output = remove_bp(output)
-
     return output
 
 def get_intergenic(bed_dir, output, chr_sizes, chr1):
@@ -551,11 +547,16 @@ def get_3utr_bed_all_exons(settings, outfile_path):
     Make sure that the last exon in each UTR is extended by the value set in
     settings.extendby"""
 
-    out_handle = open(outfile_path, 'wb')
+    raw_path = os.path.splitext(outfile_path)[0] + '_raw.bed'
+    raw_handle = open(raw_path, 'wb')
     extendby = settings.extendby
 
     # Get transcripts and genes from annotation
-    (transcripts, genes) = make_transcripts(settings.annotation_path)
+    if settings.chr1:
+        (transcripts, genes) = make_transcripts(settings.annotation_path_chr1)
+    else:
+        (transcripts, genes) = make_transcripts(settings.annotation_path)
+
     all_transcripts = transcripts
 
     # 1) single out the transcripts that belong to genes with only 1-exon
@@ -603,23 +604,113 @@ def get_3utr_bed_all_exons(settings, outfile_path):
                     multi_exon_transcripts[ts_id] = ts_obj
 
 
-    #  for the 1exon-utrs, you have a new and better way :) you will have
-    # 1gene-> multiple utrs. However, it is just 1 method and it is robust.
+    # Cluster and write single-exon utrs
+    one_exon_cluster_write(one_exon_transcripts, all_transcripts,  genes,
+                           extendby, raw_handle)
 
-    last_exons = get_last_exons(transcripts)
-
-    #one_exon_cluster_write(one_exon_transcripts, all_transcripts,  genes,
-                           #last_exons, extendby, out_handle)
-
-    # Cluster and write the multi-exon utrs to file. Return several utrs per
-    # gene.
-    # This option has one-gene -> multi-utrs
+    # Cluster and write the multi-exon utrs to file.
     cluster_by_utrbeg_multi_exon(multi_exon_transcripts, all_transcripts,
-                                 last_exons, genes, extendby, out_handle)
-    out_handle.close()
+                                 genes, extendby, raw_handle)
+
+    raw_handle.close()
+
+    # Remove utrs that have CDS exons in them and write to outfile_path
+    remove_intersects_and_extend(raw_path, outfile_path, all_transcripts,
+                                 settings)
+
+
+def remove_intersects_and_extend(unfiltered_path, outfile_path, all_transcripts,
+                                settings):
+    """Remove UTR intersections with CDS exons. Remove UTR intersections with
+    UTRs from other genes. If sequences should be extended, do just that."""
+
+    temp_cds_path = os.path.join(os.path.dirname(outfile_path), 'temp_cds_exons.bed')
+
+    if not os.path.isfile(temp_cds_path):
+
+        temp_cds_handle = open(temp_cds_path, 'wb')
+        # Write all CDS exons
+        for ts_id, ts_obj in all_transcripts.iteritems():
+            if ts_obj.cds.exons != []:
+                for cds in ts_obj.cds.exons:
+                    temp_cds_handle.write('\t'.join([cds[0], str(cds[1]),
+                                                     str(cds[2]), cds[3]])+'\n')
+        temp_cds_handle.close()
+
+    else:
+        print('temp_cds_exons.bed file found, not overwriting')
+
+    # Set of utrs to remove
+    remove_these_utrs = set()
+
+    # 1) Run intersect bed on bedfile with CDS exons and with itself
+    cmd1 = ['intersectBed', '-wb', '-a', temp_cds_path, '-b', unfiltered_path]
+    cmd2 = ['intersectBed', '-wo', '-a', unfiltered_path, '-b', unfiltered_path]
+
+    # Run the above command and loop through output
+    f1 = Popen(cmd1, stdout=PIPE)
+    f2 = Popen(cmd2, stdout=PIPE)
+
+    # 2) Add utrs to-be-removed from the CDS intersection
+    for line in f1.stdout:
+        utr_id = line.split()[7]
+        # remove id is gene_id + '_' + utr_nr
+        remove_id = '_'.join(utr_id.split('_')[:2])
+        remove_these_utrs.add(remove_id)
+
+    # 3) Add utrs to-be-removed from the self intersection
+    for line in f2.stdout:
+        # Get the IDs of the intersecting utrs (most will be self-intersect)
+        (d,d,d, utr_id_1, d,d,d,d,d, utr_id_2, d,d,d) = line.split()
+
+        # If intersection occurred on utrs from DIFFERENT GENES, remove them
+        if utr_id_1.split('_')[0] != utr_id_2.split('_')[0]:
+            remove_these_utrs.add('_'.join(utr_id_1.split('_')[:2]))
+            remove_these_utrs.add('_'.join(utr_id_2.split('_')[:2]))
+
+    # Create the output file
+    outfile_handle = open(outfile_path, 'wb')
+
+    # 4) Loop through the original file and write to the 'filtered' file
+    extendby = settings.extendby
+
+    with open(outfile_path, 'wb') as outfile_handle:
+
+        if not extendby:
+
+            for line in open(unfiltered_path, 'rb'):
+                utr_id = '_'.join(line.split()[3].split('_')[:2])
+                if utr_id not in remove_these_utrs:
+                    outfile_handle.write(line)
+
+        if extendby:
+
+            for line in open(unfiltered_path, 'rb'):
+                utr_id = '_'.join(line.split()[3].split('_')[:2])
+                if utr_id not in remove_these_utrs:
+                    (chrm, beg, end, utr_ex_id, val, strand) = line.split()
+                    id_split = utr_ex_id.split('_')
+
+                    # Extend the utrs for the final exon in the utr-batch
+                    if len(id_split) == 4: # it has an EXTENDBY mark
+
+                        if strand == '+':
+                            end = str(int(end) + extendby)
+
+                        if strand == '-':
+                            beg = str(int(beg) - extendby)
+
+                    utr_id = '_'.join(id_split[:3])
+
+                    # val = total Exons in UTR
+                    # val = 3 means 3 exon in this UTR. See utr_id for which one
+
+                    outfile_handle.write('\t'.join([chrm, beg, end, utr_id, val,
+                                                   strand]) + '\n')
+
 
 def one_exon_cluster_write(one_exon_transcripts, all_transcripts, genes,
-                           last_exons, extendby, out_handle):
+                           extendby, out_handle):
     """Takes a set of Transcript objects whose genes should only have UTRs with
     one exon. Clusters the UTRs of the transcripts together by their
     UTR start sites. Removes or trims UTRs that overlap CDS exons for that
@@ -684,48 +775,20 @@ def one_exon_cluster_write(one_exon_transcripts, all_transcripts, genes,
 
                         utr_list.append(this_utr)
 
-                    # getting gene_id from just one of the ts in the cluster
                     gene_id = one_exon_transcripts[this_cluster_ids[0]].gene_id
+                    # The the longest of the utrs in the cluster
+                    print_utr = longest_utr(utr_list)
+                    # Count how many times you have printed from this gene
+                    gene_utrcount[gene_id] += 1
 
-                    # 1) Remove UTR if there are CDS in it or if it lies 5' to
-                    # the 3'most CDS exon
-                    #stripped_utr = trim_utr(strand, last_exons[gene_id], utr_list)
+                    exon = print_utr[0]
+                    beg = str(exon[0])
+                    end = str(exon[1])
 
-                    # 2) Keep UTRS 5' of a CDS as long as the UTR is in
-                    # introns. Further, keep UTRs that have very small internal
-                    # exons. Count how many of each condition we lose by
-                    # applying just number one. You lose about 15%. Most of
-                    # them are due to the UTR in intron loss.
-                    stripped_utr = strip_set(genes[gene_id], strand,
-                                             all_transcripts, utr_list)
+                    e_nr = '_'+str(gene_utrcount[gene_id])+ '_1_EXTENDME'
 
-                    print_utr = longest_utr(stripped_utr)
-
-                    # Don't write if a (0,0) is returned. it means the utr was
-                    # skipped because of a CDS encounter.
-                    if print_utr != (0,0):
-
-                        gene_utrcount[gene_id] += 1
-                        exon_nr = len(print_utr)
-
-                        for nr, exon in enumerate(print_utr):
-
-                            beg = str(exon[0])
-                            end = str(exon[1])
-
-                            # Extend the utrs for the 3'-most exon
-                            if (nr == exon_nr-1) and (strand == '+'):
-                                end = int(end)
-                                end += extendby
-                                end = str(end)
-                            if (nr == 0) and (strand == '-'):
-                                beg = int(beg)
-                                beg -= extendby
-                                beg = str(beg)
-
-                            e_nr = '_'+str(gene_utrcount[gene_id])+ '_'+str(nr+1)
-                            out_handle.write('\t'.join([chrm, beg, end, gene_id +
-                                                        e_nr, '0', strand]) + '\n')
+                    out_handle.write('\t'.join([chrm, beg, end, gene_id + e_nr,
+                                                '1', strand]) + '\n')
 
                     # Start the variables for the new cluster
                     clustsum = val
@@ -734,140 +797,9 @@ def one_exon_cluster_write(one_exon_transcripts, all_transcripts, genes,
                     this_cluster_ids = [this_id]
 
 
-def trim_utr(strand, limit, utr_list):
-    # for each utr_exon_list, keep only 
-
-    stripped_utr = []
-
-    for this_utr in utr_list:
-        scrap = False
-
-        if strand == '+':
-            if this_utr[0][0] < limit:
-                scrap = True
-
-        if strand == '-':
-            if limit < this_utr[-1][1]:
-                scrap = True
-
-        if scrap:
-            stripped_utr.append([])
-        else:
-            stripped_utr.append(this_utr)
-
-    return stripped_utr
-
-def strip_set(ts_ids, strand, all_transcripts, utr_list):
-    # For each cds exon, check if it falls within any of the exons in the
-    # utr_exon_list. Delete UTR if it overlaps a CDS exon > 10% of UTR size.
-    # This applies only if the CDS exon lands in the middle of the UTR.
-
-    # TODO you must deal with the case when the CDS exon is EQUAL to the UTR
-    # exon
-
-    new_exon_list = []
-
-    (beg, end) = (0, 1)
-
-    if strand == '+':
-        for this_utr in utr_list:
-            scrap = False
-            for utr_ex in this_utr:
-                for ts_id in ts_ids:
-                    for cds_exon in all_transcripts[ts_id].cds.exons:
-                        cds_ex = (cds_exon[1], cds_exon[2])
-
-                        # If the CDS-beg lands in the UTR
-                        if utr_ex[beg] < cds_ex[beg] < utr_ex[end]:
-
-                            # If the CDS-end lands in the UTR too
-                            if utr_ex[beg] < cds_ex[end] < utr_ex[end]:
-                                # If the CDS exon is very small compared to the UTR
-                                # exon, do nothing. If not, mark for deletion.
-
-                                utr_len = utr_ex[end]-utr_ex[beg]
-                                cds_len = cds_ex[end]-cds_ex[beg]
-                                if cds_len/float(utr_len) < 0.01:
-                                    continue
-                            # If the CDS-end extends beyond the UTR scrap whole UTR
-                            scrap = True
-                            break
-
-                        # if the CDS-beg coincides with the UTR-beg, scrap it
-                        elif utr_ex[beg] == cds_ex[beg]:
-                            scrap = True
-                            break
-
-                        # If the CDS-beg lands outside the UTR
-                        else:
-                            # If the CDS-end lands inside the UTR, don't save
-                            if utr_ex[beg] < cds_ex[end] < utr_ex[end]:
-                                scrap = True
-                                break
-                            # If neither the CDS-beg or the CDS-end land in the utr,
-                            # do nothing. the UTR is untouched for now
-
-                    if scrap:
-                        break
-
-            # If no changes were made, keep utr_exon. print length
-            if scrap:
-                new_exon_list.append([])
-            else:
-                new_exon_list.append(this_utr)
-
-    if strand == '-':
-        for this_utr in utr_list:
-            scrap = False
-            for utr_ex in this_utr:
-                for ts_id in ts_ids:
-                    for cds_exon in all_transcripts[ts_id].cds.exons:
-                        cds_ex = (cds_exon[1], cds_exon[2])
-
-                        # If the CDS-end lands in the UTR
-                        if utr_ex[beg] < cds_ex[end] < utr_ex[end]:
-
-                            # If the CDS-beg lands in the UTR too, save slice
-                            if utr_ex[beg] < cds_ex[beg] < utr_ex[end]:
-                                # Only slice if the CDS exon is more than 30% of
-                                # the size of the UTR exon
-                                utr_len = utr_ex[end]-utr_ex[beg]
-                                cds_len = cds_ex[end]-cds_ex[beg]
-                                if cds_len/float(utr_len) > 0.01:
-                                    continue
-                            # If the CDS-beg started before the UTR, add empty
-                                scrap = True
-                                break
-
-                        # if the CDS-end coincides with the UTR-end, scrap it
-                        elif utr_ex[end] == cds_ex[end]:
-                            scrap = True
-                            break
-
-                        # If the CDS-end is outside the UTR
-                        else:
-                            # If the CDS-beg lands in the UTR, save slice
-                            if utr_ex[beg] < cds_ex[beg] < utr_ex[end]:
-                                scrap = True
-                                break
-                            # If neither the CDS-end or the CDS-beg lands in the utr,
-                            # add nothing. the utr is untouched for now.
-                    if scrap:
-                        break
-
-            if scrap:
-                new_exon_list.append([])
-            else:
-                new_exon_list.append(this_utr)
-
-    return new_exon_list
-
 def cluster_by_utrbeg_multi_exon(multi_exon_transcripts, all_transcripts,
-                                 last_exons, genes, extendby, out_handle):
-    """Cluster multi exon transcripts by their utr-start sites. From the utrs
-    in these clusters, get the union of all their exons. As a result, some of
-    the resulting exons will not exist in the annotation. They are
-    merger-exons. They represent the sequence potential of the 3UTR."""
+                                 genes, extendby, out_handle):
+    """Cluster multi exon transcripts by their utr-start sites."""
 
     chrms = ['chr'+str(nr) for nr in range(1,23) + ['X','Y','M']]
     tsdict = dict((chrm, {'+':[],'-':[]}) for chrm in chrms)
@@ -916,7 +848,7 @@ def cluster_by_utrbeg_multi_exon(multi_exon_transcripts, all_transcripts,
 
                 # If not, save the old cluster to file
                 else:
-                    # From this cluster, merge exons to get a super-utr!
+                    # Get all the exons of the cluster in a list
                     utr_list = []
                     for ts_id in this_cluster_ids:
                         this_utr = []
@@ -926,46 +858,39 @@ def cluster_by_utrbeg_multi_exon(multi_exon_transcripts, all_transcripts,
 
                         utr_list.append(this_utr)
 
-                    # getting gene_id from just one of the ts in the cluster
+                    # get gene_id from just one of the ts in the cluster
                     gene_id = multi_exon_transcripts[this_cluster_ids[0]].gene_id
+                    # Get the longest utr in the cluster
+                    print_utr = longest_utr(utr_list)
+                    # Count how many times you've written from this gene
+                    gene_utrcount[gene_id] += 1
+                    # Get the nr of exons in this utr
+                    exon_nr = len(print_utr)
 
-                    # 1) Remove UTR if there are CDS in it or if it lies 5' to
-                    # the 3'most CDS exon
+                    # Write each exon to file
+                    for nr, exon in enumerate(print_utr):
 
-                    #stripped_utr11 = trim_utr(strand, last_exons[gene_id], utr_list)
+                        beg = str(exon[0])
+                        end = str(exon[1])
 
-                    # 2) Keep UTRS 5' of a CDS as long as the UTR is in
-                    # introns. Further, keep UTRs that have very small internal
-                    # exons. Count how many of each condition we lose by
-                    # applying just number one. You lose about 15%. Most of
-                    # them are due to the UTR in intron loss. This is for single
-                    # exon 3utrs.
+                        # Code for utr_exon_id gene_id + #utr from this gene +
+                        # #exon in this utr _ possibly EXTENDME
 
-                    stripped_utr = strip_set(genes[gene_id], strand,
-                                             all_transcripts, utr_list)
+                        ex_nr = str(nr+1)
 
-                    print_utr = longest_utr(stripped_utr)
+                        e_nr = '_'.join([str(gene_utrcount[gene_id]), ex_nr])
 
-                    # Don't write if a (0,0) is returned. it means the utr was
-                    # skipped because of a CDS encounter.
-                    if print_utr != (0,0):
-
-                        gene_utrcount[gene_id] += 1
-                        exon_nr = len(print_utr)
-
-                        for nr, exon in enumerate(print_utr):
-
-                            beg = str(exon[0])
-                            end = str(exon[1])
-
-                            # Extend the utrs for the 3'-most exon
+                        if extendby:
+                            # Mark the final utrs for extension
                             if (nr == exon_nr-1) and (strand == '+'):
-                                end = str(int(end) + extendby)
+                                e_nr += '_EXTENDME'
+
                             if (nr == 0) and (strand == '-'):
-                                beg = str(int(beg) - extendby)
-                            e_nr = '_'+str(gene_utrcount[gene_id])+ '_'+str(nr+1)
-                            out_handle.write('\t'.join([chrm, beg, end, gene_id +
-                                                        e_nr, '0', strand])+'\n')
+                                e_nr += '_EXTENDME'
+
+                        out_handle.write('\t'.join([chrm, beg, end, gene_id +
+                                                    '_' + e_nr, str(exon_nr) ,
+                                                    strand])+'\n')
 
                     # Get the values for the new cluster
                     clustsum = val
@@ -987,47 +912,6 @@ def longest_utr(utr_list):
     # Return the longest of the 3utrs
     return new_list[-1][-1]
     # Get length of each utr in utr_list
-
-def merge_set(exon_list):
-
-    exon_list.sort()
-
-    if len(exon_list) == 1:
-        return exon_list
-
-    if len(exon_list) == 0:
-        debug()
-
-    mega_utr = []
-
-    beg = exon_list[0][0]
-    end = exon_list[0][1]
-
-    utrlen = len(exon_list)-1
-
-    for exnr, exon in enumerate(exon_list[1:]):
-
-        this_beg = exon[0]
-        this_end = exon[1]
-
-        # Check if previous end falls within this exon
-        if end > this_beg:
-            # Check if this exon extends further than the previous one
-            if this_end > end:
-                end = this_end
-
-        if this_beg > end:
-            mega_utr.append((beg, end))
-
-            beg = this_beg
-            end = this_end
-
-        ## Special case for last exon. Not part of main algorithm.
-        if exnr == utrlen -1:
-            mega_utr.append((beg, end))
-            break
-
-    return mega_utr
 
 def get_a_polyA_sites_bed(settings, outfile_path):
     """Get the polyA sites (end position of last exon) of annotated 3UTRs.
@@ -1063,9 +947,11 @@ def get_a_polyA_sites_bed(settings, outfile_path):
     # go through the annotated 3UTR ends and cluster them
     for chrm, strand_dict in tsdict.items():
         for strand, ends in strand_dict.items():
+
             # Skip empty ones; could be that chr1 only is run
             if ends == []:
                 continue
+
             clustsum = 0
             clustcount = 0
             this_cluster = []
@@ -1080,6 +966,7 @@ def get_a_polyA_sites_bed(settings, outfile_path):
                 # If dist between new entry and cluster mean is < 40, keep in cluster
                 if abs(ival - mean) < 40:
                     this_cluster.append(ival)
+
                 else: # If not, start a new cluster, and save the old one
                     clusters.append(this_cluster)
                     clustsum = ival
@@ -1088,6 +975,7 @@ def get_a_polyA_sites_bed(settings, outfile_path):
 
             # Append the last cluster
             clusters.append(this_cluster)
+
             # Get the mean of the clusters with length greater than one
             cl_means = [int(math.floor(sum(clu)/len(clu))) for clu in clusters]
 
@@ -1114,26 +1002,6 @@ def get_seqs(utr_dict, hgfasta):
 
     return seq_dict
 
-def get_all_exons(annotation, chr1):
-    if chr1: chrom1 = '_chr1'
-    else: chrom1 = ''
-
-    out_path = os.path.join(os.path.dirname(annotation),
-                            'just_exons'+chrom1+'.bed')
-
-    in_handle = open(annotation, 'rb')
-    out_handle = open(out_path, 'wb')
-
-
-    for line in open(annotation, 'rb'):
-        # Skip first commented out lines
-        if line[0]=='#':
-            continue
-        (chrm, source, feature, beg, end, d, strand) = line.split('\t')[:7]
-        if feature == 'exon':
-            out_handle.write('\t'.join([chrm, beg, end, source, d, strand]) +
-                             '\n')
-
 def main():
     t1 = time.time()
 
@@ -1153,8 +1021,6 @@ def main():
 
     #new_transcripts = cluster_by_utrbeg(transcripts)
 
-    # Only get the longest of the 3UTRs when they overlap
-    #get_all_exons(annotation, chr1)
     #debug()
 
 
