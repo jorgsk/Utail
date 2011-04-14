@@ -16,6 +16,7 @@ import ConfigParser
 from multiprocessing import Pool
 from multiprocessing import cpu_count
 from pprint import pprint
+from operator import attrgetter
 
 import re
 
@@ -125,17 +126,17 @@ class UTR(object):
     """This class takes care of writing output to file. Avoids passing a million
     parameters here and there."""
 
-    def __init__(self, chrm, beg, end, strand, val, utr_ID, exon_nr, rpkm,
-                 extendby, first_covr, sequence, polyA_reads, a_polyA_sites):
+    def __init__(self, chrm, beg, end, strand, val, utr_ID, rpkm, extendby,
+                 first_covr, sequence, polyA_reads, a_polyA_sites):
 
         # variables you have to initialize
         self.chrm = chrm
         # Note that beg and end might be subject to extensions! See the
         # nonextended versions further down
-        self.beg = beg
-        self.end = end
-        self.val = val
-        self.length = end-beg
+        self.beg = int(beg)
+        self.end = int(end)
+        self.val = int(val)
+        self.length = self.end-self.beg
         self.utr_ID = utr_ID
         self.strand = strand
         self.rpkm = rpkm
@@ -144,17 +145,23 @@ class UTR(object):
         self.polyA_reads = polyA_reads # the polyA reads
         self.a_polyA_sites = [int(site[1]) for site in a_polyA_sites] # annotated sites
 
-
         # Assume not a multi exon
-        self.multi_exon = False
-        self.exon_nr = exon_nr
+        if self.val == 1:
+            self.multi_exon = False
+        elif self.val > 1:
+            self.multi_exon = True
+        else:
+            print('Exon number must be an integer larger than 1')
+            sys.exit()
+
+        self.exon_nr =int(utr_ID[-1])
 
         # If multi exon, update values
-        self.tot_exnr = int(val)
+        self.tot_exnr = self.val
 
         # the coverage vectors
-        self.covr_vector = [first_covr]
-        self.cumul_covr = [first_covr]
+        self.covr_vector = [int(first_covr)]
+        self.cumul_covr = [int(first_covr)]
 
         # Get the non-extended begs and ends as well!
         if extendby > 0:
@@ -162,6 +169,15 @@ class UTR(object):
                 self.end_nonextended = self.end - extendby
             if strand == '-':
                 self.beg_nonextended = self.beg + extendby
+
+        # if multi exon, make a beg-end list (extended and nonextended) for the
+        # utrs
+        if self.multi_exon:
+            self.begends = [(self.beg, self.end)]
+            if strand == '+':
+                self.begends_nonextended = [(self.beg, self.end_nonextended)]
+            if strand == '-':
+                self.begends_nonextended = [(self.beg_nonextended, self.end)]
 
     def is_empty(self):
         """Determine if non-extended coverage vector is empty"""
@@ -178,44 +194,50 @@ class UTR(object):
 
         return True
 
-    def update_utr(self, new_beg, new_end, new_exon_nr, new_rpkm, new_sequence,
-                   new_polyA_reads, new_annotated_polyA_sites):
+    def update_utr(self, new_exon):
+        """Update the first exon in the utr (which by sorting is the one with
+        the smallest utr.beg) with the next exon."""
 
-        # Update exon_nr
-        self.exon_nr = new_exon_nr
         # Update RPKM with weights on the lenghts of the two exons
-        new_length = new_end - new_beg
-        self.rpkm = ((self.rpkm/self.length) + new_rpkm/new_length)/(self.length
-                                                                   + new_length)
+        self.rpkm = ((self.rpkm/self.length) +
+                     new_exon.rpkm/new_exon.length)/(self.length + new_exon.length)
         # Update length
-        self.length += new_length
+        self.length += new_exon.length
+
+        # Update begends lists to know where all exons begin and end
+        self.begends.append((new_exon.beg, new_exon.end))
+        if self.strand == '+':
+            self.begends_nonextended.append((new_exon.beg, new_exon.end_nonextended))
+        if self.strand == '-':
+            self.begends_nonextended.append((new_exon.beg_nonextended, new_exon.end))
 
         # Update polyA_reads if any
-        if new_polyA_reads[0] != []:
-            if len(new_polyA_reads[0]) == 1:
-                self.polyA_reads[0].append(new_polyA_reads[0][0])
-                self.polyA_reads[1].append(new_polyA_reads[1][0])
+        if new_exon.polyA_reads[0] != []:
+            if len(new_exon.polyA_reads[0]) == 1:
+                self.polyA_reads[0].append(new_exon.polyA_reads[0][0])
+                self.polyA_reads[1].append(new_exon.polyA_reads[1][0])
 
             else:
+                # Debug in this case, to see that the code works
                 debug()
-                for (pA_site, pA_support) in new_polyA_reads:
+                for (pA_site, pA_support) in new_exon.polyA_reads:
                     self.polyA_reads[0].append(pA_site)
                     self.polyA_reads[1].append(pA_support)
                 debug()
 
+
         # Update annotated polyA sites
-        for site in new_annotated_polyA_sites:
-            self.a_polyA_sites.append(int(site[1]))
+        for site in new_exon.a_polyA_sites:
+            self.a_polyA_sites.append(site)
 
-        # Update the sequence, depending on beg/end
-        # If the new sequence is upstream the current one
-        if new_beg < self.beg:
-            self.sequence = new_sequence + self.sequence
+        # Update the sequence, depending on strand
+        # If + strand, new.exon is downstream self.exon
+        if self.strand == '+':
+            self.sequence = self.sequence + new_exon.sequence
 
-        # If the new sequence is downstream the current one
-        if self.beg < new_beg:
-            self.sequence += new_sequence
-
+        # If - strand, new.exon is upstream self.exon
+        if self.strand == '-':
+            self.sequence = new_exon.sequence + self.sequence
 
 def frmt(self, element):
     """Return float objects with four decimals. Return all other objects as
@@ -248,7 +270,7 @@ class FullLength(object):
         """Return  """
         return dict((('chrm', this_utr.chrm), ('beg', self.frmt(this_utr.beg)),
                     ('end', self.frmt(this_utr.end)),
-                    ('utr_ID', self.frmt(this_utr.utr_ID)),
+                    ('utr_ID', self.frmt(this_utr.utr_ID[:-2])),
                     ('strand', this_utr.strand),
                     ('3utr_extended_by', self.frmt(this_utr.extendby)),
                     ('cuml_point_rel_size', self.frmt(self.cuml_rel_size)),
@@ -365,8 +387,6 @@ class FullLength(object):
 
     def cumul_plus(self, this_utr):
         """Get cumulative read coverage"""
-        #if this_utr.exon_nr >1:
-            #debug()
         covr_vector = this_utr.covr_vector
         extendby = this_utr.extendby
 
@@ -469,7 +489,6 @@ class PolyAReads(object):
         self.rel_sizes = 'NA'
         self.cumul_rel_sizes = 'NA'
 
-
     def write_header(self, outfile):
         outfile.write('\t'.join(self.header_order()) + '\n')
 
@@ -484,12 +503,11 @@ class PolyAReads(object):
         else:
             return element
 
-
     def header_dict(self, this_utr, polA_nr, pAcoord, nr_supp_pA, covR, covL,
                     annotpA_dist, nearbyPAS, PAS_dist, rel_size, norm_cuml_val):
 
         return dict((
-                    ('utr_ID', this_utr.utr_ID),
+                    ('utr_ID', this_utr.utr_ID[:-2]),
                     ('polyA_number', self.frmt(polA_nr)),
                     ('strand', this_utr.strand),
                     ('polyA_coordinate', self.frmt(pAcoord)),
@@ -588,10 +606,6 @@ class PolyAReads(object):
             return
 
         self.polyRead_sites = this_utr.polyA_reads[0]
-        if self.utr_ID == 'ENSG00000187961_1_1':
-            debug()
-        if self.utr_ID == 'ENSG00000169598_2_1':
-            debug()
         # If there are no polyA reads in the UTR, pass on
         if self.polyRead_sites == []:
             return
@@ -845,6 +859,17 @@ def get_pas_list():
             'AATACA', 'CATAAA', 'GATAAA', 'AATGAA', 'TTTAAA', 'ACTAAA',
             'AATAGA'])
 
+def join_multiexon_utr(multi_exon_utr):
+    # Sort utr-exon instances according to utr-beg
+    multi_exon_utr.sort(key = attrgetter('beg'))
+    # Select the first exon in the utr as the 'main' utr. Add information from
+    # the other utrs to this utr.
+    main_utr = multi_exon_utr[0]
+    for new_exon in multi_exon_utr[1:]:
+        main_utr.update_utr(new_exon)
+
+    return main_utr
+
 def output_writer(dset_id, coverage, annotation, utr_seqs, rpkm, extendby,
                  polyA_reads):
     """Putting together all the info on the 3UTRs and writing to files. Write
@@ -856,28 +881,30 @@ def output_writer(dset_id, coverage, annotation, utr_seqs, rpkm, extendby,
 
     (dirpath, basename) = os.path.split(coverage)
 
-    # list of PAS hexamers
-    pas_list = get_pas_list()
-
-
-    # First get line 1 as something to start from
-    read_from = open(coverage, 'rb')
-    line1 = read_from.next()
-    (chrm, beg, end, utr_ID, val, strand, rel_pos, covr) = line1.split()
-
-    # Separate exon nr fom the UTR ID
-    exon_nr = int(utr_ID[-1])
-
-    # Create a UTR-instance
-    this_utr = UTR(chrm, int(beg), int(end), strand, val, utr_ID, exon_nr,
-                   rpkm[utr_ID], extendby, int(covr), utr_seqs[utr_ID],
-                   polyA_reads[utr_ID], a_polyA_sites_dict[utr_ID])
-
     # Paths and file objecutr for the two output files (length and one polyA)
     length_outpath = os.path.join(dirpath, 'utr_'+dset_id)
     polyA_outpath = os.path.join(dirpath, 'polyA_'+dset_id)
     length_outfile = open(length_outpath, 'wb')
     polyA_outfile = open(polyA_outpath, 'wb')
+
+    # list of PAS hexamers
+    pas_list = get_pas_list()
+
+    # Create the multi-exon dictionary where unfinshed multi-exon utrs will be
+    # stored. When all exons of a multi exons have been added, they will be
+    # combined and written to file.
+    multi_exons = {}
+
+    # First get line 1 as something to start from
+    read_from = open(coverage, 'rb')
+
+    line1 = read_from.next()
+    (chrm, beg, end, utr_ID, val, strand, rel_pos, covr) = line1.split()
+
+    # Create a UTR-instance
+    this_utr = UTR(chrm, beg, end, strand, val, utr_ID, rpkm[utr_ID], extendby,
+                   covr, utr_seqs[utr_ID], polyA_reads[utr_ID],
+                   a_polyA_sites_dict[utr_ID])
 
     # Create instances for writing to two output files
     length_output = FullLength(utr_ID)
@@ -890,57 +917,62 @@ def output_writer(dset_id, coverage, annotation, utr_seqs, rpkm, extendby,
     # Assert that the file information is the same as you started with
     assert utr_exons[utr_ID] == (chrm, int(beg), int(end), strand), 'Mismatch'
 
-     # staring reading from line nr 2
+    # staring reading from line nr 2
     for line in read_from:
         (chrm, beg, end, utr_ID, val, strand, pos, covr) = line.split('\t')
 
-        # get the exon number
-        exon_nr = int(utr_ID[-1])
+        # Check if you stay on the same UTR-exon in the coverage file
+        if utr_ID == this_utr.utr_ID:
 
-        # HUGE XXX TODO NOTE
-        # You can in general not expect the exons to follow each other in the
-        # output. You need to be able to set aside a UTR until it is complete.
-        # If the utr-part of the utr_ID remains the same, stay on track
-        if utr_ID[:-2] == this_utr.utr_ID[:-2]:
-            # Note: we also add coverage from extension; this is corrected for later
-
-            # if exon nr has changed, update the utr object
-            if exon_nr != this_utr.exon_nr:
-
-                # see if next utr is 3' or 5' of the current one
-                if int(beg) < this_utr.beg:
-                    print('Multiple-exon UTRs in {0} not in 5\'->3\ '\
-                          'order. Exiting.'.format(coverage))
-                    sys.exit()
-
-                this_utr.update_utr(int(beg), int(end), exon_nr, rpkm[utr_ID],
-                                    utr_seqs[utr_ID], polyA_reads[utr_ID],
-                                    a_polyA_sites_dict[utr_ID])
-
-            covr = int(covr)
-            this_utr.covr_vector.append(covr) # add coverage and continue
-            this_utr.cumul_covr.append(this_utr.cumul_covr[-1] + covr)
+            this_utr.covr_vector.append(int(covr))
+            this_utr.cumul_covr.append(this_utr.cumul_covr[-1] + int(covr))
 
         # if not, this is the first line of a new UTR
         else:
-            # Calculate output values like 99.5% length, cumulative coverage, etc
-            length_output.calculate_output(pas_list, this_utr)
-            pAread_output.calculate_output(pas_list, this_utr)
 
-            # Save output to files
-            length_output.write_output(length_outfile, this_utr)
-            pAread_output.write_output(polyA_outfile, this_utr)
+            calculate_and_write = True
+
+            # check if the previous utr was a multi-exon utr
+            if this_utr.tot_exnr > 1:
+                # If so, check if it is complete
+                utr_name = this_utr.utr_ID[:-2]
+
+                if utr_name in multi_exons:
+                    multi_exons[utr_name].append(this_utr)
+                else:
+                    multi_exons[utr_name] = [this_utr]
+
+                if len(multi_exons[utr_name]) == this_utr.tot_exnr:
+                    # If complete, join the utrs into a this_utr object
+                    this_utr = join_multiexon_utr(multi_exons[utr_name])
+
+                    # Create instances for writing to file
+                    length_output = FullLength(utr_ID)
+                    pAread_output = PolyAReads(utr_ID)
+
+                else:
+                    # if incomplete, continue without writing anything
+                    calculate_and_write = False
+
+            if calculate_and_write:
+
+                # Calculate output values like 99.5% length, cumulative coverage, etc
+                length_output.calculate_output(pas_list, this_utr)
+                pAread_output.calculate_output(pas_list, this_utr)
+
+                # Save output to files
+                length_output.write_output(length_outfile, this_utr)
+                pAread_output.write_output(polyA_outfile, this_utr)
 
             # Update to the new utr and start the loop from scratch
-            this_utr = UTR(chrm, int(beg), int(end), strand, val, utr_ID,
-                           exon_nr, rpkm[utr_ID], extendby, int(covr),
-                           utr_seqs[utr_ID], polyA_reads[utr_ID],
-                           a_polyA_sites_dict[utr_ID])
+            this_utr = UTR(chrm, beg, end, strand, val, utr_ID, rpkm[utr_ID],
+                           extendby, covr, utr_seqs[utr_ID],
+                           polyA_reads[utr_ID], a_polyA_sites_dict[utr_ID])
 
-            # Create instances for writing to two output files
-            # Start here and go through each step...
-            length_output = FullLength(utr_ID)
-            #pAread_output = PolyAReads(utr_ID)
+            # If not a multi exon, make output instances for writing to file
+            if not this_utr.multi_exon:
+                length_output = FullLength(utr_ID)
+                pAread_output = PolyAReads(utr_ID)
 
             # Assert that the next utr has correct info
             assert utr_exons[utr_ID] == (chrm, int(beg), int(end), strand), 'Mismatch'
@@ -1572,7 +1604,7 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs, settings,
     # Get transcript 3utr endings as determined by read coverage
     output = output_writer(dset_id, coverage, annotation, utr_seqs, rpkm,
                              extendby, polyA_reads)
-    debug()
+    #debug()
 
     print('Total time for {0}: {1}\n'.format(dset_id, time.time() - t0))
 
@@ -1967,20 +1999,19 @@ def main():
                          settings, annotation)
 
             ###### WORK IN PROGRESS
-            akk = pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs,
-                           settings, annotation)
+            #akk = pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs,
+                           #settings, annotation)
 
-            debug()
 
-            #result = my_pool.apply_async(pipeline, arguments)
-            #results.append(result)
+            result = my_pool.apply_async(pipeline, arguments)
+            results.append(result)
 
         # Wait for all procsses to finish
         my_pool.close()
         my_pool.join()
 
-        # Get the paths from the final output
         dsets = settings.datasets.keys()
+        # Get the paths from the final output
         outp = [result.get() for result in results]
         print('Total elapsed time: {0}\n'.format(time.time()-t1))
 
@@ -2028,6 +2059,9 @@ def main():
 
 if __name__ == '__main__':
     main()
+
+# TODO
+# Get an empirical measure of the 99.5% cutoff
 
 # 1) Put the temp poly(A) reads in a different folder. Thus you can re-obtain
 # them easily, because it takes so much time (and RAM) to remap them.
