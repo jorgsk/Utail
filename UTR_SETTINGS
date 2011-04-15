@@ -76,10 +76,12 @@ max_cores = 3
 # restrict_reads = 10000
 restrict_reads = false
 
+
 [DELETE_READS]
 # If reads were unpackaged from zip, delete reads after? Source reads are
 # never deleted.
 delete_reads = false
+
 
 [SUPPLIED_3UTR_BEDFILE]
 # The path to a .bed-file that contains the 3UTRS you want to investigate.
@@ -88,16 +90,38 @@ delete_reads = false
 utr_bed_path = false
 # utr_bed_path = /users/rg/pferreira/desktop/motifsapa/data/bedannotation/hg19/3utr_hg19.selectedcases.bed
 
+
 [EXTEND]
 # By how much should the annotated 3UTRs be extended (in the 3' direction...)?
 # It is recommended to let the default setting stay
 extend_by = 100
+
 
 [HG_FASTA]
 # Supply the path to a fasta file of the entire human genome, where each fasta
 # entry is one chromosome (big 3G file). The genome version in the fasta file
 # must be the same as all the genome versions in the other files.
 hg_fasta = /users/rg/jskancke/phdproject/3UTR/hg19fasta/hg19.fa
+
+
+[UTR_LENGTH_TUNING]
+# WARNING: if you run the 
+# If polyA is True, you can train the cumulative percentage by seeing at what
+# cumulative percentage the polyA reads are found. The default value is the
+# result of this tuning in the ENCODE cell-compartment dataset.
+# 
+# An extra output file, cumul.stat, will be generated.
+# In column 1: distances from the given cumulative point (e.g 99.5%) to the
+# closest polyA cluster
+# In column 2: cumulative points of the closest polyA cluster
+# In column 3: RPKM values of this utr
+# In column 4: length of this utr
+#
+# From this information distributions and distances can be generated for tuning
+# the 99.5% value.
+tuning = true
+# tuning = false
+
 
 [PLOTTING]
 # List the datasets from which you wish plots to be generated

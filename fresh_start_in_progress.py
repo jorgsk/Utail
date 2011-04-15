@@ -43,12 +43,11 @@ import matplotlib.pyplot as plt
 # Your own imports
 import annotation_analysis_progress as genome
 
-
 class Settings(object):
     """Store the settings obtained from file"""
     def __init__(self, datasets, annotation_path, utrfile_provided, read_limit,
                  max_cores, chr1, hgfasta_path, polyA, min_utrlen, extendby,
-                 del_reads):
+                 del_reads, cumul_tuning):
 
         self.datasets = datasets
         self.annotation_path = annotation_path
@@ -61,17 +60,18 @@ class Settings(object):
         self.min_utrlen = min_utrlen
         self.extendby = int(extendby)
         self.del_reads = del_reads
+        self.cumul_tuning = cumul_tuning
 
     def DEBUGGING(self):
 
         self.chr1 = True
-        self.read_limit = 10000
-        #self.read_limit = False
+        #self.read_limit = 1000000
+        self.read_limit = False
         self.max_cores = 3
         #self.polyA = False
-        #self.polyA = True
-        self.polyA = '/users/rg/jskancke/phdproject/3UTR/the_project/polyA_file/'\
-                'polyA_reads_k562_whole_cell_processed_mapped_in_3utr.bed'
+        self.polyA = True
+        #self.polyA = '/users/rg/jskancke/phdproject/3UTR/the_project/polyA_file/'\
+                #'polyA_reads_k562_whole_cell_processed_mapped_in_3utr.bed'
 
 class Annotation(object):
     """A convenience class that holds the files and data structures relevant to
@@ -135,7 +135,6 @@ class UTR(object):
         self.beg = int(beg)
         self.end = int(end)
         self.val = int(val)
-        self.length = self.end-self.beg
         self.utr_ID = utr_ID
         self.strand = strand
         self.rpkm = rpkm
@@ -166,8 +165,13 @@ class UTR(object):
         if extendby > 0:
             if strand == '+':
                 self.end_nonextended = self.end - extendby
+                self.beg_nonextended = self.beg
             if strand == '-':
+                self.end_nonextended = self.end
                 self.beg_nonextended = self.beg + extendby
+
+        # Get the UNEXTENDED length
+        self.length = self.end_nonextended - self.beg_nonextended
 
         # if multi exon, make a beg-end list (extended and nonextended) for the
         # utrs
@@ -344,6 +348,8 @@ class FullLength(object):
         covr_vector = this_utr.covr_vector
         extendby = this_utr.extendby
         cumul_covr = this_utr.cumul_covr
+        # NOTE the coverage arrays are in terms of the non-extended one
+
         # get the cumulated coverage resulting from the extension
         ext_cumul = cumul_covr[extendby-1]
         # subtract this from extension
@@ -356,12 +362,12 @@ class FullLength(object):
         covr_sum = sum(covr_vector[extendby:])
         this_utr.norm_cuml = [1-val/covr_sum for val in cumul_covr]
 
-        # Test for a special case where only last entry has value
+        # Test for a special case where only the last entry has coverage
         if covr_sum == covr_vector[-1]:
             rel_pos = 1
             self.cuml_rel_size = rel_pos/float(this_utr.end-this_utr.beg)
 
-        # Get the utr-relative position where 99.5% of reads have landed
+        # Get the utr-relative position where 99.5% of the reads have landed
         for ind, el in enumerate(this_utr.norm_cuml):
             if el < 0.995:
                 rel_pos = ind
@@ -369,8 +375,9 @@ class FullLength(object):
                 self.cuml_rel_size = (length-rel_pos)/length
                 break
 
-        # Save relative position with the this utr for later usage
+        # Save relative cumulative position with the this utr for later usage
         this_utr.rel_pos = rel_pos
+        #Note that rel_pos is relative to the un-extended 3UTR.
 
         # rel_pos according to extended 3utr
         ext_rel_pos = rel_pos + extendby
@@ -463,14 +470,6 @@ class FullLength(object):
                 self.polyA_support = 1
                 break
 
-        # Get the cumulative coverage of the clostest pA site
-        # Iteratively get closer to the true value.
-        for pAsite in this_utr.polyA_reads[0]:
-            if pAsite-100 < end_pos < pAsite+100:
-                # A general marker for polyA close to end_pos
-                self.polyA_support = 1
-                break
-
     def write_output(self, outobject, this_utr):
         """Format the output as desired, then save"""
 
@@ -493,8 +492,6 @@ class PolyAReads(object):
         self.read_coverage_change = 'NA'
         self.annotation_support = 'NA'
         self.PAS_list = 'NA'
-        self.rel_sizes = 'NA'
-        self.cumul_rel_sizes = 'NA'
 
     def write_header(self, outfile):
         outfile.write('\t'.join(self.header_order()) + '\n')
@@ -511,7 +508,7 @@ class PolyAReads(object):
             return element
 
     def header_dict(self, this_utr, polA_nr, pAcoord, nr_supp_pA, covR, covL,
-                    annotpA_dist, nearbyPAS, PAS_dist, rel_size, norm_cuml_val):
+                    annotpA_dist, nearbyPAS, PAS_dist):
 
         return dict((
                     ('utr_ID', this_utr.utr_ID[:-2]),
@@ -524,8 +521,6 @@ class PolyAReads(object):
                     ('annotated_polyA_distance', self.frmt(annotpA_dist)),
                     ('nearby_PAS', nearbyPAS),
                     ('PAS_distance', self.frmt(PAS_dist)),
-                    ('rel_size', self.frmt(rel_size)),
-                    ('norm_cuml_read_value', self.frmt(norm_cuml_val))
                     ))
 
     def header_order(self):
@@ -540,8 +535,6 @@ class PolyAReads(object):
         annotated_polyA_distance
         nearby_PAS
         PAS_distance
-        rel_size
-        norm_cuml_read_value
         """.split()
 
     def write_output(self, outobject, this_utr):
@@ -565,14 +558,11 @@ class PolyAReads(object):
             annotpA_dist = self.annotation_support[indx]
             # One site might have several PAS of several creeds
             (nearbyPAS, PAS_dist) = self.select_PAS(indx)
-            # STATUS: self.rel_sizes is [] while should have len=4
-            rel_size = self.rel_sizes[indx]
-            norm_cuml_val = self.cumul_rel_sizes[indx]
 
             # Get the output dictionary with updated values
             output_dict = self.header_dict(this_utr, polAnr, pAcord, nr_supp_pA,
                                            covR, covL, annotpA_dist, nearbyPAS,
-                                           PAS_dist, rel_size, norm_cuml_val)
+                                           PAS_dist)
 
             output = [output_dict[hedr] for hedr in output_order]
 
@@ -653,50 +643,6 @@ class PolyAReads(object):
         #3) If there is a PAS nearby? This is secondary information. Look 40 nt
         #downstream and look for PAS. The SVM is a better indicator.
         self.PAS_list = self.get_PAS(pas_list, this_utr)
-
-        #4) The relative length of the 3UTR at the polyA_read sites
-        self.rel_sizes = self.get_rel_len(this_utr)
-
-        #5) The normalized cumulative read value at this site
-        self.cumul_rel_sizes = self.get_cumul_rel_len(this_utr)
-        # TODO IDEA: plot the rel_size against length; but only include those longer
-        # than 0.99. Interpolate against this value
-
-    def get_cumul_rel_len(self, this_utr):
-        rel_lens = []
-        # Get the cumulative read coverage at the polyA sites.
-        # Now, it's relative to the un-extended sequence.
-        if this_utr.strand == '+':
-            for rpoint in self.rel_polyRead_sites:
-                if rpoint > this_utr.length - this_utr.extendby:
-                    rel_lens.append(1)
-                else:
-                    rel_lens.append(this_utr.norm_cuml[rpoint-1])
-
-        if this_utr.strand == '-':
-            for rpoint in self.rel_polyRead_sites:
-                if rpoint < this_utr.extendby:
-                    rel_lens.append(1)
-                else:
-                    rel_lens.append(this_utr.norm_cuml[rpoint-this_utr.extendby])
-
-        return rel_lens
-
-    def get_rel_len(self, this_utr):
-        """For each polyA_read site, get the relative length of the 3UTR at this
-        point"""
-        # Get the relative point to the extended sequence. It's OK. Won't be
-        # much in the end.
-        rel_lens = []
-
-        if this_utr.strand == '+':
-            for rpoint in self.rel_polyRead_sites:
-                rel_lens.append(rpoint/(this_utr.length-this_utr.extendby))
-        if this_utr.strand == '-':
-            for rpoint in self.rel_polyRead_sites:
-                rel_lens.append(1-rpoint/(this_utr.length-this_utr.extendby))
-
-        return rel_lens
 
     def get_PAS(self, pas_list, this_utr):
         """Go through the -40 from the polyA read average. Collect any PAS you
@@ -878,7 +824,7 @@ def join_multiexon_utr(multi_exon_utr):
     return main_utr
 
 def output_writer(dset_id, coverage, annotation, utr_seqs, rpkm, extendby,
-                 polyA_reads):
+                 polyA_reads, settings):
     """Putting together all the info on the 3UTRs and writing to files. Write
     one file mainly about the length of the 3UTR, and write another file about
     the polyA sites found in the 3UTR."""
@@ -920,6 +866,13 @@ def output_writer(dset_id, coverage, annotation, utr_seqs, rpkm, extendby,
     # Write the headers of the length and polyA output files
     length_output.write_header(length_outfile)
     pAread_output.write_header(polyA_outfile)
+
+    # If tuning the cumulative length, open a file for this
+    if settings.cumul_tuning:
+        tuning_output = open(os.path.split(dirpath)[0] + '/output/cumul.stat', 'wb')
+        #write header
+        tuning_output.write('\t'.join(['utr_id', 'cumul', 'pA_to_cumul_dist',
+                                       'pA_cumul', 'rpkm', 'utr-length']))
 
     # Assert that the file information is the same as you started with
     assert utr_exons[utr_ID] == (chrm, int(beg), int(end), strand), 'Mismatch'
@@ -971,6 +924,10 @@ def output_writer(dset_id, coverage, annotation, utr_seqs, rpkm, extendby,
                 length_output.write_output(length_outfile, this_utr)
                 pAread_output.write_output(polyA_outfile, this_utr)
 
+                # If tuning, calculate the tuning variables and write to file
+                if settings.cumul_tuning:
+                    calc_write_tuning(tuning_output, length_output, this_utr)
+
             # Update to the new utr and start the loop from scratch
             this_utr = UTR(chrm, beg, end, strand, val, utr_ID, rpkm[utr_ID],
                            extendby, covr, utr_seqs[utr_ID],
@@ -984,10 +941,65 @@ def output_writer(dset_id, coverage, annotation, utr_seqs, rpkm, extendby,
             # Assert that the next utr has correct info
             assert utr_exons[utr_ID] == (chrm, int(beg), int(end), strand), 'Mismatch'
 
+    # Close opened files
     length_outfile.close()
     polyA_outfile.close()
 
+    if settings.cumul_tuning:
+        tuning_output.close()
+
     return (polyA_outpath, length_outpath)
+
+def calc_write_tuning(tuning_output, length_output, this_utr):
+
+    if this_utr.is_empty():
+        return
+
+    # Get the absolute end-position of the 99.5% 
+    if this_utr.strand == '+':
+        end_pos = this_utr.beg + this_utr.rel_pos
+    if this_utr.strand == '-':
+        end_pos = this_utr.beg_nonextended + this_utr.rel_pos
+
+    # Get the cumulative coverage of the closest pA site
+    # Iteratively get closer to the true value.
+    write_output = False
+    for pAsite in this_utr.polyA_reads[0]:
+        if pAsite-100 < end_pos < pAsite+100:
+            # Get the absolute distance from the polyA site
+            pA_dist = pAsite-end_pos
+
+            # Get the relative-to-exon position of the polyA site 
+            rel_pA_pos = pAsite - this_utr.beg_nonextended
+
+            # Get the cumulative coverage of the polyA site
+            # However, watch out for reads that land outside the non-extended
+            # region
+            # For now I simply assign them to the last value of the region.. but
+            # it's not satisfactory!
+            if (rel_pA_pos < 0) or (rel_pA_pos >= this_utr.length):
+                if this_utr.strand == '+':
+                    cumul_pA = this_utr.norm_cuml[-1]
+                if this_utr.strand == '-':
+                    cumul_pA = this_utr.norm_cuml[0]
+            else:
+                cumul_pA = this_utr.norm_cuml[rel_pA_pos]
+
+            write_output = True
+            break
+
+    if write_output:
+        pA_dist = str(pA_dist)
+        cumul_pA = str(cumul_pA)
+        rpkm = str(this_utr.rpkm)
+        length = str(this_utr.length)
+        end_pos = str(end_pos)
+        strand = str(this_utr.strand)
+        tuning_output.write('\t'.join([this_utr.utr_ID[:-2], end_pos, pA_dist,
+                                       cumul_pA, rpkm, length, strand]) + '\n')
+
+    # Write utr_id, distances, cumulative coverage, rpkm, and length of utr
+
 
 def verify_access(f):
     try:
@@ -1006,13 +1018,14 @@ def read_settings(settings_file):
     expected_fields = ['DATASETS', 'ANNOTATION', 'CPU_CORES', 'RESTRICT_READS',
                        'CHROMOSOME1', 'SUPPLIED_3UTR_BEDFILE', 'HG_FASTA',
                        'POLYA_READS', 'MIN_3UTR_LENGTH', 'EXTEND', 'PLOTTING',
-                       'DELETE_READS']
+                       'DELETE_READS', 'UTR_LENGTH_TUNING']
 
     missing = set(conf.sections()) - set(expected_fields)
     if len(missing) == 0:
         pass
     else:
         print('The following options sections are missing: {}'.format(missing))
+        sys.exit()
 
     # datasets and annotation
     datasets = dict((dset, files.split(':')) for dset, files in conf.items('DATASETS'))
@@ -1066,8 +1079,16 @@ def read_settings(settings_file):
         polyA = conf.get('POLYA_READS', 'polya')
         verify_access(polyA) # Check if is a file
 
+    # tuning of the 99.5% value
+    cuml_tuning = conf.getboolean('UTR_LENGTH_TUNING', 'tuning')
+
+    # if polyA is false, you can't do tuning
+    if cuml_tuning and not polyA:
+        print('To tune the cumulative value, you need to enable polyA reads')
+        sys.exit()
+
     return(datasets, annotation, utr_bedfile_path, read_limit, max_cores, chr1,
-          hg_fasta, polyA, min_utrlen, extendby, del_reads)
+          hg_fasta, polyA, min_utrlen, extendby, del_reads, cuml_tuning)
 
 
 def get_chromosome1(annotation, beddir):
@@ -1610,8 +1631,7 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs, settings,
     print('Using coverage to get 3UTR ends for {0} ...\n'.format(dset_id))
     # Get transcript 3utr endings as determined by read coverage
     output = output_writer(dset_id, coverage, annotation, utr_seqs, rpkm,
-                             extendby, polyA_reads)
-    #debug()
+                             extendby, polyA_reads, settings)
 
     print('Total time for {0}: {1}\n'.format(dset_id, time.time() - t0))
 
@@ -2008,6 +2028,7 @@ def main():
             ###### WORK IN PROGRESS
             #akk = pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs,
                            #settings, annotation)
+            #debug()
 
 
             result = my_pool.apply_async(pipeline, arguments)
