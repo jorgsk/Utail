@@ -51,21 +51,13 @@ class Region(object):
         # Note exons and introns should be on the form
         # (chr1, beg, end, strand), and sorted.
         self.exons = []
-
-
-class Gene(object):
-
-    def __init__(self, chrm, beg, end, strand):
-        self.chrm = chrm
-        self.beg = beg
-        self.end = end
-        self.strand = strand
-
+        self.length = 0
 
 class Transcript(object):
 
-    def __init__(self, ID, t_type, chrm, beg, end, strand):
-        self.ID = ID
+    def __init__(self, t_id, g_id, t_type, chrm, beg, end, strand):
+        self.ts_id = t_id
+        self.gene_id = g_id
         self.t_type = t_type
         self.chrm = chrm
         self.beg = beg
@@ -114,7 +106,6 @@ class Transcript(object):
                 elif self.strand == '-':
                     ex = self.exons[0]
                     return (ex[0], ex[1], str(ex[1]+1), ex[3])
-
         return 0
 
 
@@ -134,14 +125,17 @@ class Transcript(object):
                 self.five_utr.exons.append(utr)
             if utr_beg >= cds_beg:
                 self.three_utr.exons.append(utr)
+                self.three_utr.length = self.three_utr.length + utr[2]-utr[1]
 
         if self.strand == '-':
             if utr_beg <= cds_beg:
                 self.three_utr.exons.append(utr)
+                self.three_utr.length = self.three_utr.length + utr[2]-utr[1]
             if utr_beg >= cds_beg:
                 self.five_utr.exons.append(utr)
 
     def get_utr_introns(self, side=3):
+
         # You've a problem. Once or twice you might have an intron of length 1,
         # and this would give you a bed-entry of length -1, causing a crash.
 
@@ -167,60 +161,71 @@ class Transcript(object):
 
 
 def make_transcripts(annotation):
+    """Loop through a (GENCODE) annotation file and get the exon fields.
+    Finally compose them into sets of transcripts. As well return a dictionary
+    of genes with the list of transcripts belonging to that gene."""
 
     # Skip first 4 lines of annotation (for gencode at least.......)
     a_handle = skip_lines(annotation, 7)
 
     # Initialize dictionaries
-    utr, cds, exons, transcripts = (dict(), dict(), dict(), dict())
+    utr, cds, exons, transcripts, genes = (dict(), dict(), dict(), dict(),
+                                           dict())
 
     # Go though annotation and classify transcripts, genes, and utr + cds exons
     for line in a_handle:
-        (chrm, source, feature, beg, end, d, strand, d, d, d, d, t_ID, d, d,
+        (chrm, source, feature, beg, end, d, strand, d, d, g_id, d, t_id, d, d,
         d, d, d, d, d, t_type) = line.split()[:20]
         beg = int(beg)
         end = int(end)
 
         t_type = t_type.rstrip(';').strip('"') #   remove some characters
-        t_ID = t_ID.rstrip(';').strip('"')
+        t_id = t_id.rstrip(';').strip('"')
+        g_id = g_id.rstrip(';').strip('"')
 
         if feature == 'transcript':
-            transcripts[t_ID] = Transcript(t_ID, t_type, chrm, beg, end, strand)
+            transcripts[t_id] = Transcript(t_id, g_id, t_type, chrm, beg, end, strand)
+            # The genes 
+            if g_id in genes:
+                genes[g_id].append(t_id)
+            else:
+                genes[g_id] = [t_id]
 
         if feature == 'UTR':
-            if t_ID in utr:
-                utr[t_ID].append((chrm, beg, end, strand))
+            if t_id in utr:
+                utr[t_id].append((chrm, beg, end, strand))
             else:
-                utr[t_ID] = [(chrm, beg, end, strand)]
+                utr[t_id] = [(chrm, beg, end, strand)]
 
         if feature == 'CDS':
-            if t_ID in cds:
-                cds[t_ID].append((chrm, beg, end, strand))
+            if t_id in cds:
+                cds[t_id].append((chrm, beg, end, strand))
             else:
-                cds[t_ID] = [(chrm, beg, end, strand)]
+                cds[t_id] = [(chrm, beg, end, strand)]
 
         if feature == 'exon':
-            if t_ID in exons:
-                exons[t_ID].append((chrm, beg, end, strand))
+            if t_id in exons:
+                exons[t_id].append((chrm, beg, end, strand))
             else:
-                exons[t_ID] = [(chrm, beg, end, strand)]
+                exons[t_id] = [(chrm, beg, end, strand)]
 
     # Add cdses to their transcripts and order them
-    for (t_ID, cdses) in cds.iteritems():
+    # NEEDS TO BE FIRST! :S
+    for (t_id, cdses) in cds.iteritems():
         for cds in cdses:
-            transcripts[t_ID].add_cds(cds)
+            transcripts[t_id].add_cds(cds)
 
     # Add utrs to their transcripts, determine 3' or 5', and order them
-    for (t_ID, utrs) in utr.iteritems():
+    for (t_id, utrs) in utr.iteritems():
         for utr in utrs:
-            transcripts[t_ID].add_utr(utr)
+            transcripts[t_id].add_utr(utr)
 
     # Add exons to their transcripts, determine 3' or 5', and order them
-    for (t_ID, exons) in exons.iteritems():
+    for (t_id, exons) in exons.iteritems():
         for exon in exons:
-            transcripts[t_ID].add_exon(exon)
+            transcripts[t_id].add_exon(exon)
 
-    return transcripts
+    return (transcripts, genes)
 
 def skip_lines(file_path, nr):
     handle = open(file_path, 'rb')
@@ -259,7 +264,7 @@ def write_beds(transcripts, bed_dir, chr_sizes, *opts):
     aTTS_processed = open(output['aTTS_processed'], 'wb')
     # intergenic will be added at the bottom inside subfunction
 
-    for ts_ID, ts in transcripts.iteritems():
+    for ts_id, ts in transcripts.iteritems():
 
         # CDS exons
         for exon in ts.cds.exons:
@@ -355,10 +360,6 @@ def write_beds(transcripts, bed_dir, chr_sizes, *opts):
 
     ## Create the intergenic bed as the adjoint of all the bed files in output
     output = get_intergenic(bed_dir, output, chr_sizes, chr1)
-
-    # remove all lines in the output if the length is < 1
-    # THIS IS TODO -- only if you have more overlap problems and the such.
-    #output = remove_bp(output)
 
     return output
 
@@ -502,7 +503,7 @@ def merge_output(bed_dir, output):
 
         for merged_entry in p.stdout:
             (chrm, beg, end, strand) = merged_entry.split()
-            out_file.write('\t'.join([chrm, beg, end, '.', '.', strand]) + '\n')
+            out_file.write('\t'.join([chrm, beg, end, '0', '0', strand]) + '\n')
 
         out_file.close()
 
@@ -510,121 +511,423 @@ def merge_output(bed_dir, output):
 
     return output
 
-def cluster_by_utrbeg(transcripts):
-    """Place the transcripts (that have only one utr exon) in clusters depending
-    on the start site of their 3utr. Choose from each cluster only the
-    transcript with the longest 3utr.
-    """
-    chrms = ['chr'+str(nr) for nr in range(1,23) + ['X','Y','M']]
-    tsdict = dict((chrm, {'+':{(0,0):[]},'-':{(0,0):[]}}) for chrm in chrms)
+def get_last_exons(transcripts):
+
+    last_exons = {}
+
+    for tsid, ts in transcripts.iteritems():
+
+        if ts.cds.exons != []:
+            gene_id = ts.gene_id
+
+            if ts.strand == '+':
+                lultim = ts.cds.exons[-1][2]
+
+                if gene_id in last_exons:
+                    if lultim > last_exons[gene_id]:
+                        last_exons[gene_id] = lultim
+                else:
+                    last_exons[gene_id] = lultim
+
+            if ts.strand == '-':
+                lultim = ts.cds.exons[0][1]
+
+                if gene_id in last_exons:
+                    if lultim < last_exons[gene_id]:
+                        last_exons[gene_id] = lultim
+                else:
+                    last_exons[gene_id] = lultim
+
+    return last_exons
+
+def get_3utr_bed_all_exons(settings, outfile_path):
+    """Get the regions of all 3UTRs in the annotation. Cluster them by the
+    UTR-beg, and save for each cluster a 'super-UTR' that contains all the
+    exons in that cluster. Save these regions to a bedfile in outfile_path.
+    Make sure that the last exon in each UTR is extended by the value set in
+    settings.extendby"""
+
+    raw_path = os.path.splitext(outfile_path)[0] + '_raw.bed'
+    raw_handle = open(raw_path, 'wb')
+    extendby = settings.extendby
+
+    # Get transcripts and genes from annotation
+    if settings.chr1:
+        (transcripts, genes) = make_transcripts(settings.annotation_path_chr1)
+    else:
+        (transcripts, genes) = make_transcripts(settings.annotation_path)
+
+    all_transcripts = transcripts
+
+    # 1) single out the transcripts that belong to genes with only 1-exon
+    # 3UTRS. Give them the old clustering treatment.
+    one_exon_transcripts = {}
+    # 2) For the rest, make a new clustering method
+    multi_exon_transcripts = {}
 
     for ts_id, ts_obj in transcripts.iteritems():
-        # Only deal with the ones with one utr exon
-        if len(ts_obj.three_utr.exons) == 1:
-            found = False # trace if it is being placed in an existing cluster
 
-            # The the chrm, beg, end, and strand of the 3UTR
-            (chrm, beg, end, strand) = ts_obj.three_utr.exons[0]
+        # Don't consider utrs without exons
+        if ts_obj.three_utr.exons != []:
 
-            # Clustering by beg/end depending on +/- for the strand
-            if strand == '+':
-                utr_start = beg
+            # If has one exon and all other utrs for gene has one as well, add
+            # to list of transcripts that will receive old clustering approach
+
+            if len(ts_obj.three_utr.exons) == 1:
+                # Skip short utrs
+                if ts_obj.three_utr.length < settings.min_utrlen:
+                    continue
+
+                keeper = True
+                # see if all other transcripts of this gene also has only one
+                # exon utrs (as long as the utr is long enough)
+                for other_id in genes[ts_obj.gene_id]:
+                    other_obj = transcripts[other_id]
+
+                    if other_obj.three_utr.exons != []:
+                        if ts_obj.three_utr.length > settings.min_utrlen:
+                            if len(other_obj.three_utr.exons) != 1:
+                                keeper = False
+
+                # If it has only 1 exon and so do all other utrs for this gene
+                if keeper:
+                    one_exon_transcripts[ts_id] = ts_obj
+
+                # If it has only 1 exon -- but others in the family have more
+                else:
+                    multi_exon_transcripts[ts_id] = ts_obj
+
+            # If it has more than 1 exon
             else:
-                utr_start = end
+                # if it is long enough
+                if ts_obj.three_utr.length > settings.min_utrlen:
+                    multi_exon_transcripts[ts_id] = ts_obj
 
-            for cluster, c_ts in tsdict[chrm][strand].items():
-                # if current beg is in in the range of the cluster
-                if (utr_start > cluster[0]) and (utr_start < cluster[1]):
-                    # Extend cluster by +/- new utr_start if needed
-                    (new_min, new_max) = (utr_start-20, utr_start+20)
-                    cluster_changed = False
-                    if new_min < cluster[0]:
-                        n_cluster = (new_min, cluster[1])
-                    if new_max > cluster[1]:
-                        n_cluster = (cluster[0], new_max)
-                    if cluster_changed:
-                        # Get the ids, remove old, and add new
-                        ids = tsdict[chrm][strand].items()
-                        tsdict[chrm][strand].pop(cluster)
-                        tsdict[chrm][strand][n_cluster] = ids
-                        cluster = n_cluster
 
-                    # Add ts_id to cluster (new cluster or not)
-                    tsdict[chrm][strand][cluster].append(ts_id)
-                    # Claim as found and break out of the for loop
-                    found = True
-                    break
+    # Cluster and write single-exon utrs
+    one_exon_cluster_write(one_exon_transcripts, all_transcripts,  genes,
+                           extendby, raw_handle)
 
-            # If not found in a cluster, create a new cluster for the ts
-            if not found:
-                tsdict[chrm][strand][(utr_start-20, utr_start+20)] = [ts_id]
+    # Cluster and write the multi-exon utrs to file.
+    cluster_by_utrbeg_multi_exon(multi_exon_transcripts, all_transcripts,
+                                 genes, extendby, raw_handle)
 
-    # Remove the two initial, dummy clusters
-    for chrm in chrms:
-        for strand in ['+', '-']:
-            tsdict[chrm][strand].pop((0,0))
+    raw_handle.close()
 
-    # Now select from the tsdict clusters only the ts with the longest utr
-    new_ts = {}
+    # Remove utrs that have CDS exons in them and write to outfile_path
+    remove_intersects_and_extend(raw_path, outfile_path, all_transcripts,
+                                 settings)
 
-    for chrm, strand_dict in tsdict.items():
-        for strand, cluster_dict in strand_dict.items():
-            for cluster, ids in cluster_dict.items():
-                # a [(utrlength, id)] kind of list
-                utr_lens =\
-                [(feature_length(transcripts[ts_id].three_utr.exons[0]), ts_id)
-                 for ts_id in ids]
-                longest_length, longest_id = sorted(utr_lens, reverse=True)[0]
-                # Choose only the ts with the longest 3UTR
-                new_ts[longest_id] = transcripts[longest_id]
 
-    return new_ts
+def remove_intersects_and_extend(unfiltered_path, outfile_path, all_transcripts,
+                                settings):
+    """Remove UTR intersections with CDS exons. Remove UTR intersections with
+    UTRs from other genes. If sequences should be extended, do just that."""
 
-def get_3utr_bed(annotation_path, outfile_path, settings):
-    """Get the annotated regions of 3UTRs that have only one exon. Save these
-    regions to a bedfile in outfile_path"""
+    temp_cds_path = os.path.join(os.path.dirname(outfile_path), 'temp_cds_exons.bed')
 
-    out_handle = open(outfile_path, 'wb')
-    # Get transcripts from annotation
-    transcripts = make_transcripts(annotation_path)
+    if not os.path.isfile(temp_cds_path):
 
-    # Only get the longest of the 3UTRs when they overlap
-    new_transcripts = cluster_by_utrbeg(transcripts)
-    transcripts = new_transcripts
+        temp_cds_handle = open(temp_cds_path, 'wb')
+        # Write all CDS exons
+        for ts_id, ts_obj in all_transcripts.iteritems():
+            if ts_obj.cds.exons != []:
+                for cds in ts_obj.cds.exons:
+                    temp_cds_handle.write('\t'.join([cds[0], str(cds[1]),
+                                                     str(cds[2]), cds[3]])+'\n')
+        temp_cds_handle.close()
 
-    for ts_id, ts_obj in transcripts.items():
-        if len(ts_obj.three_utr.exons) == 1:
-            (chrm, beg, end, strand) = ts_obj.three_utr.exons[0]
+    else:
+        print('temp_cds_exons.bed file found, not overwriting')
 
-            # Skip the utrs shorter than utrlen
-            if end-beg < settings.min_utrlen:
+    # Set of utrs to remove
+    remove_these_utrs = set()
+
+    # 1) Run intersect bed on bedfile with CDS exons and with itself
+    cmd1 = ['intersectBed', '-wb', '-a', temp_cds_path, '-b', unfiltered_path]
+    cmd2 = ['intersectBed', '-wo', '-a', unfiltered_path, '-b', unfiltered_path]
+
+    # Run the above command and loop through output
+    f1 = Popen(cmd1, stdout=PIPE)
+    f2 = Popen(cmd2, stdout=PIPE)
+
+    # 2) Add utrs to-be-removed from the CDS intersection
+    for line in f1.stdout:
+        utr_id = line.split()[7]
+        # remove id is gene_id + '_' + utr_nr
+        remove_id = '_'.join(utr_id.split('_')[:2])
+        remove_these_utrs.add(remove_id)
+
+    # 3) Add utrs to-be-removed from the self intersection
+    for line in f2.stdout:
+        # Get the IDs of the intersecting utrs (most will be self-intersect)
+        (d,d,d, utr_id_1, d,d,d,d,d, utr_id_2, d,d,d) = line.split()
+
+        # If intersection occurred on utrs from DIFFERENT GENES, remove them
+        if utr_id_1.split('_')[0] != utr_id_2.split('_')[0]:
+            remove_these_utrs.add('_'.join(utr_id_1.split('_')[:2]))
+            remove_these_utrs.add('_'.join(utr_id_2.split('_')[:2]))
+
+    # Create the output file
+    outfile_handle = open(outfile_path, 'wb')
+
+    # 4) Loop through the original file and write to the 'filtered' file
+    extendby = settings.extendby
+
+    with open(outfile_path, 'wb') as outfile_handle:
+
+        if not extendby:
+
+            for line in open(unfiltered_path, 'rb'):
+                utr_id = '_'.join(line.split()[3].split('_')[:2])
+                if utr_id not in remove_these_utrs:
+                    outfile_handle.write(line)
+
+        if extendby:
+
+            for line in open(unfiltered_path, 'rb'):
+                utr_id = '_'.join(line.split()[3].split('_')[:2])
+                if utr_id not in remove_these_utrs:
+                    (chrm, beg, end, utr_ex_id, val, strand) = line.split()
+                    id_split = utr_ex_id.split('_')
+
+                    # Extend the utrs for the final exon in the utr-batch
+                    if len(id_split) == 4: # it has an EXTENDBY mark
+
+                        if strand == '+':
+                            end = str(int(end) + extendby)
+
+                        if strand == '-':
+                            beg = str(int(beg) - extendby)
+
+                    utr_id = '_'.join(id_split[:3])
+
+                    # val = total Exons in UTR
+                    # val = 3 means 3 exon in this UTR. See utr_id for which one
+
+                    outfile_handle.write('\t'.join([chrm, beg, end, utr_id, val,
+                                                   strand]) + '\n')
+
+
+def one_exon_cluster_write(one_exon_transcripts, all_transcripts, genes,
+                           extendby, out_handle):
+    """Takes a set of Transcript objects whose genes should only have UTRs with
+    one exon. Clusters the UTRs of the transcripts together by their
+    UTR start sites. Removes or trims UTRs that overlap CDS exons for that
+    gene."""
+
+    chrms = ['chr'+str(nr) for nr in range(1,23) + ['X','Y','M']]
+    tsdict = dict((chrm, {'+':[], '-':[]}) for chrm in chrms)
+
+    for ts_id, ts_obj in one_exon_transcripts.iteritems():
+        # The the chrm, beg, end, and strand of the first and last exon
+        # if only one exon, they will be the same
+        (chrm, beg, end, strand) = ts_obj.three_utr.exons[0]
+
+        # We want to append the beginning of the 3UTR
+        if strand == '+':
+            tsdict[chrm][strand].append((beg, ts_id))
+        if strand == '-':
+            tsdict[chrm][strand].append((end, ts_id))
+
+    # you will need this to count how many times the gene has been used
+    gene_utrcount = dict((gene_id, 0) for gene_id in genes)
+
+    gene_clusters = {}
+
+    # Cluster the reads as you go through them; when leaving a cluster check
+    # for rouge overlapping CDS exons; then write the cluster to disc
+    for chrm, strand_dict in tsdict.iteritems():
+        for strand, beg_and_id in strand_dict.iteritems():
+
+            # Skip empty ones; could be that chr1 only is run
+            if beg_and_id == []:
                 continue
 
-            # If extendby, extend the 3UTR in the direction of extendby
-            if settings.extendby:
-                if strand == '+':
-                    end = end + settings.extendby
-                if strand == '-':
-                    beg = beg - settings.extendby
+            # initial values for the loop
+            clustsum = 0
+            clustcount = 0
+            this_cluster_begs = []
+            this_cluster_ids = []
 
-            out_handle.write('\t'.join([chrm, str(beg), str(end), ts_obj.ID,
-                                            '0', strand])+'\n')
-    out_handle.close()
+            for indx, begid in enumerate(sorted(beg_and_id)):
+                val = int(begid[0])
+                this_id = begid[1]
 
-def get_a_polyA_sites_bed(annotation_path, outfile_path, settings):
+                clustsum = clustsum + val   # sum, for mean
+                clustcount += 1             # n elements, for mean
+                mean = clustsum/clustcount
+
+                # If dist between new entry and cluster mean is < 20, keep in cluster
+                if abs(val - mean) < 20:
+                    this_cluster_begs.append(val)
+                    this_cluster_ids.append(this_id)
+
+                # If not, filter UTR by checking for CDS sequences
+                else:
+                    # get all the 3UTR exons from the cluster
+                    utr_list = []
+                    for ts_id in this_cluster_ids:
+                        this_utr = []
+                        for ex in one_exon_transcripts[ts_id].three_utr.exons:
+                            (chrm, beg, end, strand) = ex
+                            this_utr.append(((beg, end)))
+
+                        utr_list.append(this_utr)
+
+                    gene_id = one_exon_transcripts[this_cluster_ids[0]].gene_id
+                    # The the longest of the utrs in the cluster
+                    print_utr = longest_utr(utr_list)
+                    # Count how many times you have printed from this gene
+                    gene_utrcount[gene_id] += 1
+
+                    exon = print_utr[0]
+                    beg = str(exon[0])
+                    end = str(exon[1])
+
+                    e_nr = '_'+str(gene_utrcount[gene_id])+ '_1_EXTENDME'
+
+                    out_handle.write('\t'.join([chrm, beg, end, gene_id + e_nr,
+                                                '1', strand]) + '\n')
+
+                    # Start the variables for the new cluster
+                    clustsum = val
+                    clustcount = 1
+                    this_cluster_begs = [val]
+                    this_cluster_ids = [this_id]
+
+
+def cluster_by_utrbeg_multi_exon(multi_exon_transcripts, all_transcripts,
+                                 genes, extendby, out_handle):
+    """Cluster multi exon transcripts by their utr-start sites."""
+
+    chrms = ['chr'+str(nr) for nr in range(1,23) + ['X','Y','M']]
+    tsdict = dict((chrm, {'+':[],'-':[]}) for chrm in chrms)
+
+    for ts_id, ts_obj in multi_exon_transcripts.iteritems():
+        # The the chrm, beg, end, and strand of the first and last exon
+        # if only one exon, they will be the same
+        (chrm, first_beg, first_end, strand) = ts_obj.three_utr.exons[0]
+        (chrm, last_beg, last_end, strand) = ts_obj.three_utr.exons[-1]
+
+        # We want to append the beginning of the 3UTR
+        if strand == '+':
+            tsdict[chrm][strand].append((first_beg, ts_id))
+        if strand == '-':
+            tsdict[chrm][strand].append((last_end, ts_id))
+
+    # keep count of the number of times a utr has been written to file from a
+    # given gene
+    gene_utrcount = dict((gene_id, 0) for gene_id in genes)
+
+    # go through the annotated 3UTR starts and cluster them
+    for chrm, strand_dict in tsdict.iteritems():
+        for strand, beg_and_id in strand_dict.iteritems():
+            # Skip empty ones; could be that chr1 only is run
+            if beg_and_id == []:
+                continue
+
+            # Initiate cluster parameters
+            clustsum = 0
+            clustcount = 0
+            this_cluster_begs = []
+            this_cluster_ids = []
+
+            for indx, begid in enumerate(sorted(beg_and_id)):
+                val = int(begid[0])
+                this_id = begid[1]
+
+                clustsum = clustsum + val   # sum, for mean
+                clustcount += 1             # n elements, for mean
+                mean = clustsum/clustcount
+
+                # If dist between new entry and cluster mean is < 20, keep in cluster
+                if abs(val - mean) < 20:
+                    this_cluster_begs.append(val)
+                    this_cluster_ids.append(this_id)
+
+                # If not, save the old cluster to file
+                else:
+                    # Get all the exons of the cluster in a list
+                    utr_list = []
+                    for ts_id in this_cluster_ids:
+                        this_utr = []
+                        for ex in multi_exon_transcripts[ts_id].three_utr.exons:
+                            (chrm, beg, end, strand) = ex
+                            this_utr.append(((beg, end)))
+
+                        utr_list.append(this_utr)
+
+                    # get gene_id from just one of the ts in the cluster
+                    gene_id = multi_exon_transcripts[this_cluster_ids[0]].gene_id
+                    # Get the longest utr in the cluster
+                    print_utr = longest_utr(utr_list)
+                    # Count how many times you've written from this gene
+                    gene_utrcount[gene_id] += 1
+                    # Get the nr of exons in this utr
+                    exon_nr = len(print_utr)
+
+                    # Write each exon to file
+                    for nr, exon in enumerate(print_utr):
+
+                        beg = str(exon[0])
+                        end = str(exon[1])
+
+                        # Code for utr_exon_id gene_id + #utr from this gene +
+                        # #exon in this utr _ possibly EXTENDME
+
+                        ex_nr = str(nr+1)
+
+                        e_nr = '_'.join([str(gene_utrcount[gene_id]), ex_nr])
+
+                        if extendby:
+                            # Mark the final utrs for extension
+                            if (nr == exon_nr-1) and (strand == '+'):
+                                e_nr += '_EXTENDME'
+
+                            if (nr == 0) and (strand == '-'):
+                                e_nr += '_EXTENDME'
+
+                        out_handle.write('\t'.join([chrm, beg, end, gene_id +
+                                                    '_' + e_nr, str(exon_nr) ,
+                                                    strand])+'\n')
+
+                    # Get the values for the new cluster
+                    clustsum = val
+                    clustcount = 1
+                    this_cluster_begs = [val]
+                    this_cluster_ids = [this_id]
+
+def longest_utr(utr_list):
+    new_list = []
+    for utr in utr_list:
+        if utr == []:
+            new_list.append((0, (0,0)))
+        else:
+            length = sum([ex[1]-ex[0] for ex in utr])
+            new_list.append((length, utr))
+
+    new_list.sort()
+
+    # Return the longest of the 3utrs
+    return new_list[-1][-1]
+    # Get length of each utr in utr_list
+
+def get_a_polyA_sites_bed(settings, outfile_path):
     """Get the polyA sites (end position of last exon) of annotated 3UTRs.
     Save these positions to a bedfile in outfile_path. Cluster the polyA sites
     and return the averages of the clusters."""
 
     out_handle = open(outfile_path, 'wb')
     # Get transcripts from annotation
-    transcripts = make_transcripts(annotation_path)
+    (transcripts, genes) = make_transcripts(settings.annotation_path)
 
     # Only get the longest of the 3UTRs when they overlap
     chrms = ['chr' + str(nr) for nr in range(1,23) + ['X','Y','M']]
     tsdict = dict((chrm, dict((('+', []), ('-', [])))) for chrm in chrms)
 
     for ts_id, ts_obj in transcripts.iteritems():
+        # Don't consider utrs without exons
         if ts_obj.three_utr.exons != []:
 
             # The the chrm, beg, end, and strand of the first and last exon
@@ -644,9 +947,11 @@ def get_a_polyA_sites_bed(annotation_path, outfile_path, settings):
     # go through the annotated 3UTR ends and cluster them
     for chrm, strand_dict in tsdict.items():
         for strand, ends in strand_dict.items():
+
             # Skip empty ones; could be that chr1 only is run
             if ends == []:
                 continue
+
             clustsum = 0
             clustcount = 0
             this_cluster = []
@@ -661,6 +966,7 @@ def get_a_polyA_sites_bed(annotation_path, outfile_path, settings):
                 # If dist between new entry and cluster mean is < 40, keep in cluster
                 if abs(ival - mean) < 40:
                     this_cluster.append(ival)
+
                 else: # If not, start a new cluster, and save the old one
                     clusters.append(this_cluster)
                     clustsum = ival
@@ -669,6 +975,7 @@ def get_a_polyA_sites_bed(annotation_path, outfile_path, settings):
 
             # Append the last cluster
             clusters.append(this_cluster)
+
             # Get the mean of the clusters with length greater than one
             cl_means = [int(math.floor(sum(clu)/len(clu))) for clu in clusters]
 
@@ -695,26 +1002,6 @@ def get_seqs(utr_dict, hgfasta):
 
     return seq_dict
 
-def get_all_exons(annotation, chr1):
-    if chr1: chrom1 = '_chr1'
-    else: chrom1 = ''
-
-    out_path = os.path.join(os.path.dirname(annotation),
-                            'just_exons'+chrom1+'.bed')
-
-    in_handle = open(annotation, 'rb')
-    out_handle = open(out_path, 'wb')
-
-
-    for line in open(annotation, 'rb'):
-        # Skip first commented out lines
-        if line[0]=='#':
-            continue
-        (chrm, source, feature, beg, end, d, strand) = line.split('\t')[:7]
-        if feature == 'exon':
-            out_handle.write('\t'.join([chrm, beg, end, source, d, strand]) +
-                             '\n')
-
 def main():
     t1 = time.time()
 
@@ -730,19 +1017,17 @@ def main():
 
     ### TESTING START
 
-    #transcripts = make_transcripts(annotation)
+    #(transcripts, genes) = make_transcripts(annotation)
 
     #new_transcripts = cluster_by_utrbeg(transcripts)
 
-    # Only get the longest of the 3UTRs when they overlap
-    #get_all_exons(annotation, chr1)
     #debug()
 
 
     ### TESTING OVER
 
     # Read annotation file to get exons and introns of 3utr, cds, and 5utr
-    transcripts = make_transcripts(annotation)
+    (transcripts, genes) = make_transcripts(annotation)
 
     debug()
 
