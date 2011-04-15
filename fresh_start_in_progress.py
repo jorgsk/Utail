@@ -20,14 +20,13 @@ from operator import attrgetter
 
 import re
 
+# only get the debug function if run from Ipython
 def run_from_ipython():
     try:
         __IPYTHON__
         return True
     except NameError:
         return False
-
-# only get the debug function if run from Ipython
 if run_from_ipython():
     from IPython.Debugger import Tracer
     debug = Tracer()
@@ -65,10 +64,8 @@ class Settings(object):
     def DEBUGGING(self):
 
         self.chr1 = True
-        #self.read_limit = 1000000
         self.read_limit = False
         self.max_cores = 3
-        #self.polyA = False
         self.polyA = True
         #self.polyA = '/users/rg/jskancke/phdproject/3UTR/the_project/polyA_file/'\
                 #'polyA_reads_k562_whole_cell_processed_mapped_in_3utr.bed'
@@ -869,10 +866,13 @@ def output_writer(dset_id, coverage, annotation, utr_seqs, rpkm, extendby,
 
     # If tuning the cumulative length, open a file for this
     if settings.cumul_tuning:
-        tuning_output = open(os.path.split(dirpath)[0] + '/output/cumul.stat', 'wb')
-        #write header
+        basedir = os.path.split(dirpath)[0]
+        outfile = 'cumul_' + dset_id + '.stat'
+        tuning_output = open(os.path.join(basedir, 'output', outfile), 'wb')
+        #write header for the polyA-cumulative stats
         tuning_output.write('\t'.join(['utr_id', 'cumul', 'pA_to_cumul_dist',
-                                       'pA_cumul', 'rpkm', 'utr-length']))
+                                       'pA_cumul', 'rpkm', 'utr-length',
+                                       'strand']) + '\n')
 
     # Assert that the file information is the same as you started with
     assert utr_exons[utr_ID] == (chrm, int(beg), int(end), strand), 'Mismatch'
@@ -993,10 +993,11 @@ def calc_write_tuning(tuning_output, length_output, this_utr):
         cumul_pA = str(cumul_pA)
         rpkm = str(this_utr.rpkm)
         length = str(this_utr.length)
-        end_pos = str(end_pos)
+        default_pos = str(this_utr.rel_pos)
         strand = str(this_utr.strand)
-        tuning_output.write('\t'.join([this_utr.utr_ID[:-2], end_pos, pA_dist,
-                                       cumul_pA, rpkm, length, strand]) + '\n')
+        tuning_output.write('\t'.join([this_utr.utr_ID[:-2], default_pos,
+                                       pA_dist, cumul_pA, rpkm, length, strand])
+                            + '\n')
 
     # Write utr_id, distances, cumulative coverage, rpkm, and length of utr
 
