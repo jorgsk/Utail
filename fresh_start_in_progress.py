@@ -464,6 +464,14 @@ class FullLength(object):
                 self.polyA_support = 1
                 break
 
+        # Get the cumulative coverage of the clostest pA site
+        # Iteratively get closer to the true value.
+        for pAsite in this_utr.polyA_reads[0]:
+            if pAsite-100 < end_pos < pAsite+100:
+                # A general marker for polyA close to end_pos
+                self.polyA_support = 1
+                break
+
     def write_output(self, outobject, this_utr):
         """Format the output as desired, then save"""
 
@@ -2060,8 +2068,9 @@ def main():
 if __name__ == '__main__':
     main()
 
-# TODO
-# Get an empirical measure of the 99.5% cutoff
+# TODO: delete the entry of the multiple-exon-entries after you have dealt with them in
+# writing output??
+# TODO: get an empirical measure of the 99.5% cutoff
 
 # 1) Put the temp poly(A) reads in a different folder. Thus you can re-obtain
 # them easily, because it takes so much time (and RAM) to remap them.
@@ -2074,3 +2083,8 @@ if __name__ == '__main__':
     # Run the whole pipelien with _JUST_THE_EXTENSIOSN! you can make an
     # extension.bed file and mark it with the gene you extend from. extend until
     # you meet another annotated object, and at most a certain distance.
+    # 3) Consult Hagen about what he would expect from the different
+    # compartments
+    # 4) The postoc's speach was that methylation downstream a poly(A) site can
+    # contribute to polyadenylation, thuogh Hagen injected that it could
+    # contribute to the slowing and subsequent release of the polymerase
