@@ -14,7 +14,7 @@ First, an outline of the tool as it stands today.
 1) Who is interested in this tool?
 
 	* Those who want to study alternative polyadenylation with RNA-seq
-	* ...?
+	* Those who want to study 3UTR-length variation between RNA-seq datasets
 
 
 2.1) Input -- required:
@@ -27,14 +27,10 @@ First, an outline of the tool as it stands today.
 2.2) Input -- optional	
 
 	* Poly(A) reads (can be gathered from raw RNA-seq reads)
-	* Annotated poly(A) sites in the poly(A) database
-	* Support vector machine (SVM) predicted poly(A) sites.
-
 
 3.1) Output -- without poly(A) reads
 
 	* 3UTR end for each gene -- based on 99.5% cumulative coverage
-		SVM and pAdb if included
 	* Length of 3UTR relative to the annotation.
 	* Coverage and RPKM for whole 3UTR
 	* Coverage before and after 3UTR end
@@ -46,7 +42,6 @@ First, an outline of the tool as it stands today.
 
 	* Putative TTS sites in 3UTR 
 		*  Evidence: poly(A) reads; coverage change around TTS site
-					 -- SVM and pAdb if included
 	* If annotation is provided, highlight poly(A) sites not found in the annotation
 
 
@@ -81,21 +76,16 @@ First, an outline of the tool as it stands today.
 
 
 Unresolved issues: 
+
 1) Paired end vs. non-paired. Should we use the information?
 	Status: I'm using it! Now I just have to 'not use' not paired end!
-2) The 30% of 3UTRs that have multiple exons. Should we include them?
-	Difficulty: Hard
+	Solution: demand paired?
+
+2) Detection of novel poly(A) sites.
+	Solution: make bedfiles for the unambiguous parts of the genome
+
 3) Graphical output. Should I make a nice one?
 	Status: Roderic says it's not worth it, unless it's really fast
+	Update: make wig-files so people can visualize the coverage?
 
-
-# NOTES FROM MEETING WITH RODERIC
-1) He wants to include all the 3UTR exons
-2) There should be an obvious way to detect novel poly(A) sites
-3) The 'input' part will take 2 weeks
-4) The flux capacitor can be used to get the relative isoform usage
-5) The flux capacitor would do away with the rpkm and coverage change
-6) When introducing multiple-exon utrs, remember that coverage change and
-distance to PAS is not so trivial anymore
-7) SVM and polyAdb are only for human. what about mouse and horse?
 
