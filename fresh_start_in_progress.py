@@ -239,12 +239,17 @@ class UTR(object):
 
         # Update polyA_reads if any
         if new_exon.polyA_reads[0] != []:
+            # If only one new polyA read
             if len(new_exon.polyA_reads[0]) == 1:
                 self.polyA_reads[0].append(new_exon.polyA_reads[0][0])
                 self.polyA_reads[1].append(new_exon.polyA_reads[1][0])
 
             else:
-                for (pA_site, pA_support) in new_exon.polyA_reads:
+                # If more than one cluster, be smart about it
+                # This code possibly also works for == 1, but too lazy to check
+                avrges = new_exon.polyA_reads[0]
+                supprt = new_exon.polyA_reads[1]
+                for (pA_site, pA_support) in zip(avrges, supprt):
                     self.polyA_reads[0].append(pA_site)
                     self.polyA_reads[1].append(pA_support)
 
@@ -1315,8 +1320,6 @@ def get_rpkm(reads, utrfile_path, total_reads, utrs, extendby, dset_id):
     # # of reads landing in the UTR.
     rpkm = {}
     # If the bed-file has been extended, we need to unextend it.
-    # TODO XXX THIS COULD HAPPEN AT THE SAME TIME!!!! RENAME TO SOMETHING ELSE THAN
-    # temp_bed.
     if extendby:
         temp_bed_path = os.path.join(os.path.dirname(utrfile_path), dset_id+
                                      '_temp_bed')
@@ -1378,6 +1381,9 @@ def process_reads(pA_reads_path):
     # Go through the file two lines at a time. If the next line does not begin
     # with '>', append line to last entry (it's a split fasta-file).
 
+    length_sum = 0
+    tot_reads = 0
+
     for line in open(pA_reads_path, 'rb'):
         # add lines until there are 2 entries in linepair
         seq = line.rstrip()
@@ -1386,16 +1392,26 @@ def process_reads(pA_reads_path):
             As = seq.count('A')
             Ts = seq.count('T')
             # only save if A/T frequencies are not abnormal
-            if (As/seqlen < 0.45) and (Ts/seqlen < 0.45):
+            if (As/seqlen < 0.50) and (Ts/seqlen < 0.50):
+                length_sum += seqlen
+                tot_reads += 1
                 # trim the title
                 outfile.write('>read\n'+line)
 
+    if tot_reads > 0:
+        avrg_len = length_sum/float(tot_reads)
+    else:
+        avrg_len = 0
+
     outfile.close()
 
-    return processed_reads
+    return processed_reads, avrg_len
 
-def map_reads(processed_reads):
-    """ Map the processed reads using gem-mapper """
+def map_reads(processed_reads, avrg_read_len):
+    """ Map the processed reads using gem-mapper. Use the average read length to
+    determine the number of mismatches for the mapper. Only accept uniquely
+    mapping reads."""
+
     ## Andrea's GEM index of hg19
     g_ind='/users/rg/atanzer/DATA/GEM_indices/Genomes/H.sapiens.genome.hg19.main'
     mapped_reads = os.path.splitext(processed_reads)[0]+'_mapped'
@@ -1404,16 +1420,26 @@ def map_reads(processed_reads):
     base_dir = os.path.dirname(os.path.split(mapped_reads)[0])
     polybed_path = os.path.splitext(processed_reads)[0] + '_mapped.bed'
 
+    # How many mismatches depend on read length
+    if avrg_read_len < 50:
+        mismatch_nr = 1
+    elif 50 < avrg_read_len < 100:
+        mismatch_nr = 2
+    elif 100 < avrg_read_len:
+        mismatch_nr = 3
+
     # mapping trimmed reads
-    # TODO make -m 2 and see how much more FINAL polyA output you get.
-    command = "gem-mapper -I {0} -i {1} -o {2} -q ignore -m 1"\
-            .format(g_ind, processed_reads, mapped_reads)
+    command = "gem-mapper -I {0} -i {1} -o {2} -q ignore -m {3}"\
+            .format(g_ind, processed_reads, mapped_reads, mismatch_nr)
 
     p = Popen(command.split())
     p.wait()
 
-    # Accept up to one mismatch. Make as set for speedup.
-    acceptable = set(('1:0', '0:1'))
+    # Accept mismatches according to average read length
+    acceptables = {1: set(('1:0', '0:1')), 2: set(('1:0:0', '0:1:0', '0:0:1')),
+                   3: set(('1:0:0:0', '0:1:0:0', '0:0:1:0', '0:0:0:1'))}
+
+    acceptable = acceptables[mismatch_nr]
     getstrand = {'R':'-', 'F':'+'}
     start_re = re.compile('[0-9]*')
 
@@ -1445,10 +1471,10 @@ def remap_polyAs(pA_reads_path):
 
     # Process reads by removing those with low-quality, removing the leading Ts
     # and/OR trailing As.
-    processed_reads = process_reads(pA_reads_path)
+    processed_reads, avrg_read_len = process_reads(pA_reads_path)
 
     # Map the surviving reads to the genome and return unique ones
-    unique_reads = map_reads(processed_reads)
+    unique_reads = map_reads(processed_reads, avrg_read_len)
 
     return unique_reads
 
@@ -1635,7 +1661,7 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs, settings,
     """Get reads, get polyA reads, cluster polyA reads, get coverage, do
     calculations, write to output... this is where it all happens"""
 
-    # Define some parameters to shorten some lines...
+    # Give new names to some parameters to shorten the code
     utrfile_path = annotation.utrfile_path
     extendby = settings.extendby
     read_limit = settings.read_limit
@@ -1644,53 +1670,53 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs, settings,
     t0 = time.time()
 
     # Get the normal reads (in bed format). Get the polyA reads if this option is set.
-    # As well get the total number of reads for getting RPKM later.
+    # As well get the total number of reads for calculating the RPKM later.
     (bed_reads, polyA_bed, total_nr_reads) = get_bed_reads(dset_reads, dset_id,
                                                       read_limit, tempdir, polyA)
 
-    # If polyA is a string, it is a string to polyA sequences in bed-format
+    # If polyA is a string, it is a path of a bedfile with to polyA sequences
     if type(polyA) == str:
         polyA_bed_path = polyA
         utr_polyAs = get_polyA_utr(polyA_bed_path, utrfile_path)
 
+    # If polyA is True, trim the extracte polyA reads, remap them, and save the
+    # uniquely mappign ones to bed format
     elif polyA == True:
         # Do the polyA: extract, trim, remap, and -> .bed-format.
         print('Processing poly(A) reads for {0}...'.format(dset_id))
         polyA_bed_path = remap_polyAs(polyA_bed)
 
-        # If polyA, find where the polyAs overlap with the 3UTR in the first place
-        # run overlap-bed or something similar
+        # Get a dictionary for each utr_id with its overlapping polyA reads
         utr_polyAs = get_polyA_utr(polyA_bed_path, utrfile_path)
 
     # Cluster the poly(A) reads for each utr_id
     if polyA:
         polyA_reads = cluster_polyAs(utr_polyAs, annotation.utr_exons)
 
-    # Get the RPKM by running intersect-bed of the reads on the 3utr
+    # Get the RPKM
     print('Obtaining RPKM for {0} ...\n'.format(dset_id))
     rpkm = get_rpkm(bed_reads, utrfile_path, total_nr_reads, annotation.utr_exons,
                     extendby, dset_id)
 
-    # Cover the annotated 3UTR with the reads
+    # Cover the 3UTRs with the reads
     print('Getting read-coverage for the 3UTRs for {0} ...\n'.format(dset_id))
     options = '-d'
     coverage_path = coverage_wrapper(dset_id, bed_reads, utrfile_path, options)
 
+    # Iterate through the coverage files and write to output files
     print('Writing output files... {0} ...\n'.format(dset_id))
-    # Get transcript 3utr endings as determined by read coverage
-    output = output_writer(dset_id, coverage_path, annotation, utr_seqs, rpkm,
-                             extendby, polyA_reads, settings)
-
+    output_files = output_writer(dset_id, coverage_path, annotation, utr_seqs,
+                                 rpkm, extendby, polyA_reads, settings)
     print('Total time for {0}: {1}\n'.format(dset_id, time.time() - t0))
 
-    # If requested, delete the reads in .bed format after use
+    # If requested, delete the read-files after use
     if settings.del_reads:
         os.remove(bed_reads)
 
-    # Split output
-    (polyA_output, length_output) = output
+    # Get the paths to the two output files explicitly
+    (polyA_output, length_output) = output_files
 
-    # Return a list with the salient file paths of output files
+    # Return a dictionary with the file paths of the output files
     return {dset_id: {'coverage': coverage_path, 'length': length_output,
                       'polyA':polyA_output}}
 
@@ -2037,6 +2063,8 @@ def main():
         settings.DEBUGGING()
 
     settings.chr1 = True
+    settings.polyA = '/users/rg/jskancke/phdproject/3UTR/the_project/polyA_file/'\
+                'polyA_reads_k562_whole_cell_processed_mapped.bed'
 
 
     # The program reads a lot of information from the annotation. The annotation
@@ -2078,6 +2106,7 @@ def main():
         # Apply all datasets to the pool
         t1 = time.time()
 
+        # dset_id and dset_reads are as given in UTR_SETTINGS
         for dset_id, dset_reads in settings.datasets.items():
 
             # The arguments needed for the pipeline
@@ -2148,21 +2177,13 @@ def main():
 if __name__ == '__main__':
     main()
 
-# You get them from cytoplasm and whole cell.
-# TODO in ipython, you want to debug those two 'debug()' you had forgotten about
-#      in foc, you want to see if everything runs smoothly now that that
-#      debugging thing is gone. (THOUGH IT SHOULD JSUT BE PASS :S)
-# TODO: delete the entry of the multiple-exon-entries after you have dealt with them in
-# writing output??
-# TODO: write the actual rel_pos in the length file
-# TODO: go through the entire program, and improve documentation.
-# TODO: get an empirical measure of the 99.5% cutoff (done)
-# TODO: generate the figures.
 # TODO: print a colum with the 50before/50after ratio. Can you get the
 # before/after measure at the poly(A) reads? Then we know what is a good ratio.
+# TODO: write the genomic rel_pos in the length file
+# TODO: go through the entire program and improve documentation.
+# TODO: generate the figures.
 # TODO: don't leave out polyA clusters from the 'wrong' strand. filter that
 # later. just keep the min 1 read in cluster criteria.
-# TODO: map with up to 2 mismatches in the remapping of the polyA reads.
 
 # PAPER IDEAS:
     # 1) Reproduce everything they have done with ESTs. This shows that detailed
@@ -2174,11 +2195,12 @@ if __name__ == '__main__':
     # you meet another annotated object, and at most a certain distance.
     # 3) Consult Hagen about what he would expect from the different
     # compartments
-    # 4) The postoc's speach was that methylation downstream a poly(A) site can
+    # 4) The postoc's speech was that methylation downstream a poly(A) site can
     # contribute to polyadenylation, thuogh Hagen injected that it could
     # contribute to the slowing and subsequent release of the polymerase
     # 5) Don't remove the polyA clusters of different direction. A few of them
-    # are from the other strand! Remove instread just those that have 1 nt.
+    # are genuinly from the other strand! Remove instread just those that have a
+    # support of 1 read.
     # 6) Give the absolute number of poly(A) reads in the different
     # compartments. Seems like there are a lot more poly(A) reads in the
     # cytoplasm than in the nucleus
