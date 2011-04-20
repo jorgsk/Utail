@@ -89,12 +89,14 @@ class Settings(object):
 
         self.chr1 = True
         #self.read_limit = False
-        self.read_limit = 4000000
+        self.read_limit = 100000
         #self.read_limit = 1000
-        self.max_cores = 4
+        self.max_cores = 3
         #self.polyA = True
+        #self.polyA = '/users/rg/jskancke/phdproject/3UTR/the_project/polyA_file/'\
+                #'polyA_reads_k562_whole_cell_processed_mapped_in_3utr.bed'
         self.polyA = '/users/rg/jskancke/phdproject/3UTR/the_project/polyA_file/'\
-                'polyA_reads_k562_whole_cell_processed_mapped_in_3utr.bed'
+                'polyA_reads_hela-s3_cytoplasm_processed_mapped_in_3utr.bed'
 
 class Annotation(object):
     """A convenience class that holds the files and data structures relevant to
@@ -155,8 +157,8 @@ class UTR(object):
         self.chrm = chrm
         # Note that beg and end might be subject to extensions! See the
         # nonextended versions further down
-        self.beg = int(beg)
-        self.end = int(end)
+        self.beg_ext = int(beg)
+        self.end_ext = int(end)
         self.val = int(val)
         self.utr_ID = utr_ID
         self.strand = strand
@@ -187,23 +189,21 @@ class UTR(object):
         # Get the non-extended begs and ends as well!
         if extendby > 0:
             if strand == '+':
-                self.end_nonextended = self.end - extendby
-                self.beg_nonextended = self.beg
+                self.end_nonext = self.end_ext - extendby
+                self.beg_nonext = self.beg_ext
             if strand == '-':
-                self.end_nonextended = self.end
-                self.beg_nonextended = self.beg + extendby
+                self.end_nonext = self.end_ext
+                self.beg_nonext = self.beg_ext + extendby
 
         # Get the UNEXTENDED length
-        self.length = self.end_nonextended - self.beg_nonextended
+        self.length_ext = self.end_ext - self.beg_ext
+        self.length_nonext = self.end_nonext - self.beg_nonext
 
         # if multi exon, make a beg-end list (extended and nonextended) for the
         # utrs
         if self.multi_exon:
-            self.begends = [(self.beg, self.end)]
-            if strand == '+':
-                self.begends_nonextended = [(self.beg, self.end_nonextended)]
-            if strand == '-':
-                self.begends_nonextended = [(self.beg_nonextended, self.end)]
+            self.begends_ext = [(self.beg_ext, self.end_ex_extt)]
+            self.begends_nonext = [(self.beg_nonext, self.end_nonext)]
 
     def is_empty(self):
         """Determine if non-extended coverage vector is empty"""
@@ -296,8 +296,8 @@ class FullLength(object):
 
     def header_dict(self, this_utr):
         """Return  """
-        return dict((('chrm', this_utr.chrm), ('beg', self.frmt(this_utr.beg)),
-                    ('end', self.frmt(this_utr.end)),
+        return dict((('chrm', this_utr.chrm), ('beg', self.frmt(this_utr.beg_nonext)),
+                    ('end', self.frmt(this_utr.end_nonext)),
                     ('utr_ID', self.frmt(this_utr.utr_ID[:-2])),
                     ('strand', this_utr.strand),
                     ('3utr_extended_by', self.frmt(this_utr.extendby)),
@@ -392,14 +392,15 @@ class FullLength(object):
         # Test for a special case where only the last entry has coverage
         if covr_sum == covr_vector[-1]:
             rel_pos = 1
-            self.cuml_rel_size = rel_pos/float(this_utr.end-this_utr.beg)
+            self.cuml_rel_size = rel_pos/float(this_utr.length_nonext)
 
-        # Get the utr-relative position where 99.5% of the reads have landed
+        # Get the non_extended utr-relative position where 99.5% of the reads
+        # have landed
         for ind, el in enumerate(this_utr.norm_cuml):
             if el < 0.995:
                 rel_pos = ind
-                length = float(this_utr.end-this_utr.beg)
-                self.cuml_rel_size = (length-rel_pos)/length
+                length_nonext = this_utr.length_nonext
+                self.cuml_rel_size = (length_nonext-rel_pos)/length_nonext
                 break
 
         # Save relative cumulative position with the this utr for later usage
@@ -423,22 +424,22 @@ class FullLength(object):
         covr_vector = this_utr.covr_vector
         extendby = this_utr.extendby
 
-        # Get normalized cuml-coverage of un-extended 3UTR
-        cumul_covr = this_utr.cumul_covr[:-extendby]
-        covr_sum = sum(covr_vector[:-extendby])
+        # Get normalized cuml-coverage of UN-extended 3UTR
+        cumul_covr = this_utr.cumul_covr[:-extendby] # non-extended cumul_covr
+        covr_sum = sum(covr_vector[:-extendby]) # non-extended sum(covr_vector)
         this_utr.norm_cuml = [val/covr_sum for val in cumul_covr]
 
         # Test special case where only first entry has value
         if covr_sum == covr_vector[0]:
             rel_pos = 1
-            self.cuml_rel_size = rel_pos/float((this_utr.end-this_utr.beg))
+            self.cuml_rel_size = rel_pos/float((this_utr.length_nonext))
 
         # Get the point where 99.5% of reads have landed
         for ind, el in enumerate(reversed(this_utr.norm_cuml)):
             if el < 0.995:
-                length = this_utr.end-this_utr.beg
-                rel_pos = length - ind
-                self.cuml_rel_size = rel_pos/float(length)
+                length_nonext = this_utr.length_nonext
+                rel_pos = length_nonext - ind
+                self.cuml_rel_size = rel_pos/float(length_nonext)
                 break
 
         # Save relative position (relative to extended 3utr) with the object
@@ -485,10 +486,7 @@ class FullLength(object):
          """
 
         # Get the absolute end-position of the 99.5% 
-        if this_utr.strand == '+':
-            end_pos = this_utr.beg + this_utr.rel_pos
-        if this_utr.strand == '-':
-            end_pos = this_utr.beg_nonextended + this_utr.rel_pos
+        end_pos = this_utr.beg_nonext + this_utr.rel_pos
 
         # Check if this position has polyA reads within 50 nt
         for pAsite in this_utr.polyA_reads[0]:
@@ -633,8 +631,8 @@ class PolyAReads(object):
         # If there are no polyA reads in the UTR, pass on
         if self.polyRead_sites == []:
             return
-        # Get the relative (relative to extended utr!) location of the polyA sites.
-        self.rel_polyRead_sites = [pos-this_utr.beg for pos in
+        # Get the relative to extended utr(!) location of the polyA sites.
+        self.rel_polyRead_sites = [pos-this_utr.beg_ext for pos in
                                        self.polyRead_sites]
 
         ############# TEST #################
@@ -757,8 +755,8 @@ def zcat_wrapper(bed_reads, read_limit, out_path, polyA, polyA_path):
             beg = start_re.match(rest[1:]).group()
 
             # Write to file
-            out_file.write('\t'.join([chrom, beg, str(int(beg)+len(seq)), '.',
-                                      '.', strand]) + '\n')
+            out_file.write('\t'.join([chrom, beg, str(int(beg)+len(seq)), '0',
+                                      '0', strand]) + '\n')
             total_reads = total_reads + 1
 
         # When looking for poly(A) reads, filter by non-uniquely mapped reads
@@ -898,9 +896,9 @@ def output_writer(dset_id, coverage, annotation, utr_seqs, rpkm, extendby,
     if settings.cumul_tuning:
         basedir = os.path.split(dirpath)[0]
         outfile = 'cumul_' + dset_id + '.stat'
-        tuning_output = open(os.path.join(basedir, 'output', outfile), 'wb')
+        tuning_handle = open(os.path.join(basedir, 'output', outfile), 'wb')
         #write header for the polyA-cumulative stats
-        tuning_output.write('\t'.join(['utr_id', 'epsilon_relative',
+        tuning_handle.write('\t'.join(['utr_id', 'epsilon_relative',
                                        'pA_to_cumul_dist', 'pA_cumul',
                                        'covr_minus', 'covr_plus', 'rpkm',
                                        'utr-length', 'strand']) + '\n')
@@ -957,7 +955,7 @@ def output_writer(dset_id, coverage, annotation, utr_seqs, rpkm, extendby,
 
                 # If tuning, calculate the tuning variables and write to file
                 if settings.cumul_tuning:
-                    calc_write_tuning(tuning_output, length_output, this_utr)
+                    calc_write_tuning(tuning_handle, length_output, this_utr)
 
             # Update to the new utr and start the loop from scratch
             this_utr = UTR(chrm, beg, end, strand, val, utr_ID, rpkm[utr_ID],
@@ -977,34 +975,48 @@ def output_writer(dset_id, coverage, annotation, utr_seqs, rpkm, extendby,
     polyA_outfile.close()
 
     if settings.cumul_tuning:
-        tuning_output.close()
+        tuning_handle.close()
 
     return (polyA_outpath, length_outpath)
 
-def calc_write_tuning(tuning_output, length_output, this_utr):
+def calc_write_tuning(tuning_handle, length_output, this_utr):
+    """Write output important for tuning internal parameters"""
 
     if this_utr.is_empty():
         return
 
     # Get the absolute end-position of the 99.5% 
-    if this_utr.strand == '+':
-        end_pos = this_utr.beg + this_utr.rel_pos
-    if this_utr.strand == '-':
-        end_pos = this_utr.beg_nonextended + this_utr.rel_pos
+    # (this_utr.rel_pos is relative to the non-extended UTR)
+    end_pos = this_utr.beg_nonext + this_utr.rel_pos
 
     # Get the cumulative coverage and +/- 50nt coverage of the closest pA site
     write_output = False
     for pAsite in this_utr.polyA_reads[0]:
-        if pAsite-100 < end_pos < pAsite+100:
+        if pAsite-50 < end_pos < pAsite+50:
             # Get the absolute distance from the polyA site
             pA_dist = pAsite-end_pos
 
             # Get the relative-to-exon position of the polyA site 
-            rel_pA_pos = pAsite - this_utr.beg_nonextended
+            rel_pA_pos = pAsite - this_utr.beg_nonext
+
+            # Test this by visualizing in the browser.
+            # Upload the polyA reads and scrutinize the coverage vector
 
             # Get the coverage 50 nt on both sides of the polyA site
-            minus_covr = sum(this_utr.covr_vector[rel_pA_pos-50:rel_pA_pos])/50
-            plus_covr = sum(this_utr.covr_vector[rel_pA_pos:rel_pA_pos+50])/50
+            if this_utr.strand == '+':
+                d_stream_covr = sum(this_utr.covr_vector[rel_pA_pos-50:rel_pA_pos])/50
+                u_stream_covr = sum(this_utr.covr_vector[rel_pA_pos:rel_pA_pos+50])/50
+
+            if this_utr.strand == '-':
+                d_stream_covr = sum(this_utr.covr_vector[rel_pA_pos:rel_pA_pos+50])/50
+                u_stream_covr = sum(this_utr.covr_vector[rel_pA_pos-50:rel_pA_pos])/50
+
+            # 
+            debug()
+            # RESULT: end-pos (thereby rel-pos) seems wrong! :S it's 
+            # Rel_pos is according to the EXTENDED 3utr!
+            # RESULT: polyA clusters are in correct place.
+            # TODO fig rel_pos! I want it to be relative to the annotation!
 
             # Get the cumulative coverage of the polyA site
             # However, watch out for reads that land outside the non-extended
@@ -1022,20 +1034,22 @@ def calc_write_tuning(tuning_output, length_output, this_utr):
                 cumul_pA = this_utr.norm_cuml[rel_pA_pos]
 
             write_output = True
+
             break
 
     if write_output:
-        minus_covr = str(minus_covr)
-        plus_covr = str(plus_covr)
+        d_stream_covr = str(d_stream_covr)
+        u_stream_covr = str(u_stream_covr)
         pA_dist = str(pA_dist)
         cumul_pA = str(cumul_pA)
         rpkm = str(this_utr.rpkm)
         length = str(this_utr.length)
         default_pos = str(this_utr.rel_pos)
         strand = str(this_utr.strand)
-        tuning_output.write('\t'.join([this_utr.utr_ID[:-2], default_pos,
-                                       pA_dist, cumul_pA, minus_covr, plus_covr,
-                                       rpkm, length, strand]) + '\n')
+        tuning_handle.write('\t'.join([this_utr.utr_ID[:-2], default_pos,
+                                       pA_dist, cumul_pA, d_stream_covr,
+                                       u_stream_covr, rpkm, length, strand]) +
+                            '\n')
 
     # Write utr_id, distances, cumulative coverage, rpkm, and length of utr
 
@@ -2057,15 +2071,10 @@ def main():
 
     # This option should be set only in case of debugging. It makes sure you
     # just run chromosome 1 and only extract a tiny fraction of the total reads.
-    #DEBUGGING = True
-    DEBUGGING = False
+    DEBUGGING = True
+    #DEBUGGING = False
     if DEBUGGING:
         settings.DEBUGGING()
-
-    settings.chr1 = True
-    settings.polyA = '/users/rg/jskancke/phdproject/3UTR/the_project/polyA_file/'\
-                'polyA_reads_k562_whole_cell_processed_mapped.bed'
-
 
     # The program reads a lot of information from the annotation. The annotation
     # object will hold this information (file-paths and datastructures).
@@ -2119,8 +2128,8 @@ def main():
             debug()
 
 
-            #result = my_pool.apply_async(pipeline, arguments)
-            #results.append(result)
+            result = my_pool.apply_async(pipeline, arguments)
+            results.append(result)
 
         #debug()
         # Wait for all procsses to finish
@@ -2177,13 +2186,16 @@ def main():
 if __name__ == '__main__':
     main()
 
-# TODO: print a colum with the 50before/50after ratio. Can you get the
-# before/after measure at the poly(A) reads? Then we know what is a good ratio.
+# TODO: make wig-file from the coverage-file
+# RESULT: you need to save it on your own server, accesable from ftp/http
+# TODO: quality check the output to .stats files for coverage before/after
+#       + don't do minus/plus: do downstream and upstream
 # TODO: write the genomic rel_pos in the length file
-# TODO: go through the entire program and improve documentation.
 # TODO: generate the figures.
 # TODO: don't leave out polyA clusters from the 'wrong' strand. filter that
-# later. just keep the min 1 read in cluster criteria.
+# TODO: verify the polyA reads clusters with polyAdb + other results
+# TODO: go through the entire program and improve documentation.
+# TODO: verify the 3UTR length with annotation + smth else
 
 # PAPER IDEAS:
     # 1) Reproduce everything they have done with ESTs. This shows that detailed
