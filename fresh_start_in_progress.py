@@ -89,7 +89,7 @@ class Settings(object):
 
         self.chr1 = True
         #self.read_limit = False
-        self.read_limit = 100000
+        self.read_limit = 20000000
         #self.read_limit = 1000
         self.max_cores = 3
         #self.polyA = True
@@ -156,7 +156,7 @@ class UTR(object):
         # variables you have to initialize
         self.chrm = chrm
         # Note that beg and end might be subject to extensions! See the
-        # nonextended versions further down
+        # nonext versions further down
         self.beg_ext = int(beg)
         self.end_ext = int(end)
         self.val = int(val)
@@ -167,6 +167,7 @@ class UTR(object):
         self.sequence = sequence
         self.polyA_reads = polyA_reads # the polyA reads
         self.a_polyA_sites = [int(site[1]) for site in a_polyA_sites] # annotated sites
+        self.rel_pos = 'NA' # it might not be updated
 
         # Assume not a multi exon
         if self.val == 1:
@@ -199,10 +200,10 @@ class UTR(object):
         self.length_ext = self.end_ext - self.beg_ext
         self.length_nonext = self.end_nonext - self.beg_nonext
 
-        # if multi exon, make a beg-end list (extended and nonextended) for the
+        # if multi exon, make a beg-end list (extended and nonext) for the
         # utrs
         if self.multi_exon:
-            self.begends_ext = [(self.beg_ext, self.end_ex_extt)]
+            self.begends_ext = [(self.beg_ext, self.end_ext)]
             self.begends_nonext = [(self.beg_nonext, self.end_nonext)]
 
     def is_empty(self):
@@ -225,17 +226,15 @@ class UTR(object):
         the smallest utr.beg) with the next exon."""
 
         # Update RPKM with weights on the lenghts of the two exons
-        self.rpkm = ((self.rpkm/self.length) +
-                     new_exon.rpkm/new_exon.length)/(self.length + new_exon.length)
+        self.rpkm = ((self.rpkm/self.length_nonext) +
+                     new_exon.rpkm/new_exon.length_nonext)/\
+                (self.length_nonext + new_exon.length_nonext)
         # Update length
-        self.length += new_exon.length
+        self.length_nonext += new_exon.length_nonext
 
         # Update begends lists to know where all exons begin and end
-        self.begends.append((new_exon.beg, new_exon.end))
-        if self.strand == '+':
-            self.begends_nonextended.append((new_exon.beg, new_exon.end_nonextended))
-        if self.strand == '-':
-            self.begends_nonextended.append((new_exon.beg_nonextended, new_exon.end))
+        self.begends_ext.append((new_exon.beg_ext, new_exon.end_ext))
+        self.begends_nonext.append((new_exon.beg_nonext, new_exon.end_nonext))
 
         # Update polyA_reads if any
         if new_exon.polyA_reads[0] != []:
@@ -283,16 +282,14 @@ class FullLength(object):
     def __init__(self, utr_ID):
         self.utr_ID = utr_ID
 
-        # variables that change depending on if reads map to 3UTR
         self.has_PAS = 'NA'
         self.pas_pos ='NA'
-        self.ext_mean_99 = 'NA'
-        self.int_mean_99 = 'NA'
-        self.ext_mean_annot = 'NA'
-        self.int_mean_annot = 'NA'
+        self.eps_dstream_coverage = 'NA'
+        self.eps_ustream_coverage = 'NA'
+        self.annot_dstream_coverage = 'NA'
+        self.annot_ustream_coverage = 'NA'
         self.cuml_rel_size = 'NA'
         self.polyA_support = 'NA'
-        self.rel_pos = 'NA'
 
     def header_dict(self, this_utr):
         """Return  """
@@ -301,12 +298,14 @@ class FullLength(object):
                     ('utr_ID', self.frmt(this_utr.utr_ID[:-2])),
                     ('strand', this_utr.strand),
                     ('3utr_extended_by', self.frmt(this_utr.extendby)),
-                    ('epsilon_coord', self.frmt(self.rel_pos)),
+                    ('epsilon_coord', self.frmt(this_utr.rel_pos)),
                     ('epsilon_rel_size', self.frmt(self.cuml_rel_size)),
-                    ('epsilon_mean_int_covrg', self.frmt(self.int_mean_99)),
-                    ('epsilon_mean_ext_covrg', self.frmt(self.ext_mean_99)),
-                    ('annotation_mean_int_covrg', self.frmt(self.int_mean_annot)),
-                    ('annotation_mean_ext_covrg', self.frmt(self.ext_mean_annot)),
+                    ('epsilon_downstream_covrg', self.frmt(self.eps_dstream_coverage)),
+                    ('epsilon_upstream_covrg', self.frmt(self.eps_ustream_coverage)),
+                    ('annotation_downstream_covrg',
+                     self.frmt(self.annot_dstream_coverage)),
+                    ('annotation_upstream_covrg',
+                     self.frmt(self.annot_ustream_coverage)),
                     ('epsilon_polyA_support', self.frmt(self.polyA_support)),
                     ('epsilon_PAS_type', self.has_PAS),
                     ('epsilon_PAS_distance', self.frmt(self.pas_pos)),
@@ -334,10 +333,10 @@ class FullLength(object):
         utr_ID
         epsilon_coord
         epsilon_rel_size
-        epsilon_mean_int_covrg
-        epsilon_mean_ext_covrg
-        annotation_mean_int_covrg
-        annotation_mean_ext_covrg
+        epsilon_downstream_covrg
+        epsilon_upstream_covrg
+        annotation_downstream_covrg
+        annotation_upstream_covrg
         epsilon_polyA_support
         epsilon_PAS_type
         epsilon_PAS_distance
@@ -408,16 +407,19 @@ class FullLength(object):
         #Note that rel_pos is relative to the un-extended 3UTR.
 
         # rel_pos according to extended 3utr
-        ext_rel_pos = rel_pos + extendby
+        er_pos = rel_pos + extendby
 
         # Then calculate the mean coverage on both sides of this.
         # Note for ext_mean_99: ext_rel_pos - extendby = ind
-        self.ext_mean_99 = sum(covr_vector[ind:ext_rel_pos])/extendby
-        self.int_mean_99 = sum(covr_vector[ext_rel_pos:ext_rel_pos +extendby])/extendby
+        self.eps_dstream_coverage = sum(covr_vector[er_pos:er_pos+50])/float(50)
+        self.eps_ustream_coverage = sum(covr_vector[er_pos-50:er_pos])/float(50)
 
         # Get the mean values 'extendby' around the annotated end too
-        self.ext_mean_annot = sum(covr_vector[:extendby])/extendby
-        self.int_mean_annot = sum(covr_vector[extendby: 2*extendby])/extendby
+        self.annot_dstream_coverage = sum(covr_vector[extendby: 2*extendby])/extendby
+        self.annot_ustream_coverage = sum(covr_vector[:extendby])/extendby
+
+        if this_utr.rpkm > 50:
+            debug()
 
     def cumul_plus(self, this_utr):
         """Get cumulative read coverage"""
@@ -445,18 +447,18 @@ class FullLength(object):
         # Save relative position (relative to extended 3utr) with the object
         this_utr.rel_pos = rel_pos
 
-        # rel_pos according to extended 3utr
-        ext_rel_pos = rel_pos - extendby
-
         # Calculate the mean coverage on both sides of this.
         # Note for ext_mean_99: ext_rel_pos + extendby = rel_pos
-        self.ext_mean_99 = sum(covr_vector[ext_rel_pos:rel_pos])/extendby
-        self.int_mean_99 = sum(covr_vector[ext_rel_pos-extendby:ext_rel_pos])/extendby
+        # ext_mean_99 -> upstream_coverage
+        self.eps_ustream_coverage = sum(covr_vector[rel_pos:rel_pos+50])/float(50)
+        self.eps_dstream_coverage = sum(covr_vector[rel_pos-50:rel_pos])/float(50)
 
         # Get the mean values extendby around the annotated end too
-        self.ext_mean_annot = sum(covr_vector[-extendby:])/extendby
-        self.int_mean_annot = sum(covr_vector[-2*extendby:-extendby])/extendby
+        self.annot_ustream_coverage = sum(covr_vector[-extendby:])/extendby
+        self.annot_dstream_coverage = sum(covr_vector[-2*extendby:-extendby])/extendby
 
+        if this_utr.rpkm > 50:
+            debug()
 
     def get_pas(self, pas_list, this_utr):
 
@@ -641,19 +643,19 @@ class PolyAReads(object):
         #polyRead_sites_count = [len(sites) for sites in this_utr.polyA_reads[1]]
 
         #if self.strand  == '+':
-            #end_dist = [self.end_nonextended - pos for pos in polyRead_sites]
+            #end_dist = [self.end_nonext - pos for pos in polyRead_sites]
             #print (self.strand, sorted(zip(end_dist, polyRead_sites_count)))
 
         #if self.strand == '-':
-            #end_dist = [pos - self.beg_nonextended for pos in polyRead_sites]
+            #end_dist = [pos - self.beg_nonext for pos in polyRead_sites]
             #print (self.strand, sorted(zip(end_dist, polyRead_sites_count)))
         ###################################
 
         #1) Get coverage on both sides of polyA read
         # This variable should be printed relative to polyA_read count divided
         # by the rpkm
-        rccp = [(sum(this_utr.covr_vector[point:point-50])/50,
-                  sum(this_utr.covr_vector[point:point+50])/50) for point in
+        rccp = [(sum(this_utr.covr_vector[point:point-50])/float(50),
+                  sum(this_utr.covr_vector[point:point+50])/float(50)) for point in
                  self.rel_polyRead_sites]
 
         self.read_coverage_change = rccp
@@ -839,7 +841,7 @@ def get_pas_list():
 
 def join_multiexon_utr(multi_exon_utr):
     # Sort utr-exon instances according to utr-beg
-    multi_exon_utr.sort(key = attrgetter('beg'))
+    multi_exon_utr.sort(key = attrgetter('beg_nonext'))
     # Select the first exon in the utr as the 'main' utr. Add information from
     # the other utrs to this utr.
     main_utr = multi_exon_utr[0]
@@ -985,65 +987,73 @@ def calc_write_tuning(tuning_handle, length_output, this_utr):
     if this_utr.is_empty():
         return
 
-    # Get the absolute end-position of the 99.5% 
-    # (this_utr.rel_pos is relative to the non-extended UTR)
+    # Get the absolute end-position of the 99.5%, relative to the non-extended UTR
     end_pos = this_utr.beg_nonext + this_utr.rel_pos
 
     # Get the cumulative coverage and +/- 50nt coverage of the closest pA site
     write_output = False
+    close_sites = []
+
     for pAsite in this_utr.polyA_reads[0]:
         if pAsite-50 < end_pos < pAsite+50:
-            # Get the absolute distance from the polyA site
-            pA_dist = pAsite-end_pos
-
-            # Get the relative-to-exon position of the polyA site 
-            rel_pA_pos = pAsite - this_utr.beg_nonext
-
-            # Test this by visualizing in the browser.
-            # Upload the polyA reads and scrutinize the coverage vector
-
-            # Get the coverage 50 nt on both sides of the polyA site
-            if this_utr.strand == '+':
-                d_stream_covr = sum(this_utr.covr_vector[rel_pA_pos-50:rel_pA_pos])/50
-                u_stream_covr = sum(this_utr.covr_vector[rel_pA_pos:rel_pA_pos+50])/50
-
-            if this_utr.strand == '-':
-                d_stream_covr = sum(this_utr.covr_vector[rel_pA_pos:rel_pA_pos+50])/50
-                u_stream_covr = sum(this_utr.covr_vector[rel_pA_pos-50:rel_pA_pos])/50
-
-            # 
-            debug()
-            # RESULT: end-pos (thereby rel-pos) seems wrong! :S it's 
-            # Rel_pos is according to the EXTENDED 3utr!
-            # RESULT: polyA clusters are in correct place.
-            # TODO fig rel_pos! I want it to be relative to the annotation!
-
-            # Get the cumulative coverage of the polyA site
-            # However, watch out for reads that land outside the non-extended
-            # region
-
-            # For now I simply assign them to the last value of the region.. but
-            # it's not satisfactory!
-
-            if (rel_pA_pos < 0) or (rel_pA_pos >= this_utr.length):
-                if this_utr.strand == '+':
-                    cumul_pA = this_utr.norm_cuml[-1]
-                if this_utr.strand == '-':
-                    cumul_pA = this_utr.norm_cuml[0]
-            else:
-                cumul_pA = this_utr.norm_cuml[rel_pA_pos]
-
+            close_sites.append(pAsite)
             write_output = True
 
-            break
-
     if write_output:
+        # There could be 3 clusters within 50 nt of the end_pos. You need to
+        # choose the most downstream cluster.
+        close_sites.sort()
+        if this_utr.strand == '+':
+            pAsite = close_sites[-1]
+        if this_utr.strand == '-':
+            pAsite = close_sites[0]
+
+        # Get the absolute distance from the polyA site
+        pA_dist = pAsite-end_pos
+
+        # Get the relative-to-non-extended position of the polyA site 
+        rel_pA_pos = pAsite - this_utr.beg_nonext
+
+        # Test this by visualizing in the browser.
+        # Upload the polyA reads and scrutinize the coverage vector
+
+        covr_vec = this_utr.covr_vector
+
+        # Get the coverage 50 nt on both sides of the polyA site
+        # No worried about extension -- it is in the end.
+        if this_utr.strand == '+':
+            d_stream_covr = sum(covr_vec[rel_pA_pos-50:rel_pA_pos])/float(50)
+            u_stream_covr = sum(covr_vec[rel_pA_pos:rel_pA_pos+50])/float(50)
+
+        # if negative strand and extended, become relative to the extended one
+        if this_utr.strand == '-':
+            if this_utr.extendby:
+                rel_ex_pA_pos = rel_pA_pos + this_utr.extendby
+            d_stream_covr = sum(covr_vec[rel_ex_pA_pos:rel_ex_pA_pos+50])/float(50)
+            u_stream_covr = sum(covr_vec[rel_ex_pA_pos-50:rel_ex_pA_pos])/float(50)
+
+        # Get the cumulative coverage of the polyA site
+        # However, watch out for reads that land outside the non-extended
+        # region
+        # For now I simply assign them to the last value of the region.. but
+        # it's not satisfactory!
+
+        if (rel_pA_pos < 0) or (rel_pA_pos >= this_utr.length_nonext):
+            if this_utr.strand == '+':
+                cumul_pA = this_utr.norm_cuml[-1]
+            if this_utr.strand == '-':
+                cumul_pA = this_utr.norm_cuml[0]
+        else:
+            cumul_pA = this_utr.norm_cuml[rel_pA_pos]
+
+        # TODO VERIFY CORRECTNESS OF COVERAGES and positions
+
         d_stream_covr = str(d_stream_covr)
         u_stream_covr = str(u_stream_covr)
         pA_dist = str(pA_dist)
         cumul_pA = str(cumul_pA)
         rpkm = str(this_utr.rpkm)
-        length = str(this_utr.length)
+        length = str(this_utr.length_nonext)
         default_pos = str(this_utr.rel_pos)
         strand = str(this_utr.strand)
         tuning_handle.write('\t'.join([this_utr.utr_ID[:-2], default_pos,
@@ -2160,6 +2170,7 @@ def main():
         # Copy output from temp-dir do output-dir
         save_output(final_outp_polyA, output_dir)
         save_output(final_outp_length, output_dir)
+
     ##################################################################
     # NOTE TO SELF: everything starting from there should be in a separate
     # script: utr_output_analysis.py or smth similar. It's only been put here
@@ -2188,9 +2199,6 @@ if __name__ == '__main__':
 
 # TODO: make wig-file from the coverage-file
 # RESULT: you need to save it on your own server, accesable from ftp/http
-# TODO: quality check the output to .stats files for coverage before/after
-#       + don't do minus/plus: do downstream and upstream
-# TODO: write the genomic rel_pos in the length file
 # TODO: generate the figures.
 # TODO: don't leave out polyA clusters from the 'wrong' strand. filter that
 # TODO: verify the polyA reads clusters with polyAdb + other results
