@@ -37,8 +37,8 @@ here = os.path.dirname(os.path.realpath(__file__))
 import time
 import sys
 from subprocess import Popen, PIPE, call
-sys.path.append(os.path.join(here,'py_modules'))
-sys.path.append(os.path.join(here,'py_modules/pyfasta'))
+sys.path.append(os.path.join(here,'modules'))
+sys.path.append(os.path.join(here,'modules/pyfasta'))
 from fasta import Fasta
 import math
 

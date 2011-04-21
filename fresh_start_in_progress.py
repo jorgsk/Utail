@@ -25,9 +25,14 @@ treated in several steps. The steps are
 output for the previous 3UTR. If however the previous 3UTR was part of a
 multi-exon.......... begin here.
 
-... TODO YOU ARE DOCUMENTING AND YOU ARE WORRIED THAT THE FULL RUN IS
-CRASHING WHEN USING ALL READS BUT NOT WHEN USING 10000. NEED TO DEBUG THAT
-BETTER.
+Dependencies:
+    pyFasta
+    bedGraphToBigWig
+    bedTools
+    numpy (can easily be removed -- just mean and std used)
+    matplotlib (optional -- for plotting)
+    python 2.6.4 or greater
+
 """
 
 from __future__ import division
@@ -94,14 +99,14 @@ class Settings(object):
 
         self.chr1 = True
         #self.read_limit = False
-        self.read_limit = 50000000
+        self.read_limit = 10000
         #self.read_limit = 1000
         self.max_cores = 3
-        self.polyA = True
+        #self.polyA = True
         #self.polyA = '/users/rg/jskancke/phdproject/3UTR/the_project/polyA_file/'\
                 #'polyA_reads_k562_whole_cell_processed_mapped_in_3utr.bed'
-        #self.polyA = '/users/rg/jskancke/phdproject/3UTR/the_project/polyA_file/'\
-                #'polyA_reads_hela-s3_cytoplasm_processed_mapped_in_3utr.bed'
+        self.polyA = '/users/rg/jskancke/phdproject/3UTR/the_project/polyA_file/'\
+                'polyA_reads_hela-s3_cytoplasm_processed_mapped_in_3utr.bed'
 
 class Annotation(object):
     """A convenience class that holds the files and data structures relevant to
@@ -885,7 +890,7 @@ def output_writer(dset_id, coverage, annotation, utr_seqs, rpkm, extendby,
 
     # Create a UTR-instance
     this_utr = UTR(chrm, beg, end, strand, val, utr_ID, rpkm[utr_ID], extendby,
-                   covr, utr_seqs[utr_ID], polyA_reads[utr_ID],
+                   covr, utr_seqs[utr_ID], polyA_reads[utr_ID]['other_strand'],
                    a_polyA_sites_dict[utr_ID])
 
     # Create instances for writing to two output files
@@ -964,7 +969,8 @@ def output_writer(dset_id, coverage, annotation, utr_seqs, rpkm, extendby,
             # Update to the new utr and start the loop from scratch
             this_utr = UTR(chrm, beg, end, strand, val, utr_ID, rpkm[utr_ID],
                            extendby, covr, utr_seqs[utr_ID],
-                           polyA_reads[utr_ID], a_polyA_sites_dict[utr_ID])
+                           polyA_reads[utr_ID]['other_strand'],
+                           a_polyA_sites_dict[utr_ID])
 
             # If not a multi exon, make output instances for writing to file
             if not this_utr.multi_exon:
@@ -1649,48 +1655,21 @@ def cluster_polyAs(utr_polyAs, utrs):
         utr_info = utrs[utr_id]
         real_strand = utr_info[3]
 
-        # Getting statistics for which strand the polyA reads map to
-        # ONLY UNCOMMENT WHEN RUNNING WITH ALL READS
-        #nr_polyA_reads = len(polyAs)
-        #plus_ratio = sum(1 for tup in polyAs if tup[5] == '+')/nr_polyA_reads
-        #minus_ratio = sum(1 for tup in polyAs if tup[5] == '-')/nr_polyA_reads
-
-        #if real_strand == '+':
-            #plus_values['+'].append(plus_ratio)
-            #plus_values['-'].append(minus_ratio)
-        #if real_strand == '-':
-            #minus_values['+'].append(plus_ratio)
-            #minus_values['-'].append(minus_ratio)
-
-        # For + strands, choose beg as polyA_site; choose end for - strands.
-        # Select only the reads with opposite strand! Make use of bias :)
-        # TODO do statistics on how many in which strand; count the number
-        # depending on direction so you can justify removing those with only one
-        # read. This will help you screening out fake poly(A)s for non-stranded
-        # data as well :)
-
         if real_strand == '+':
-            ends = sorted([tup[2] for tup in polyAs if tup[5] == '-'])
+            other_strand_ends = sorted([tup[2] for tup in polyAs if tup[5] == '-'])
+            this_strand_ends = sorted([tup[1] for tup in polyAs if tup[5] == '+'])
         if real_strand == '-':
-            ends = sorted([tup[1] for tup in polyAs if tup[5] == '+'])
+            other_strand_ends = sorted([tup[1] for tup in polyAs if tup[5] == '+'])
+            this_strand_ends = sorted([tup[2] for tup in polyAs if tup[5] == '-'])
 
         # Getting the actual clusters
-        polyA_reads[utr_id] = cluster_loop(ends)
+        polyA_reads[utr_id] = {'this_strand': cluster_loop(this_strand_ends),
+                               'other_strand': cluster_loop(other_strand_ends)}
 
     # For those utr_id that don't have a cluster, give them an empty list; ad hoc
     for utr_id in utrs:
         if utr_id not in polyA_reads:
-            polyA_reads[utr_id] = [[],[]]
-
-    # Statistics on the ratio of + and - mapped reads for the genes that are in
-    # the positive or negative strand. RESULT: for paired end reads, the polyA
-    # reads map to the OPPOSITE strand 90% of the times.
-
-    #plus_avrg = {'+': sum(plus_values['+'])/len(plus_values['+']),
-                 #'-': sum(plus_values['-'])/len(plus_values['-'])}
-
-    #minus_avrg = {'+': sum(minus_values['+'])/len(minus_values['+']),
-                 #'-': sum(minus_values['-'])/len(minus_values['-'])}
+            polyA_reads[utr_id] = {'this_strand':[[],[]], 'other_strand':[[],[]]}
 
     return polyA_reads
 
@@ -2088,18 +2067,9 @@ def make_bigwigs(settings, annotation, here):
         2) Do .bed -> .bedgraph
         3) Do .bedgraph -> bigWig
         4) Print USCS line
-
     """
 
-    # Check if read_data and polyA data are found for the datasets.
-    # If either read_data or polyA data are not found for a dataset, say so,
-    # but continue. Do the same if neither are found.
-
-    # MAke bigWig dir if it doesn't exist
-    bigwig_dir = os.path.join(here, 'bigWigs')
-    if not os.path.exists(bigwig_dir):
-        os.makedirs(bigwig_dir)
-
+    # Define shortcut variables
     dsets = settings.bigwig_datasets
     utrfile_path = annotation.utrfile_path
     savedir = settings.bigwig_savedir
@@ -2124,10 +2094,6 @@ def make_bigwigs(settings, annotation, here):
     print('Done checking.\n')
 
     for dset in keepers:
-
-        # Question: make bigWig for polyA reads or only for 3UTR reads?
-        # First try with both; if bigwig is bad for polyA, change to bedgraph
-        # instead.
 
         # Do intersectBed again and keep the polyA reads. Good for plotting.
         (dirname, filename) = os.path.split(dset)
@@ -2181,8 +2147,9 @@ def main():
     # When a simulation is over, the paths to the output files are pickled. When
     # simulate is False, the program will not read rna-seq files but will
     # instead try to get the output files from the last simulation.
-    simulate = False
-    #simulate = True
+    #simulate = False
+    simulate = True
+    settings.bigwig = False
 
     # This option should be set only in case of debugging. It makes sure you
     # just run chromosome 1 and only extract a tiny fraction of the total reads.
@@ -2306,10 +2273,8 @@ def main():
 if __name__ == '__main__':
     main()
 
-# TODO: make wig-file from the coverage-file
-# RESULT: you need to save it on your own server, accessable from ftp/http
 # TODO: go through the entire program and improve documentation.
-# TODO: don't leave out polyA clusters from the 'wrong' strand. filter that
+# TODO: write external documentation file for the program
 # TODO: generate the figures. one button!
 # TODO: the two below should be part of the final analysis script; one button!
 # TODO: verify the polyA reads clusters with polyAdb + other results
@@ -2328,9 +2293,8 @@ if __name__ == '__main__':
     # 4) The postoc's speech was that methylation downstream a poly(A) site can
     # contribute to polyadenylation, thuogh Hagen injected that it could
     # contribute to the slowing and subsequent release of the polymerase
-    # 5) Don't remove the polyA clusters of different direction. A few of them
-    # are genuinly from the other strand! Remove instread just those that have a
-    # support of 1 read.
+    # 5) Do statistics on the number of times polyA reads fall in the opposite
+    # strand (for all clusters and for clusters with more than 1 read)
     # 6) Give the absolute number of poly(A) reads in the different
     # compartments. Seems like there are a lot more poly(A) reads in the
     # cytoplasm than in the nucleus
