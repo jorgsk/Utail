@@ -69,7 +69,7 @@ import math
 import matplotlib.pyplot as plt
 
 # Your own imports
-import annotation_analysis_progress as genome
+import annotation_parser as genome
 
 class Settings(object):
     """Store the settings obtained from the settings file"""
