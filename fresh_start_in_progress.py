@@ -70,7 +70,8 @@ class Settings(object):
     """Store the settings obtained from the settings file"""
     def __init__(self, datasets, annotation_path, utrfile_provided, read_limit,
                  max_cores, chr1, hgfasta_path, polyA, min_utrlen, extendby,
-                 del_reads, cumul_tuning):
+                 del_reads, cumul_tuning, bigwig, bigwig_datasets,
+                 bigwig_savedir, bigwig_url):
 
         self.datasets = datasets
         self.annotation_path = annotation_path
@@ -84,19 +85,23 @@ class Settings(object):
         self.extendby = int(extendby)
         self.del_reads = del_reads
         self.cumul_tuning = cumul_tuning
+        self.bigwig = bigwig
+        self.bigwig_datasets = bigwig_datasets
+        self.bigwig_savedir = bigwig_savedir
+        self.bigwig_url = bigwig_url
 
     def DEBUGGING(self):
 
         self.chr1 = True
         #self.read_limit = False
-        self.read_limit = 20000000
+        self.read_limit = 50000000
         #self.read_limit = 1000
         self.max_cores = 3
-        #self.polyA = True
+        self.polyA = True
         #self.polyA = '/users/rg/jskancke/phdproject/3UTR/the_project/polyA_file/'\
                 #'polyA_reads_k562_whole_cell_processed_mapped_in_3utr.bed'
-        self.polyA = '/users/rg/jskancke/phdproject/3UTR/the_project/polyA_file/'\
-                'polyA_reads_hela-s3_cytoplasm_processed_mapped_in_3utr.bed'
+        #self.polyA = '/users/rg/jskancke/phdproject/3UTR/the_project/polyA_file/'\
+                #'polyA_reads_hela-s3_cytoplasm_processed_mapped_in_3utr.bed'
 
 class Annotation(object):
     """A convenience class that holds the files and data structures relevant to
@@ -291,6 +296,8 @@ class FullLength(object):
         self.cuml_rel_size = 'NA'
         self.polyA_support = 'NA'
 
+        self.epsilon = 0.995
+
     def header_dict(self, this_utr):
         """Return  """
         return dict((('chrm', this_utr.chrm), ('beg', self.frmt(this_utr.beg_nonext)),
@@ -396,7 +403,7 @@ class FullLength(object):
         # Get the non_extended utr-relative position where 99.5% of the reads
         # have landed
         for ind, el in enumerate(this_utr.norm_cuml):
-            if el < 0.995:
+            if el < self.epsilon:
                 rel_pos = ind
                 length_nonext = this_utr.length_nonext
                 self.cuml_rel_size = (length_nonext-rel_pos)/length_nonext
@@ -418,11 +425,9 @@ class FullLength(object):
         self.annot_dstream_coverage = sum(covr_vector[extendby: 2*extendby])/extendby
         self.annot_ustream_coverage = sum(covr_vector[:extendby])/extendby
 
-        if this_utr.rpkm > 50:
-            debug()
 
     def cumul_plus(self, this_utr):
-        """Get cumulative read coverage"""
+        """Get cumulative read coverage for positive strand exons"""
         covr_vector = this_utr.covr_vector
         extendby = this_utr.extendby
 
@@ -436,9 +441,9 @@ class FullLength(object):
             rel_pos = 1
             self.cuml_rel_size = rel_pos/float((this_utr.length_nonext))
 
-        # Get the point where 99.5% of reads have landed
+        # Get the point where epsilon percent of reads have landed (e.g. 99.5)
         for ind, el in enumerate(reversed(this_utr.norm_cuml)):
-            if el < 0.995:
+            if el < self.epsilon:
                 length_nonext = this_utr.length_nonext
                 rel_pos = length_nonext - ind
                 self.cuml_rel_size = rel_pos/float(length_nonext)
@@ -456,9 +461,6 @@ class FullLength(object):
         # Get the mean values extendby around the annotated end too
         self.annot_ustream_coverage = sum(covr_vector[-extendby:])/extendby
         self.annot_dstream_coverage = sum(covr_vector[-2*extendby:-extendby])/extendby
-
-        if this_utr.rpkm > 50:
-            debug()
 
     def get_pas(self, pas_list, this_utr):
 
@@ -1076,12 +1078,13 @@ def read_settings(settings_file):
     """Read settings file for parameters needed to run the script."""
 
     conf = ConfigParser.ConfigParser()
+    conf.optionxform = str
     conf.read(settings_file)
 
     expected_fields = ['DATASETS', 'ANNOTATION', 'CPU_CORES', 'RESTRICT_READS',
                        'CHROMOSOME1', 'SUPPLIED_3UTR_BEDFILE', 'HG_FASTA',
                        'POLYA_READS', 'MIN_3UTR_LENGTH', 'EXTEND', 'PLOTTING',
-                       'DELETE_READS', 'UTR_LENGTH_TUNING']
+                       'DELETE_READS', 'UTR_LENGTH_TUNING', 'BIGWIG']
 
     missing = set(conf.sections()) - set(expected_fields)
     if len(missing) == 0:
@@ -1136,6 +1139,17 @@ def read_settings(settings_file):
     # should you delete reads?
     del_reads = conf.getboolean('DELETE_READS', 'delete_reads')
 
+    # bigWig or not?
+    bigwig = conf.getboolean('BIGWIG', 'bigwig')
+
+    bigwig_datasets = []
+    bigwig_savedir = ''
+    bigwig_url = ''
+    if bigwig:
+        bigwig_datasets = conf.get('BIGWIG', 'datasets').split(':')
+        bigwig_savedir = conf.get('BIGWIG', 'save_dir')
+        bigwig_url = conf.get('BIGWIG', 'url')
+
     # poly(A) reads -- get them / dont get them / supply them
     try:
         polyA = conf.getboolean('POLYA_READS', 'polya')
@@ -1152,7 +1166,8 @@ def read_settings(settings_file):
         sys.exit()
 
     return(datasets, annotation, utr_bedfile_path, read_limit, max_cores, chr1,
-          hg_fasta, polyA, min_utrlen, extendby, del_reads, cuml_tuning)
+          hg_fasta, polyA, min_utrlen, extendby, del_reads, cuml_tuning, bigwig,
+          bigwig_datasets, bigwig_savedir, bigwig_url)
 
 
 def get_chromosome1(annotation, beddir):
@@ -1480,7 +1495,7 @@ def map_reads(processed_reads, avrg_read_len):
             beg = start_re.match(rest[1:]).group()
 
             # Write to file in .bed format
-            reads_file.write('\t'.join([chrom, beg, str(int(beg)+len(seq)), '.',
+            reads_file.write('\t'.join([chrom, beg, str(int(beg)+len(seq)), '0',
                                       '0', strand]) + '\n')
 
     return polybed_path
@@ -2057,6 +2072,96 @@ def make_directories(here, dirnames):
 
     return outdirs
 
+def make_bigwigs(settings, annotation, here):
+    """
+    Make bigwig files of the polyA reads and the normal reads of the datasets
+    specified under [BIGWIG] in the UTR_SETTINGS file.
+
+    Turn the read coverage and polyA read .bedfiles into bigWig files.
+    These files can in turn be viewed on the UCSC genome browser.
+
+    Finally print out a USCS custom track line for usage with the bigWig file.
+
+    Steps:
+
+        1) Intersect with 3UTR (or whatever original bedfile was used)
+        2) Do .bed -> .bedgraph
+        3) Do .bedgraph -> bigWig
+        4) Print USCS line
+
+    """
+
+    # Check if read_data and polyA data are found for the datasets.
+    # If either read_data or polyA data are not found for a dataset, say so,
+    # but continue. Do the same if neither are found.
+
+    # MAke bigWig dir if it doesn't exist
+    bigwig_dir = os.path.join(here, 'bigWigs')
+    if not os.path.exists(bigwig_dir):
+        os.makedirs(bigwig_dir)
+
+    dsets = settings.bigwig_datasets
+    utrfile_path = annotation.utrfile_path
+    savedir = settings.bigwig_savedir
+    url = settings.bigwig_url
+
+    keepers = []
+
+    print('Checking if files are available...\n')
+    for dset in dsets:
+        polyAfile = 'polyA_reads_'+ dset +'_processed_mapped.bed'
+        readfile = 'reads_'+ dset +'.bed'
+        polyApath = os.path.join(here, 'temp_files', polyAfile)
+        readpath = os.path.join(here, 'temp_files', readfile)
+
+        for bedfile in [polyApath, readpath]:
+            try:
+                open(bedfile, 'rb')
+                keepers.append(bedfile)
+            except:
+                print('Not found or no access:\n{0}\nSkipping file...\n'\
+                      .format(bedfile))
+    print('Done checking.\n')
+
+    for dset in keepers:
+
+        # Question: make bigWig for polyA reads or only for 3UTR reads?
+        # First try with both; if bigwig is bad for polyA, change to bedgraph
+        # instead.
+
+        # Do intersectBed again and keep the polyA reads. Good for plotting.
+        (dirname, filename) = os.path.split(dset)
+        # Shorten filename for polyA reads (remove processign and mapped parts)
+        if filename.startswith('polyA'):
+            shortname = '_'.join(filename.split('_')[:-2])
+        if filename.startswith('reads'):
+            shortname = os.path.splitext(filename)[0]
+        bedG_path = os.path.join(savedir, shortname + '.bedGraph')
+        bigW_path = os.path.join(savedir, shortname + '.bigWig')
+
+        # 0) intersectBed (it will also sort the first file -- no need for
+        # resorting)
+        hg19 = '/users/rg/jskancke/phdproject/3UTR/the_project/source_bedfiles/hg19'
+        bedGtoBigWig = '/users/rg/jskancke/programs/other/bedGraphToBigWig'
+
+        cmd_intersect = ['intersectBed', '-wb', '-a', dset, '-b', utrfile_path]
+        cmd_bedGraph = ['genomeCoverageBed', '-bg', '-i', 'stdin', '-g', hg19]
+        cmd_bedGtoBW = [bedGtoBigWig, bedG_path, hg19, bigW_path]
+
+        f = Popen(cmd_intersect, stdout = PIPE)
+        g = Popen(cmd_bedGraph, stdin = f.stdout, stdout = open(bedG_path, 'wb'))
+        g.wait() # wait for bedGraph to finish
+        h = Popen(cmd_bedGtoBW)
+        h.wait() # wait for bigWig to finish
+
+        UCSC = """track type=bigWig
+        name="{0}"
+        description="{0}"
+        bigDataUrl={1}
+        """.format(shortname, os.path.join(url, shortname + '.bigWig'))
+        print('Printing USCS custom track line:\n')
+        print UCSC
+
 def main():
 
     # The path to the directory the script is located in
@@ -2076,8 +2181,8 @@ def main():
     # When a simulation is over, the paths to the output files are pickled. When
     # simulate is False, the program will not read rna-seq files but will
     # instead try to get the output files from the last simulation.
-    #simulate = False
-    simulate = True
+    simulate = False
+    #simulate = True
 
     # This option should be set only in case of debugging. It makes sure you
     # just run chromosome 1 and only extract a tiny fraction of the total reads.
@@ -2176,13 +2281,17 @@ def main():
     # script: utr_output_analysis.py or smth similar. It's only been put here
     # for conveniece for checking the output during work.
 
-    if not simulate:
+    #if not simulate:
 
-        file_path_dict = cPickle.load(open(pickled_final, 'rb'))
+        #file_path_dict = cPickle.load(open(pickled_final, 'rb'))
 
-        final_outp_polyA = file_path_dict['final_output_polyA']
-        final_outp_length = file_path_dict['final_output_length']
-        coverage = file_path_dict['coverage']
+        #final_outp_polyA = file_path_dict['final_output_polyA']
+        #final_outp_length = file_path_dict['final_output_length']
+        #coverage = file_path_dict['coverage']
+
+    # if set, make bigwig files
+    if settings.bigwig:
+        make_bigwigs(settings, annotation, here)
 
     # Present output graphically
     #output_analyzer(final_output, utrs, utrfile_path)
@@ -2198,11 +2307,12 @@ if __name__ == '__main__':
     main()
 
 # TODO: make wig-file from the coverage-file
-# RESULT: you need to save it on your own server, accesable from ftp/http
-# TODO: generate the figures.
-# TODO: don't leave out polyA clusters from the 'wrong' strand. filter that
-# TODO: verify the polyA reads clusters with polyAdb + other results
+# RESULT: you need to save it on your own server, accessable from ftp/http
 # TODO: go through the entire program and improve documentation.
+# TODO: don't leave out polyA clusters from the 'wrong' strand. filter that
+# TODO: generate the figures. one button!
+# TODO: the two below should be part of the final analysis script; one button!
+# TODO: verify the polyA reads clusters with polyAdb + other results
 # TODO: verify the 3UTR length with annotation + smth else
 
 # PAPER IDEAS:

@@ -1,7 +1,7 @@
 [DATASETS]
 # The read files must be either gem-files, zipped gem-files, bed-files, or
 # zipped bedfiles. The extensions must thus be either of: .map.gz, .gem.map.gz,
-#
+# Avoid spaces and punctuation marks (.) in the filenames to aviod problems...
 # .bed, or .bed.gz.
 
 carrie = /users/rg/projects/NGS/Projects/ENCODE/hg19main/GingerasCarrie
@@ -40,7 +40,7 @@ annotation = /users/rg/jskancke/phdproject/3UTR/gencode5/gencode5_annotation.gtf
 # The first time this setting is used, the chromosome 1 entries from the
 # annotation file above will be filtered out to a separate file.
 # CHR1 = true
-CHR1 = false
+chr1 = false
 
 
 [MIN_3UTR_LENGTH]
@@ -126,6 +126,20 @@ hg_fasta = /users/rg/jskancke/phdproject/3UTR/hg19fasta/hg19.fa
 # the 99.5% value.
 tuning = true
 # tuning = false
+
+
+[BIGWIG]
+# list the datasets you would like to make into bigWig. The reads that overlap
+# the 3UTR and the polyA reads will be turned into bigWig files.
+# Note that this process requires a lot of memory. More than 6 gigabytes
+# recommended for normal usage (needed for sorting). If region under
+# investigation is large, more is required.
+# Note that if bigWig files are found, they will not be overwritten. Delete
+# files you want to re-make.
+bigwig = true
+datasets = HeLa-S3_Cytoplasm:non_existing_dataset
+save_dir = /users/rg/jskancke/public_html/bigWigs
+url = http://genome.crg.es/~jskancke/bigWigs
 
 
 [PLOTTING]
