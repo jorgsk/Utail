@@ -9,29 +9,30 @@ treated in several steps. The steps are
 
 1) Extract the reads from a gem-mapping
 
-1.1) If requested, also extract the polyA reads
-1.2) Treat the polyA reads: trimming of poly(A) tail + remapping to the genome
-1.3) Intersect the remapped polyA reads with the 3UTR
-1.4) Cluster the polyA reads that map to the 3UTR (stochastic cleavage)
+    If run with **polyA = true** in the settings file
+    1.1) If requested, also extract the polyA reads
+    1.2) Treat the polyA reads: trimming of poly(A) tail + remapping to the genome
+    1.3) Intersect the remapped polyA reads with the 3UTR
+    1.4) Cluster the polyA reads that map to the 3UTR (stochastic cleavage)
 
 2) Get the RPKM of the 3UTRs: run intersectBed on the 3UTR bedfile and the readfile
 
 3) Get read coverage of the 3UTRs: run coverageBed -d on the 3UTRs and the reads
 
 4) Go through the coverage file one line at a time;
-4.1) Each line is one base; each 3UTR exon has from 200-X0000 lines
-4.2) While on the same utr, keep adding coverage data
-4.3) When a line with a different UTR is encountered, pause, and calculate
-output for the previous 3UTR. If however the previous 3UTR was part of a
-multi-exon.......... begin here.
+    4.1) Each line is one base; each 3UTR exon has from 200-X0000 lines
+    4.2) While on the same utr, keep adding coverage data
+    4.3) When a line with a different UTR is encountered, pause, and calculate
+    output for the previous 3UTR. If however the previous 3UTR was part of a
+    multi-exon.......... begin here.
 
 Dependencies:
-    pyFasta
-    bedGraphToBigWig
-    bedTools
-    numpy (can easily be removed -- just mean and std used)
-    matplotlib (optional -- for plotting)
-    python 2.6.4 or greater
+    * pyFasta
+    * bedGraphToBigWig
+    * bedTools
+    * numpy (can easily be removed -- just mean and std used)
+    * matplotlib (optional -- for plotting)
+    * python 2.6.4 or greater
 
 """
 
@@ -72,7 +73,10 @@ import matplotlib.pyplot as plt
 import annotation_parser as genome
 
 class Settings(object):
-    """Store the settings obtained from the settings file"""
+    """
+    Convenience class.One instance is created from this class: it holds all the
+    settings parameters obtained from the UTR_SETTINGS file.
+    """
     def __init__(self, datasets, annotation_path, utrfile_provided, read_limit,
                  max_cores, chr1, hgfasta_path, polyA, min_utrlen, extendby,
                  del_reads, cumul_tuning, bigwig, bigwig_datasets,
@@ -96,6 +100,9 @@ class Settings(object):
         self.bigwig_url = bigwig_url
 
     def DEBUGGING(self):
+        """
+        Modify settings for debugging ONLY!
+        """
 
         self.chr1 = True
         #self.read_limit = False
@@ -109,11 +116,12 @@ class Settings(object):
                 'polyA_reads_hela-s3_cytoplasm_processed_mapped_in_3utr.bed'
 
 class Annotation(object):
-    """A convenience class that holds the files and data structures relevant to
-    the annotation that has been supplied."""
+    """
+    A convenience class. Refers to the files and data structures relevant to
+    the annotation that has been supplied.
+    """
 
     def __init__(self, annotation_path):
-        """Initiate as empty strings and fill in as they are being created."""
         self.path = annotation_path
         self.utrfile_path = ''
         self.utr_exons = ''
@@ -157,8 +165,12 @@ class Annotation(object):
         return polyA_dict
 
 class UTR(object):
-    """This class takes care of writing output to file. Avoids passing a million
-    parameters here and there."""
+    """
+    Class for UTR-objects. Holds all the relevant information about a UTR-object
+    that has been calculated in the pipeline. Attributes are either
+    variables that are written to output files, or variables that assist in
+    calculating the output variables.
+    """
 
     def __init__(self, chrm, beg, end, strand, val, utr_ID, rpkm, extendby,
                  first_covr, sequence, polyA_reads, a_polyA_sites):
@@ -217,7 +229,10 @@ class UTR(object):
             self.begends_nonext = [(self.beg_nonext, self.end_nonext)]
 
     def is_empty(self):
-        """Determine if non-extended coverage vector is empty"""
+        """
+        Determine if non-extended coverage vector is empty, i.e, has no
+        read-coverage.
+        """
 
         if self.strand == '-':
             covr_slice = iter(self.covr_vector[self.extendby:])
@@ -232,8 +247,11 @@ class UTR(object):
         return True
 
     def update_utr(self, new_exon):
-        """Update the first exon in the utr (which by sorting is the one with
-        the smallest utr.beg) with the next exon."""
+        """
+        For multi-exon 3UTRs. Updates the attributes of the UTR-object with the
+        next exon with the next exon. The first exon's ID will be the one
+        written to file.
+        """
 
         # Update RPKM with weights on the lenghts of the two exons
         self.rpkm = ((self.rpkm/self.length_nonext) +
@@ -275,9 +293,12 @@ class UTR(object):
         if self.strand == '-':
             self.sequence = new_exon.sequence + self.sequence
 
-def frmt(self, element):
-    """Return float objects with four decimals. Return all other objects as
-    they were"""
+def frmt(element):
+    """
+    Return floats as strings with four decimals.
+    Return ints as strings.
+    Return all other objects as they came in.
+    """
 
     if type(element) is float:
         return format(element, '.4f')
@@ -287,7 +308,11 @@ def frmt(self, element):
         return element
 
 class FullLength(object):
-    """Class for writing the UTR end file"""
+    """
+    Class for writing the 'length' file. Calculates the output based on
+    variables from a UTR instance. Also writes the header of the 'length' output
+    file.
+    """
 
     def __init__(self, utr_ID):
         self.utr_ID = utr_ID
@@ -299,41 +324,32 @@ class FullLength(object):
         self.annot_dstream_coverage = 'NA'
         self.annot_ustream_coverage = 'NA'
         self.cuml_rel_size = 'NA'
-        self.polyA_support = 'NA'
 
         self.epsilon = 0.995
 
     def header_dict(self, this_utr):
-        """Return  """
-        return dict((('chrm', this_utr.chrm), ('beg', self.frmt(this_utr.beg_nonext)),
-                    ('end', self.frmt(this_utr.end_nonext)),
-                    ('utr_ID', self.frmt(this_utr.utr_ID[:-2])),
+        """
+        Return a dictionary that maps header-entries to the UTR or FullLength
+        instances that are being written to file. This ensures that each column
+        contains the data that corresponds to the colum header.
+        """
+        return dict((('chrm', this_utr.chrm), ('beg', frmt(this_utr.beg_nonext)),
+                    ('end', frmt(this_utr.end_nonext)),
+                    ('utr_ID', frmt(this_utr.utr_ID[:-2])),
                     ('strand', this_utr.strand),
-                    ('3utr_extended_by', self.frmt(this_utr.extendby)),
-                    ('epsilon_coord', self.frmt(this_utr.rel_pos)),
-                    ('epsilon_rel_size', self.frmt(self.cuml_rel_size)),
-                    ('epsilon_downstream_covrg', self.frmt(self.eps_dstream_coverage)),
-                    ('epsilon_upstream_covrg', self.frmt(self.eps_ustream_coverage)),
+                    ('3utr_extended_by', frmt(this_utr.extendby)),
+                    ('epsilon_coord', frmt(this_utr.rel_pos)),
+                    ('epsilon_rel_size', frmt(self.cuml_rel_size)),
+                    ('epsilon_downstream_covrg', frmt(self.eps_dstream_coverage)),
+                    ('epsilon_upstream_covrg', frmt(self.eps_ustream_coverage)),
                     ('annotation_downstream_covrg',
-                     self.frmt(self.annot_dstream_coverage)),
+                     frmt(self.annot_dstream_coverage)),
                     ('annotation_upstream_covrg',
-                     self.frmt(self.annot_ustream_coverage)),
-                    ('epsilon_polyA_support', self.frmt(self.polyA_support)),
+                     frmt(self.annot_ustream_coverage)),
                     ('epsilon_PAS_type', self.has_PAS),
-                    ('epsilon_PAS_distance', self.frmt(self.pas_pos)),
-                    ('3utr_RPKM', self.frmt(this_utr.rpkm))
+                    ('epsilon_PAS_distance', frmt(self.pas_pos)),
+                    ('3utr_RPKM', frmt(this_utr.rpkm))
                      ))
-
-    def frmt(self, element):
-        """Return float objects with four decimals. Return all other objects as
-        they came in"""
-
-        if type(element) is float:
-            return format(element, '.4f')
-        if type(element) is int:
-            return str(element)
-        else:
-            return element
 
     def header_order(self):
         return """
@@ -349,16 +365,24 @@ class FullLength(object):
         epsilon_upstream_covrg
         annotation_downstream_covrg
         annotation_upstream_covrg
-        epsilon_polyA_support
         epsilon_PAS_type
         epsilon_PAS_distance
         3utr_RPKM
         """.split()
 
     def write_header(self, outfile):
+        """
+        Write the header of the 'length' output file
+        """
         outfile.write('\t'.join(self.header_order()) + '\n')
 
     def calculate_output(self, pas_list, this_utr):
+        """
+        Calculate output variables if *this_utr* is nonempty:
+            1) Get cumulative coverage using the *epsilon* parameter
+            2) See if there is a PAS close to the estimated end, and if so,
+            return the distance to that PAS
+        """
         # Don't do anything if coverage vector is empty
         if this_utr.is_empty():
             return
@@ -372,17 +396,16 @@ class FullLength(object):
             # calculate the cumulative values
             self.cumul_plus(this_utr)
 
-        # see if the end position has polyA support (if polyA reads are given)
-        if this_utr.polyA_reads != []:
-            self.get_polyA_support(this_utr)
-
         # calculate the PAS and pas distance for 'length'
         self.get_pas(pas_list, this_utr)
 
 
     def cumul_minus(self, this_utr):
-        """Note that rel_pos is relative to the un-extended 3UTR. Thus, a
-        rel_pos value of 3 here would be the same as self.beg + extension + 3."""
+        """
+        Calculate the position of cumulative coverage (e.g 0.98) relative to the
+        length of the annotated 3UTR. This is refered to as the *epsilon*
+        position. Calculate the coverage on both sides of this position.
+        """
         covr_vector = this_utr.covr_vector
         extendby = this_utr.extendby
         cumul_covr = this_utr.cumul_covr
@@ -432,7 +455,9 @@ class FullLength(object):
 
 
     def cumul_plus(self, this_utr):
-        """Get cumulative read coverage for positive strand exons"""
+        """
+        See cumul_minus
+        """
         covr_vector = this_utr.covr_vector
         extendby = this_utr.extendby
 
@@ -468,6 +493,9 @@ class FullLength(object):
         self.annot_dstream_coverage = sum(covr_vector[-2*extendby:-extendby])/extendby
 
     def get_pas(self, pas_list, this_utr):
+        """
+        Return any close-by PAS and the distance to that PAS.
+        """
 
         utr_ID = this_utr.utr_ID
 
@@ -486,23 +514,6 @@ class FullLength(object):
                 break
             except ValueError:
                 (self.has_PAS, self.pas_pos) = ('NA', 'NA')
-
-
-    def get_polyA_support(self, this_utr):
-        """ Look for polyA-read support -- and get the cumulative
-         percentage at which the majority of the polyAreads are
-         found.
-         """
-
-        # Get the absolute end-position of the 99.5% 
-        end_pos = this_utr.beg_nonext + this_utr.rel_pos
-
-        # Check if this position has polyA reads within 50 nt
-        for pAsite in this_utr.polyA_reads[0]:
-            if pAsite-40 < end_pos < pAsite+40:
-                # A general marker for polyA close to end_pos
-                self.polyA_support = 1
-                break
 
     def write_output(self, outobject, this_utr):
         """Format the output as desired, then save"""
@@ -530,31 +541,20 @@ class PolyAReads(object):
     def write_header(self, outfile):
         outfile.write('\t'.join(self.header_order()) + '\n')
 
-    def frmt(self, element):
-        """Return float objects with four decimals. Return all other objects as
-        they were"""
-
-        if type(element) is float:
-            return format(element, '.4f')
-        if type(element) is int:
-            return str(element)
-        else:
-            return element
-
     def header_dict(self, this_utr, polA_nr, pAcoord, nr_supp_pA, covR, covL,
                     annotpA_dist, nearbyPAS, PAS_dist):
 
         return dict((
                     ('utr_ID', this_utr.utr_ID[:-2]),
-                    ('polyA_number', self.frmt(polA_nr)),
+                    ('polyA_number', frmt(polA_nr)),
                     ('strand', this_utr.strand),
-                    ('polyA_coordinate', self.frmt(pAcoord)),
-                    ('number_supporting_reads', self.frmt(nr_supp_pA)),
-                    ('coverage_50nt_downstream', self.frmt(covR)),
-                    ('coverage_50nt_upstream', self.frmt(covL)),
-                    ('annotated_polyA_distance', self.frmt(annotpA_dist)),
+                    ('polyA_coordinate', frmt(pAcoord)),
+                    ('number_supporting_reads', frmt(nr_supp_pA)),
+                    ('coverage_50nt_downstream', frmt(covR)),
+                    ('coverage_50nt_upstream', frmt(covL)),
+                    ('annotated_polyA_distance', frmt(annotpA_dist)),
                     ('nearby_PAS', nearbyPAS),
-                    ('PAS_distance', self.frmt(PAS_dist)),
+                    ('PAS_distance', frmt(PAS_dist)),
                     ))
 
     def header_order(self):
@@ -2205,9 +2205,9 @@ def main():
                          settings, annotation)
 
             ###### WORK IN PROGRESS
-            akk = pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs,
-                           settings, annotation)
-            debug()
+            #akk = pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs,
+                           #settings, annotation)
+            #debug()
 
 
             result = my_pool.apply_async(pipeline, arguments)
