@@ -6,27 +6,27 @@
 
 carrie = /users/rg/projects/NGS/Projects/ENCODE/hg19main/GingerasCarrie
 
-# K562_Cytoplasm = %(carrie)s/001C/genome/LID8465_FC61LTAAAXX_5_1.gem.map.gz:%(carrie)s/001C/genome/LID8465_FC61LTAAAXX_5_2.gem.map.gz:%(carrie)s/001C/genome/LID8465_FC61LTAAAXX_6_1.gem.map.gz:%(carrie)s/001C/genome/LID8465_FC61LTAAAXX_6_2.gem.map.gz:%(carrie)s/001C/genome/LID8465_FC61LTAAAXX_7_1.gem.map.gz:%(carrie)s/001C/genome/LID8465_FC61LTAAAXX_7_2.gem.map.gz
+K562_Cytoplasm = %(carrie)s/001C/genome/LID8465_FC61LTAAAXX_5_1.gem.map.gz:%(carrie)s/001C/genome/LID8465_FC61LTAAAXX_5_2.gem.map.gz:%(carrie)s/001C/genome/LID8465_FC61LTAAAXX_6_1.gem.map.gz:%(carrie)s/001C/genome/LID8465_FC61LTAAAXX_6_2.gem.map.gz:%(carrie)s/001C/genome/LID8465_FC61LTAAAXX_7_1.gem.map.gz:%(carrie)s/001C/genome/LID8465_FC61LTAAAXX_7_2.gem.map.gz
 
-# K562_Nucleus = %(carrie)s/001N/genome/LID8556_FC62067AAXX_1_2.gem.map.gz:%(carrie)s/001N/genome/LID8556_FC62067AAXX_3_2.gem.map.gz:%(carrie)s/001N/genome/LID8556_FC62067AAXX_2_1.gem.map.gz:%(carrie)s/001N/genome/LID8556_FC62067AAXX_1_1.gem.map.gz:%(carrie)s/001N/genome/LID8556_FC62067AAXX_2_2.gem.map.gz:%(carrie)s/001N/genome/LID8556_FC62067AAXX_3_1.gem.map.gz
+K562_Nucleus = %(carrie)s/001N/genome/LID8556_FC62067AAXX_1_2.gem.map.gz:%(carrie)s/001N/genome/LID8556_FC62067AAXX_3_2.gem.map.gz:%(carrie)s/001N/genome/LID8556_FC62067AAXX_2_1.gem.map.gz:%(carrie)s/001N/genome/LID8556_FC62067AAXX_1_1.gem.map.gz:%(carrie)s/001N/genome/LID8556_FC62067AAXX_2_2.gem.map.gz:%(carrie)s/001N/genome/LID8556_FC62067AAXX_3_1.gem.map.gz
 
-# K562_Nucleus2 = %(carrie)s/001N/genome2/LID8556_FC62067AAXX_1_2.gem.map.gz:%(carrie)s/001N/genome2/LID8556_FC62067AAXX_3_2.gem.map.gz:%(carrie)s/001N/genome2/LID8556_FC62067AAXX_2_1.gem.map.gz:%(carrie)s/001N/genome2/LID8556_FC62067AAXX_1_1.gem.map.gz:%(carrie)s/001N/genome2/LID8556_FC62067AAXX_2_2.gem.map.gz:%(carrie)s/001N/genome2/LID8556_FC62067AAXX_3_1.gem.map.gz
+K562_Nucleus2 = %(carrie)s/001N/genome2/LID8556_FC62067AAXX_1_2.gem.map.gz:%(carrie)s/001N/genome2/LID8556_FC62067AAXX_3_2.gem.map.gz:%(carrie)s/001N/genome2/LID8556_FC62067AAXX_2_1.gem.map.gz:%(carrie)s/001N/genome2/LID8556_FC62067AAXX_1_1.gem.map.gz:%(carrie)s/001N/genome2/LID8556_FC62067AAXX_2_2.gem.map.gz:%(carrie)s/001N/genome2/LID8556_FC62067AAXX_3_1.gem.map.gz
 
-# K562_Whole_Cell = %(carrie)s/001WC/genome/LID16627_FC61U30AAXX_2_2.gem.map.gz:%(carrie)s/001WC/genome/LID16627_FC61U30AAXX_1_2.gem.map.gz:%(carrie)s/001WC/genome/LID16627_FC61U30AAXX_3_1.gem.map.gz:%(carrie)s/001WC/genome/LID16627_FC61U30AAXX_3_2.gem.map.gz:%(carrie)s/001WC/genome/LID16627_FC61U30AAXX_2_1.gem.map.gz:%(carrie)s/001WC/genome/LID16627_FC61U30AAXX_1_1.gem.map.gz
+K562_Whole_Cell = %(carrie)s/001WC/genome/LID16627_FC61U30AAXX_2_2.gem.map.gz:%(carrie)s/001WC/genome/LID16627_FC61U30AAXX_1_2.gem.map.gz:%(carrie)s/001WC/genome/LID16627_FC61U30AAXX_3_1.gem.map.gz:%(carrie)s/001WC/genome/LID16627_FC61U30AAXX_3_2.gem.map.gz:%(carrie)s/001WC/genome/LID16627_FC61U30AAXX_2_1.gem.map.gz:%(carrie)s/001WC/genome/LID16627_FC61U30AAXX_1_1.gem.map.gz
 
-# K562_Chromatin = %(carrie)s/025CH/genome/LID9185_FC61RV8AAXX_1_1.gem.map.gz:%(carrie)s/025CH/genome/LID9185_FC61RV8AAXX_1_2.gem.map.gz:%(carrie)s/025CH/genome/LID9185_FC61RV8AAXX_2_1.gem.map.gz:%(carrie)s/025CH/genome/LID9185_FC61RV8AAXX_2_2.gem.map.gz:%(carrie)s/025CH/genome/LID9185_FC61RV8AAXX_3_1.gem.map.gz:%(carrie)s/025CH/genome/LID9185_FC61RV8AAXX_3_2.gem.map.gz
-
-# colon_S75 = /users/rg/projects/NGS/Projects/IlluminaHumanBodyMap/Mapping/HBM_colon_totRNAP50/genome/s_5_1_sequence.gem.map.gz
+K562_Chromatin = %(carrie)s/025CH/genome/LID9185_FC61RV8AAXX_1_1.gem.map.gz:%(carrie)s/025CH/genome/LID9185_FC61RV8AAXX_1_2.gem.map.gz:%(carrie)s/025CH/genome/LID9185_FC61RV8AAXX_2_1.gem.map.gz:%(carrie)s/025CH/genome/LID9185_FC61RV8AAXX_2_2.gem.map.gz:%(carrie)s/025CH/genome/LID9185_FC61RV8AAXX_3_1.gem.map.gz:%(carrie)s/025CH/genome/LID9185_FC61RV8AAXX_3_2.gem.map.gz
 
 HeLa-S3_Cytoplasm = %(carrie)s/011C/genome/LID8469_FC61AHAAAXX_1_2.gem.map.gz:%(carrie)s/011C/genome/LID8469_FC61AHAAAXX_3_2.gem.map.gz:%(carrie)s/011C/genome/LID8469_FC61AHAAAXX_3_1.gem.map.gz:%(carrie)s/011C/genome/LID8469_FC61AHAAAXX_2_2.gem.map.gz:%(carrie)s/011C/genome/LID8469_FC61AHAAAXX_2_1.gem.map.gz:%(carrie)s/011C/genome/LID8469_FC61AHAAAXX_1_1.gem.map.gz
 
-# HeLa-S3_Nucleus = %(carrie)s/011N/genome/LID8559_FC6207CAAXX_3_1.gem.map.gz:%(carrie)s/011N/genome/LID8559_FC6207CAAXX_3_2.gem.map.gz:%(carrie)s/011N/genome/LID8559_FC6207CAAXX_4_1.gem.map.gz:%(carrie)s/011N/genome/LID8559_FC6207CAAXX_4_2.gem.map.gz:%(carrie)s/011N/genome/LID8559_FC6207CAAXX_2_1.gem.map.gz:%(carrie)s/011N/genome/LID8559_FC6207CAAXX_2_2.gem.map.gz
+HeLa-S3_Nucleus = %(carrie)s/011N/genome/LID8559_FC6207CAAXX_3_1.gem.map.gz:%(carrie)s/011N/genome/LID8559_FC6207CAAXX_3_2.gem.map.gz:%(carrie)s/011N/genome/LID8559_FC6207CAAXX_4_1.gem.map.gz:%(carrie)s/011N/genome/LID8559_FC6207CAAXX_4_2.gem.map.gz:%(carrie)s/011N/genome/LID8559_FC6207CAAXX_2_1.gem.map.gz:%(carrie)s/011N/genome/LID8559_FC6207CAAXX_2_2.gem.map.gz
 
-# GM12878_Cytoplasm = %(carrie)s/003C/genome/LID8467_FC61DG2AAXX_4_1.gem.map.gz:%(carrie)s/003C/genome/LID8467_FC61DG2AAXX_5_1.gem.map.gz:%(carrie)s/003C/genome/LID8467_FC61DG2AAXX_3_1.gem.map.gz:%(carrie)s/003C/genome/LID8467_FC61DG2AAXX_3_2.gem.map.gz:%(carrie)s/003C/genome/LID8467_FC61DG2AAXX_4_2.gem.map.gz:%(carrie)s/003C/genome/LID8467_FC61DG2AAXX_5_2.gem.map.gz
+HeLa-S3_Nucleus = %(carrie)s/011WC/genome/LID16633_FC61U2UAAXX_4_1.gem.map.gz:%(carrie)s/011WC/genome/LID16633_FC61U2UAAXX_4_2.gem.map.gz:%(carrie)s/011WC/genome/LID16633_FC61U2UAAXX_5_1.gem.map.gz:%(carrie)s/011WC/genome/LID16633_FC61U2UAAXX_5_2.gem.map.gz:%(carrie)s/011WC/genome/LID16633_FC61U2UAAXX_6_1.gem.map.gz:%(carrie)s/011WC/genome/LID16633_FC61U2UAAXX_6_2.gem.map.gz
 
-# GM12878_Nucleus = %(carrie)s/003N/genome/LID8532_FC61B6KAAXX_3_2.gem.map.gz:%(carrie)s/003N/genome/LID8532_FC61B6KAAXX_3_1.gem.map.gz:%(carrie)s/003N/genome/LID8532_FC61B6KAAXX_1_1.gem.map.gz:%(carrie)s/003N/genome/LID8532_FC61B6KAAXX_2_1.gem.map.gz:%(carrie)s/003N/genome/LID8532_FC61B6KAAXX_2_2.gem.map.gz:%(carrie)s/003N/genome/LID8532_FC61B6KAAXX_1_2.gem.map.gz
+GM12878_Cytoplasm = %(carrie)s/003C/genome/LID8467_FC61DG2AAXX_4_1.gem.map.gz:%(carrie)s/003C/genome/LID8467_FC61DG2AAXX_5_1.gem.map.gz:%(carrie)s/003C/genome/LID8467_FC61DG2AAXX_3_1.gem.map.gz:%(carrie)s/003C/genome/LID8467_FC61DG2AAXX_3_2.gem.map.gz:%(carrie)s/003C/genome/LID8467_FC61DG2AAXX_4_2.gem.map.gz:%(carrie)s/003C/genome/LID8467_FC61DG2AAXX_5_2.gem.map.gz
 
-# GM12878_Whole_Cell = %(carrie)s/003WC/genome/LID16629_FC61U2UAAXX_1_2.gem.map.gz:%(carrie)s/003WC/genome/LID16629_FC61U2UAAXX_2_2.gem.map.gz:%(carrie)s/003WC/genome/LID16629_FC61U2UAAXX_2_1.gem.map.gz:%(carrie)s/003WC/genome/LID16629_FC61U2UAAXX_3_1.gem.map.gz:%(carrie)s/003WC/genome/LID16629_FC61U2UAAXX_1_1.gem.map.gz:%(carrie)s/003WC/genome/LID16629_FC61U2UAAXX_3_2.gem.map.gz
+GM12878_Nucleus = %(carrie)s/003N/genome/LID8532_FC61B6KAAXX_3_2.gem.map.gz:%(carrie)s/003N/genome/LID8532_FC61B6KAAXX_3_1.gem.map.gz:%(carrie)s/003N/genome/LID8532_FC61B6KAAXX_1_1.gem.map.gz:%(carrie)s/003N/genome/LID8532_FC61B6KAAXX_2_1.gem.map.gz:%(carrie)s/003N/genome/LID8532_FC61B6KAAXX_2_2.gem.map.gz:%(carrie)s/003N/genome/LID8532_FC61B6KAAXX_1_2.gem.map.gz
+
+GM12878_Whole_Cell = %(carrie)s/003WC/genome/LID16629_FC61U2UAAXX_1_2.gem.map.gz:%(carrie)s/003WC/genome/LID16629_FC61U2UAAXX_2_2.gem.map.gz:%(carrie)s/003WC/genome/LID16629_FC61U2UAAXX_2_1.gem.map.gz:%(carrie)s/003WC/genome/LID16629_FC61U2UAAXX_3_1.gem.map.gz:%(carrie)s/003WC/genome/LID16629_FC61U2UAAXX_1_1.gem.map.gz:%(carrie)s/003WC/genome/LID16629_FC61U2UAAXX_3_2.gem.map.gz
 
 
 [ANNOTATION]
@@ -70,7 +70,7 @@ polya = true
 [CPU_CORES]
 # Set how many cores you wish to use. default uses system_max minus 1. For
 # example, with two processors that have two cores each, default is 4-1 = 3.
-max_cores = 3
+max_cores = 6
 # max_cores = 5
 # max_cores = default
 
@@ -80,12 +80,6 @@ max_cores = 3
 # will make the script run faster. if 'false': grab all reads.
 # restrict_reads = 10000
 restrict_reads = false
-
-
-[DELETE_READS]
-# If reads were unpackaged from zip, delete reads after? Source reads are
-# never deleted.
-delete_reads = false
 
 
 [SUPPLIED_3UTR_BEDFILE]
