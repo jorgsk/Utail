@@ -163,7 +163,10 @@ class Transcript(object):
 def make_transcripts(annotation):
     """Loop through a (GENCODE) annotation file and get the exon fields.
     Finally compose them into sets of transcripts. As well return a dictionary
-    of genes with the list of transcripts belonging to that gene."""
+    of genes with the list of transcripts belonging to that gene.
+
+    Since we go from GFF/GTF to .BED format, it's important to subtract 1 from
+    the beg-coordinate. 9 9 in GTF is 8 9 in BED."""
 
     # Skip first 4 lines of annotation (for gencode at least.......)
     a_handle = skip_lines(annotation, 7)
@@ -176,7 +179,7 @@ def make_transcripts(annotation):
     for line in a_handle:
         (chrm, source, feature, beg, end, d, strand, d, d, g_id, d, t_id, d, d,
         d, d, d, d, d, t_type) = line.split()[:20]
-        beg = int(beg)
+        beg = int(beg) - 1
         end = int(end)
 
         t_type = t_type.rstrip(';').strip('"') #   remove some characters

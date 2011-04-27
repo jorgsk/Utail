@@ -103,16 +103,19 @@ class Settings(object):
         Modify settings for debugging ONLY!
         """
 
-        self.chr1 = True
-        #self.read_limit = False
-        self.read_limit = 10000
+        #self.bed_reads = False
+        self.bed_reads = '/users/rg/jskancke/phdproject/3UTR/the_project/temp_files'\
+                '/reads_K562_Chromatin.bed'
+        #self.chr1 = True
+        self.chr1 = False
+        self.read_limit = False
+        #self.read_limit = 10000000
         #self.read_limit = 1000
         self.max_cores = 3
         #self.polyA = True
-        #self.polyA = '/users/rg/jskancke/phdproject/3UTR/the_project/polyA_file/'\
-                #'polyA_reads_k562_whole_cell_processed_mapped_in_3utr.bed'
-        self.polyA = '/users/rg/jskancke/phdproject/3UTR/the_project/polyA_file/'\
-                'polyA_reads_hela-s3_cytoplasm_processed_mapped_in_3utr.bed'
+        #self.polyA = False
+        self.polyA = '/users/rg/jskancke/phdproject/3UTR/the_project/temp_files'\
+                '/polyA_reads_K562_Chromatin_processed_mapped.bed'
 
 class Annotation(object):
     """
@@ -1735,7 +1738,7 @@ def cluster_polyAs(utr_polyAs, utrs):
 
 
 def pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs, settings,
-             annotation):
+             annotation, DEBUGGING):
     """
     Get reads, get polyA reads, cluster polyA reads, get coverage, combine it in
     a 3UTr object, do calculations on the object attributes, write calculation
@@ -1750,11 +1753,21 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs, settings,
 
     t0 = time.time()
 
+    # IF DEBUGGING AND READS IN BED FORMAT ARE SUPPLIED
+    # If both the bedfiles of the reads and the bedfiles of the polyA files are
+    # submitted for debugging purposes, don't get reads anew
+    if DEBUGGING and (type(settings.bed_reads) == str) and (type(polyA) == str):
+        bed_reads = settings.bed_reads
+        total_nr_reads = sum(1 for line in open(bed_reads, 'rb'))
+        p_polyA_bed = polyA
+
+
     # Get the normal reads (in bed format). Get the polyA reads if this option is set.
     # As well get the total number of reads for calculating the RPKM later.
     # p_polyA_bed stands for putative polyA reads
-    (bed_reads, p_polyA_bed, total_nr_reads) = get_bed_reads(dset_reads, dset_id,
-                                                      read_limit, tempdir, polyA)
+    else:
+        (bed_reads, p_polyA_bed, total_nr_reads) = get_bed_reads(dset_reads, dset_id,
+                                                          read_limit, tempdir, polyA)
 
     # If polyA is a string, it is a path of a bedfile with to polyA sequences
     if type(polyA) == str:
@@ -2177,12 +2190,11 @@ def main():
 
     # You intersect the annotated polyA files with the 3UTR bedfile you got from
     # the annotation. Put the intersected annotated polyA sites in a dictionary.
-    print('Making a_polyA_sites data structures ...\n')
+    print('Making data structures for annotation poly(A) sites ...\n')
     annotation.a_polyA_sites_dict = annotation.get_polyA_dict()
 
     # Pickle the final results. Initiate the pickle object.
     pickled_final = os.path.join(output_dir, 'pickled_result_paths')
-
 
     ##################################################################
     if simulate:
@@ -2201,17 +2213,16 @@ def main():
         # Apply all datasets to the pool
         t1 = time.time()
 
-        debug()
         # dset_id and dset_reads are as given in UTR_SETTINGS
         for dset_id, dset_reads in settings.datasets.items():
 
             # The arguments needed for the pipeline
             arguments = (dset_id, dset_reads, tempdir, output_dir, utr_seqs,
-                         settings, annotation)
+                         settings, annotation, DEBUGGING)
 
             ###### WORK IN PROGRESS
             #akk = pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs,
-                           #settings, annotation)
+                           #settings, annotation, DEBUGGING)
             #debug()
 
 
@@ -2274,6 +2285,13 @@ def main():
 
 if __name__ == '__main__':
     main()
+
+
+# XXX NOTE TO SELF XXX
+# Before the holiday you updated a lot of docstrings and you started with the
+# documentation  (see doc folder). You had a meeting with Roderic: see message
+# below. You ran the program for a lot of datasets. Curious about how long that
+# took! Check out some todos below for things to do.
 
 # TODO: the path to the gem-mapper index... if people are going to use this,
 # they need to provide the path in the SETTINGS file. If you do this yourself,
