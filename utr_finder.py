@@ -1698,7 +1698,7 @@ def cluster_loop(ends):
     # Return the clusters and their average
     return (mixed_cluster, res_clus)
 
-def cluster_polyAs(utr_polyAs, utrs):
+def cluster_polyAs(utr_polyAs, utrs, polyA):
     """
     For each UTR, save the clustered poly(A)-reads from both strands. For
     double-stranded reads, it is known that the poly(A) reads map to the
@@ -1706,9 +1706,10 @@ def cluster_polyAs(utr_polyAs, utrs):
     estimating the false positive rate.
     """
 
-    # Test if there are no polyA reads: return empty lists 
-    if utr_polyAs == {}:
-        polyA_reads = dict((utr_id, [[],[]]) for utr_id in utrs)
+    # Ff there are no polyA reads or polyA is false: return empty lists 
+    if utr_polyAs == {} or polyA == False:
+        polyA_reads = dict((utr_id,{'this_strand':[[],[]], 'other_strand':[[], []]})
+                           for utr_id in utrs)
         return polyA_reads
 
     plus_values = {'+': [], '-':[]}
@@ -1752,6 +1753,8 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs, settings,
     extendby = settings.extendby
     read_limit = settings.read_limit
     polyA = settings.polyA
+    # Define utr_polyAs in case polyA is false
+    utr_polyAs = {}
 
     t0 = time.time()
 
@@ -1792,7 +1795,8 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs, settings,
         # Get a dictionary for each utr_id with its overlapping polyA reads
         utr_polyAs = get_polyA_utr(polyA_bed_path, utrfile_path)
 
-    # Cluster the poly(A) reads for each utr_id
+    # Cluster the poly(A) reads for each utr_id. If polyA is false or no polyA
+    # reads were found, return a placeholder.
     polyA_reads = cluster_polyAs(utr_polyAs, annotation.utr_exons, polyA)
 
     # Get the RPKM
