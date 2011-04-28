@@ -113,13 +113,13 @@ class Settings(object):
         self.chr1 = True
         #self.chr1 = False
         self.read_limit = False
-        #self.read_limit = 10000000
-        self.read_limit = 1000000
+        self.read_limit = 20000000
+        #self.read_limit = 1000000
         self.max_cores = 3
-        #self.polyA = True
+        self.polyA = True
         #self.polyA = False
-        self.polyA = '/users/rg/jskancke/phdproject/3UTR/the_project/temp_files'\
-                '/polyA_reads_K562_Chromatin_processed_mapped.bed'
+        #self.polyA = '/users/rg/jskancke/phdproject/3UTR/the_project/temp_files'\
+                #'/polyA_reads_K562_Chromatin_processed_mapped.bed'
 
 class Annotation(object):
     """
@@ -339,7 +339,9 @@ class FullLength(object):
         instances that are being written to file. This ensures that each column
         contains the data that corresponds to the colum header.
         """
-        return dict((('chrm', this_utr.chrm), ('beg', frmt(this_utr.beg_nonext)),
+        return dict((
+                    ('chrm', this_utr.chrm),
+                    ('beg', frmt(this_utr.beg_nonext)),
                     ('end', frmt(this_utr.end_nonext)),
                     ('utr_ID', frmt(this_utr.utr_ID[:-2])),
                     ('strand', this_utr.strand),
@@ -575,6 +577,9 @@ class PolyAReads(object):
         """
 
         return dict((
+                    ('chrm', this_utr.chrm),
+                    ('beg', frmt(this_utr.beg_nonext)),
+                    ('end', frmt(this_utr.end_nonext)),
                     ('utr_ID', this_utr.utr_ID[:-2]),
                     ('polyA_number', frmt(polA_nr)),
                     ('strand', this_utr.strand),
@@ -592,6 +597,9 @@ class PolyAReads(object):
         See the equivalent method for the 'FullLength' class.
         """
         return """
+        chrm
+        beg
+        end
         utr_ID
         polyA_number
         strand
@@ -1156,6 +1164,7 @@ def read_settings(settings_file):
                        'UTR_LENGTH_TUNING', 'BIGWIG']
 
     missing = set(conf.sections()) - set(expected_fields)
+
     if len(missing) == 0:
         pass
     else:
@@ -2173,12 +2182,10 @@ def main():
 
     # This option should be set only in case of debugging. It makes sure you
     # just run chromosome 1 and only extract a tiny fraction of the total reads.
-    DEBUGGING = True
-    #DEBUGGING = False
+    #DEBUGGING = True
+    DEBUGGING = False
     if DEBUGGING:
         settings.DEBUGGING()
-
-    settings.polyA = False # XXX
 
     # The program reads a lot of information from the annotation. The annotation
     # object will hold this information (file-paths and datastructures).
@@ -2228,14 +2235,13 @@ def main():
                          settings, annotation, DEBUGGING)
 
             ###### WORK IN PROGRESS
-            akk = pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs,
-                           settings, annotation, DEBUGGING)
+            #akk = pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs,
+                           #settings, annotation, DEBUGGING)
 
 
-            #result = my_pool.apply_async(pipeline, arguments)
-            #results.append(result)
+            result = my_pool.apply_async(pipeline, arguments)
+            results.append(result)
 
-        debug()
         # Wait for all procsses to finish
         my_pool.close()
         my_pool.join()
@@ -2264,7 +2270,6 @@ def main():
         # Copy output from temp-dir do output-dir
         save_output(final_outp_polyA, output_dir)
         save_output(final_outp_length, output_dir)
-        debug()
 
     ##################################################################
     # NOTE TO SELF: everything starting from there should be in a separate
