@@ -37,6 +37,7 @@ Dependencies:
 """
 
 from __future__ import division
+print('Loading modules ...\n')
 import os
 import sys
 import shutil
@@ -113,7 +114,7 @@ class Settings(object):
         #self.chr1 = False
         self.read_limit = False
         #self.read_limit = 10000000
-        self.read_limit = 100000
+        self.read_limit = 1000000
         self.max_cores = 3
         #self.polyA = True
         #self.polyA = False
@@ -915,7 +916,7 @@ def output_writer(dset_id, coverage, annotation, utr_seqs, rpkm, extendby,
     (dirpath, basename) = os.path.split(coverage)
 
     # Paths and file objecutr for the two output files (length and one polyA)
-    length_outpath = os.path.join(dirpath, 'utr_'+dset_id)
+    length_outpath = os.path.join(dirpath, 'length_'+dset_id)
     polyA_outpath = os.path.join(dirpath, 'polyA_'+dset_id)
     length_outfile = open(length_outpath, 'wb')
     polyA_outfile = open(polyA_outpath, 'wb')
@@ -1762,7 +1763,6 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs, settings,
         total_nr_reads = sum(1 for line in open(bed_reads, 'rb'))
         p_polyA_bed = polyA
 
-
     # Get the normal reads (in bed format). Get the polyA reads if this option is set.
     # As well get the total number of reads for calculating the RPKM later.
     # p_polyA_bed stands for putative polyA reads
@@ -1793,8 +1793,7 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs, settings,
         utr_polyAs = get_polyA_utr(polyA_bed_path, utrfile_path)
 
     # Cluster the poly(A) reads for each utr_id
-    if polyA:
-        polyA_reads = cluster_polyAs(utr_polyAs, annotation.utr_exons)
+    polyA_reads = cluster_polyAs(utr_polyAs, annotation.utr_exons, polyA)
 
     # Get the RPKM
     print('Obtaining RPKM for {0} ...\n'.format(dset_id))
@@ -2175,8 +2174,11 @@ def main():
     if DEBUGGING:
         settings.DEBUGGING()
 
+    settings.polyA = False # XXX
+
     # The program reads a lot of information from the annotation. The annotation
     # object will hold this information (file-paths and datastructures).
+    print('Reading settings ...\n')
     annotation = Annotation(settings.annotation_path)
 
     # Check if 3UTRfile has been made or provided; if not, get it from annotation
@@ -2224,13 +2226,12 @@ def main():
             ###### WORK IN PROGRESS
             akk = pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs,
                            settings, annotation, DEBUGGING)
-            debug()
 
 
             #result = my_pool.apply_async(pipeline, arguments)
             #results.append(result)
 
-        #debug()
+        debug()
         # Wait for all procsses to finish
         my_pool.close()
         my_pool.join()
@@ -2259,6 +2260,7 @@ def main():
         # Copy output from temp-dir do output-dir
         save_output(final_outp_polyA, output_dir)
         save_output(final_outp_length, output_dir)
+        debug()
 
     ##################################################################
     # NOTE TO SELF: everything starting from there should be in a separate
@@ -2299,8 +2301,6 @@ if __name__ == '__main__':
 # it will be easier to switch to an index file on your own hard-disc, makign
 # loading the index into memory much faster.
 
-# TODO: save all PAS sites! Put them in a list and print them with space
-# separation. As well, save all distances.
 # TODO: go through the entire program and improve documentation.
 # TODO: write external documentation file for the program
 # TODO: generate the figures. one button!

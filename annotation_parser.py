@@ -629,19 +629,15 @@ def remove_intersects_and_extend(unfiltered_path, outfile_path, all_transcripts,
 
     temp_cds_path = os.path.join(os.path.dirname(outfile_path), 'temp_cds_exons.bed')
 
-    if not os.path.isfile(temp_cds_path):
-
-        temp_cds_handle = open(temp_cds_path, 'wb')
-        # Write all CDS exons
-        for ts_id, ts_obj in all_transcripts.iteritems():
-            if ts_obj.cds.exons != []:
-                for cds in ts_obj.cds.exons:
-                    temp_cds_handle.write('\t'.join([cds[0], str(cds[1]),
-                                                     str(cds[2]), cds[3]])+'\n')
-        temp_cds_handle.close()
-
-    else:
-        print('temp_cds_exons.bed file found, not overwriting')
+    temp_cds_handle = open(temp_cds_path, 'wb')
+    # Write all CDS exons
+    for ts_id, ts_obj in all_transcripts.iteritems():
+        if ts_obj.cds.exons != []:
+            for cds in ts_obj.cds.exons:
+                temp_cds_handle.write('\t'.join([cds[0], str(cds[1]),
+                                                 str(cds[2]), cds[3]])+'\n')
+    temp_cds_handle.close()
+    print('temp_cds_exons.bed file found, not overwriting')
 
     # Set of utrs to remove
     remove_these_utrs = set()
