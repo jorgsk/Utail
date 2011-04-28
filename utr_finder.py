@@ -98,19 +98,22 @@ class Settings(object):
         self.bigwig_savedir = bigwig_savedir
         self.bigwig_url = bigwig_url
 
+        # for debugging only
+        self.bed_reads = False
+
     def DEBUGGING(self):
         """
         Modify settings for debugging ONLY!
         """
 
         #self.bed_reads = False
-        self.bed_reads = '/users/rg/jskancke/phdproject/3UTR/the_project/temp_files'\
-                '/reads_K562_Chromatin.bed'
-        #self.chr1 = True
-        self.chr1 = False
+        #self.bed_reads = '/users/rg/jskancke/phdproject/3UTR/the_project/temp_files'\
+                #'/reads_K562_Chromatin.bed'
+        self.chr1 = True
+        #self.chr1 = False
         self.read_limit = False
         #self.read_limit = 10000000
-        #self.read_limit = 1000
+        self.read_limit = 100000
         self.max_cores = 3
         #self.polyA = True
         #self.polyA = False
@@ -319,8 +322,8 @@ class FullLength(object):
     def __init__(self, utr_ID):
         self.utr_ID = utr_ID
 
+        self.PAS_dist = 'NA'
         self.has_PAS = 'NA'
-        self.pas_pos ='NA'
         self.eps_dstream_coverage = 'NA'
         self.eps_ustream_coverage = 'NA'
         self.annot_dstream_coverage = 'NA'
@@ -349,7 +352,7 @@ class FullLength(object):
                     ('annotation_upstream_covrg',
                      frmt(self.annot_ustream_coverage)),
                     ('epsilon_PAS_type', self.has_PAS),
-                    ('epsilon_PAS_distance', frmt(self.pas_pos)),
+                    ('epsilon_PAS_distance', frmt(self.PAS_dist)),
                     ('3utr_RPKM', frmt(this_utr.rpkm))
                      ))
 
@@ -381,7 +384,7 @@ class FullLength(object):
         """
         outfile.write('\t'.join(self.header_order()) + '\n')
 
-    def calculate_output(self, pas_list, this_utr):
+    def calculate_output(self, pas_patterns, this_utr):
         """
         Calculate output variables if *this_utr* is nonempty:
             1) Get cumulative coverage using the *epsilon* parameter
@@ -402,7 +405,7 @@ class FullLength(object):
             self.cumul_plus(this_utr)
 
         # calculate the PAS and pas distance for 'length'
-        self.get_pas(pas_list, this_utr)
+        self.get_pas(pas_patterns, this_utr)
 
 
     def cumul_minus(self, this_utr):
@@ -497,28 +500,37 @@ class FullLength(object):
         self.annot_ustream_coverage = sum(covr_vector[-extendby:])/extendby
         self.annot_dstream_coverage = sum(covr_vector[-2*extendby:-extendby])/extendby
 
-    def get_pas(self, pas_list, this_utr):
+    def get_pas(self, pas_patterns, this_utr):
         """
-        Return any close-by PAS and the distance to that PAS.
+        Return all close-by PAS and their distances.
         """
 
         utr_ID = this_utr.utr_ID
 
-        # rel pos is different depending on strand because we are dealing with a
-        # reverse-complemented sequence that has been extended
         if this_utr.strand == '+':
             rel_pos = this_utr.rel_pos
+            # For negative strand, take the length of the sequence mins rel_pos.
+            # However, since the sequence has been extended, and rel_pos is from
+            # the non-extended sequence, subtract the extension.
         if this_utr.strand == '-':
             rel_pos = len(this_utr.sequence) - this_utr.extendby - this_utr.rel_pos
 
-        rel_seq = this_utr.sequence[rel_pos-40:rel_pos]
-        for pas in pas_list:
-            try:
-                (self.has_PAS, pas_indx) = (pas, rel_seq.index(pas))
-                self.pas_pos = pas_indx - 40
-                break
-            except ValueError:
-                (self.has_PAS, self.pas_pos) = ('NA', 'NA')
+        temp_PAS = []
+        pas_seq = this_utr.sequence[rel_pos-40:rel_pos]
+        for pas_exp in pas_patterns:
+            temp_PAS.append([(m.group(), 40-m.end()) for m in
+                            pas_exp.finditer(pas_seq)])
+
+        if sum(temp_PAS, []) != []:
+            has_PAS = sum(temp_PAS, [])
+            if len(has_PAS) == 1:
+                (has_PAS, PAS_dist) = ([has_PAS[0][0]], [has_PAS[0][1]])
+            else:
+                (has_PAS, PAS_dist) = zip(*has_PAS)
+
+            self.has_PAS = ' '.join([str(pas) for pas in has_PAS])
+            self.PAS_dist = ' '.join([str(dist) for dist in PAS_dist])
+
 
     def write_output(self, outobject, this_utr):
         """
@@ -547,7 +559,7 @@ class PolyAReads(object):
         self.rel_polyRead_sites = 'NA'
         self.read_coverage_change = 'NA'
         self.annotation_support = 'NA'
-        self.PAS_list = 'NA'
+        self.all_PAS = 'NA'
 
     def write_header(self, outfile):
         """
@@ -605,19 +617,25 @@ class PolyAReads(object):
         # The column-order in which the output should be printed
         output_order = self.header_order()
 
-        # The output relies on that the calculations have all been 'in correct
-        # order' in calculated_output()
+        # Write one output line for each polyA cluster
         for indx, site in enumerate(self.polyRead_sites):
             polAnr = indx + 1
-            pAcord = site
+            rel_polyA_site = self.rel_polyRead_sites[indx]
             nr_supp_pA = len(this_utr.polyA_reads[1][indx])
             (covL, covR) = self.read_coverage_change[indx]
             annotpA_dist = self.annotation_support[indx]
-            # One site might have several PAS of several creeds
-            (nearbyPAS, PAS_dist) = self.select_PAS(indx)
+
+            # One site might have several PAS sites
+            (nearbyPAS, PAS_dist) = self.all_PAS[rel_polyA_site]
+
+            # If found, Turn the PAS sites and their dists into strings
+            if (nearbyPAS, PAS_dist) != ('NA', 'NA'):
+                nearbyPAS = ' '.join([str(pas) for pas in nearbyPAS])
+                PAS_dist = ' '.join([str(dist) for dist in PAS_dist])
+
 
             # Get the output dictionary with updated values
-            output_dict = self.header_dict(this_utr, polAnr, pAcord, nr_supp_pA,
+            output_dict = self.header_dict(this_utr, polAnr, site, nr_supp_pA,
                                            covR, covL, annotpA_dist, nearbyPAS,
                                            PAS_dist)
 
@@ -626,24 +644,7 @@ class PolyAReads(object):
             outobject.write('\t'.join(output) + '\n')
 
 
-    def select_PAS(self, index):
-        """
-        Select the best PAS in the list
-        """
-        if self.PAS_list[index] == []:
-            return ('NA', 'NA')
-        # If not, choose the best PAS
-        if len(self.PAS_list[index]) == 1:
-            return self.PAS_list[index][0]
-        else:
-            # Go through pas-list from best to worst. take the first you get
-            paslist = get_pas_list()
-            for pas in paslist:
-                for this_pas, pasdist in self.PAS_list[index]:
-                    if pas == this_pas:
-                        return (this_pas, pasdist)
-
-    def calculate_output(self, pas_list, this_utr):
+    def calculate_output(self, pas_patterns, this_utr):
         """
         Calculate the following output:
             # The relative position of the cluster to non-extended UTR beg
@@ -695,33 +696,38 @@ class PolyAReads(object):
         # Result: a lot of support for the final site; less support for 'within'
         # sites
 
-        #3) If there is a PAS nearby? This is secondary information. Look 40 nt
-        #downstream and look for PAS. The SVM is a better indicator.
-        self.PAS_list = self.get_PAS(pas_list, this_utr)
+        #3) If there is a PAS nearby? all_PAS hold all the PAS and their
+        #distances for all the polyA read clusters in the 3UTR
+        self.all_PAS = self.get_pas(pas_patterns, this_utr)
 
-    def get_PAS(self, pas_list, this_utr):
+    def get_pas(self, pas_patterns, this_utr):
         """
-        Go through the -40 from the polyA read average. Collect any PAS you
-        find.
+        Go through the -40 from the polyA read average. Collect PAS and distance
+        as you find them.
         """
-        pA_read_PAS = []
+
+        all_PAS = {}
         for rpoint in self.rel_polyRead_sites:
-            rel_seq = this_utr.sequence[rpoint-40:rpoint]
-            found = False
-            thispoint = []
-            for pas in pas_list:
-                try:
-                    (PAS_type, pas_indx) = (pas, rel_seq.index(pas))
-                    pas_rel_pos = 40 - pas_indx # AAT-FROMHERE-AAA
-                    thispoint.append((PAS_type, pas_rel_pos))
-                    found = True
-                    # is this biased by finding the first? let's say there are
-                    # two TATAAA -- now you only find the most distant one
-                except ValueError:
-                    (PAS_type, pas_rel_pos) = ('NA', 'NA')
-            pA_read_PAS.append(thispoint)
+            pas_seq = this_utr.sequence[rpoint-40:rpoint]
+            temp_PAS = []
+            for pas_exp in pas_patterns:
+                temp_PAS.append([(m.group(), m.start()) for m in
+                                pas_exp.finditer(pas_seq)])
 
-        return pA_read_PAS
+            if sum(temp_PAS, []) != []:
+                has_PAS = sum(temp_PAS, [])
+                if len(has_PAS) == 1:
+                    (has_PAS, PAS_dist) = ([has_PAS[0][0]], [has_PAS[0][1]])
+                else:
+                    (has_PAS, PAS_dist) = zip(*has_PAS)
+
+                all_PAS[rpoint] = (has_PAS, PAS_dist)
+
+            # In case no PAS are found, return 'NA'
+            else:
+                all_PAS[rpoint] = ('NA', 'NA')
+
+        return all_PAS
 
     def read_annotation_support(self, this_utr):
         """
@@ -879,16 +885,6 @@ def coverage_wrapper(dset_id, filtered_reads, utrfile_path, options):
 
     return out_path
 
-def get_pas_list():
-    """
-    Return list of PAS in order of appearance: when searching through it, you
-    will get the most common one first.
-    """
-    # The known PAS in order of common appearance
-    return ['AATAAA', 'ATTAAA', 'TATAAA', 'AGTAAA', 'AAGAAA', 'AATATA',
-            'AATACA', 'CATAAA', 'GATAAA', 'AATGAA', 'TTTAAA', 'ACTAAA',
-            'AATAGA']
-
 def join_multiexon_utr(multi_exon_utr):
     """
     For multi-exon UTRs. When all exons in an UTR has been accounted for, start
@@ -925,7 +921,12 @@ def output_writer(dset_id, coverage, annotation, utr_seqs, rpkm, extendby,
     polyA_outfile = open(polyA_outpath, 'wb')
 
     # list of PAS hexamers
-    pas_list = get_pas_list()
+    PAS_sites = ['AATAAA', 'ATTAAA', 'TATAAA', 'AGTAAA', 'AAGAAA', 'AATATA',
+                 'AATACA', 'CATAAA', 'GATAAA', 'AATGAA', 'TTTAAA', 'ACTAAA',
+                 'AATAGA']
+
+    # compiled regular expressions
+    pas_patterns = [re.compile(pas) for pas in PAS_sites]
 
     # Create the multi-exon dictionary where unfinshed multi-exon utrs will be
     # stored. When all exons of a multi exons have been added, they will be
@@ -1005,8 +1006,8 @@ def output_writer(dset_id, coverage, annotation, utr_seqs, rpkm, extendby,
             if calculate_and_write:
 
                 # Calculate output values like 99.5% length, cumulative coverage, etc
-                length_output.calculate_output(pas_list, this_utr)
-                pAread_output.calculate_output(pas_list, this_utr)
+                length_output.calculate_output(pas_patterns, this_utr)
+                pAread_output.calculate_output(pas_patterns, this_utr)
 
                 # Save output to files
                 length_output.write_output(length_outfile, this_utr)
@@ -2169,8 +2170,8 @@ def main():
 
     # This option should be set only in case of debugging. It makes sure you
     # just run chromosome 1 and only extract a tiny fraction of the total reads.
-    #DEBUGGING = True
-    DEBUGGING = False
+    DEBUGGING = True
+    #DEBUGGING = False
     if DEBUGGING:
         settings.DEBUGGING()
 
@@ -2221,13 +2222,13 @@ def main():
                          settings, annotation, DEBUGGING)
 
             ###### WORK IN PROGRESS
-            #akk = pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs,
-                           #settings, annotation, DEBUGGING)
-            #debug()
+            akk = pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs,
+                           settings, annotation, DEBUGGING)
+            debug()
 
 
-            result = my_pool.apply_async(pipeline, arguments)
-            results.append(result)
+            #result = my_pool.apply_async(pipeline, arguments)
+            #results.append(result)
 
         #debug()
         # Wait for all procsses to finish
@@ -2298,12 +2299,16 @@ if __name__ == '__main__':
 # it will be easier to switch to an index file on your own hard-disc, makign
 # loading the index into memory much faster.
 
+# TODO: save all PAS sites! Put them in a list and print them with space
+# separation. As well, save all distances.
 # TODO: go through the entire program and improve documentation.
 # TODO: write external documentation file for the program
 # TODO: generate the figures. one button!
 # TODO: the two below should be part of the final analysis script; one button!
 # TODO: verify the polyA reads clusters with polyAdb + other results
 # TODO: verify the 3UTR length with annotation + smth else
+# TODO: make a function that returns all regions (5UTR, intron, CDS)
+# unoverlapping other regions.
 
 # TODO Roderic ideas:
     # 1) Run without annotation: you can create bed-file from sections around the
