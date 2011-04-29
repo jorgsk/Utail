@@ -112,11 +112,11 @@ class Settings(object):
         #self.chr1 = True
         self.chr1 = False
         #self.read_limit = False
-        self.read_limit = 10000
+        self.read_limit = 10000000
         #self.read_limit = 1000000
         self.max_cores = 3
-        #self.polyA = True
-        self.polyA = False
+        self.polyA = True
+        #self.polyA = False
         #self.polyA = '/users/rg/jskancke/phdproject/3UTR/the_project/temp_files'\
                 #'/polyA_reads_K562_Chromatin_processed_mapped.bed'
 
@@ -1316,9 +1316,8 @@ def get_utr_path(settings, beddir):
     utr_bed_path = os.path.join(beddir, utr_filename)
 
     # If the file already exists, don't make it again
-    # XXX
-    #if os.path.isfile(utr_bed_path):
-        #return utr_bed_path
+    if os.path.isfile(utr_bed_path):
+        return utr_bed_path
 
     # If a utrfile is provided, never re-make from annotation, but shape it to
     # your needs? This is a bit unfinished.
@@ -1332,11 +1331,7 @@ def get_utr_path(settings, beddir):
 
         t1 = time.time()
         print('3UTR-bedfile not found. Generating from annotation ...')
-        reload(genome)
-        settings.annotation_path = '/users/rg/jskancke/phdproject/3UTR/gencode5/'\
-                'gencode5_annotation_chr10.gtf'
         genome.get_3utr_bed_all_exons(settings, utr_bed_path)
-        debug()
 
         print('\tTime taken to generate 3UTR-bedfile: {0}\n'\
               .format(time.time()-t1))
@@ -2089,8 +2084,8 @@ def main():
 
     # This option should be set only in case of debugging. It makes sure you
     # just run chromosome 1 and only extract a tiny fraction of the total reads.
-    DEBUGGING = True
-    #DEBUGGING = False
+    #DEBUGGING = True
+    DEBUGGING = False
     if DEBUGGING:
         settings.DEBUGGING()
 
@@ -2143,16 +2138,16 @@ def main():
                          settings, annotation, DEBUGGING)
 
             ###### WORK IN PROGRESS
-            akk = pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs,
-                           settings, annotation, DEBUGGING)
+            #akk = pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs,
+                           #settings, annotation, DEBUGGING)
 
 
-            akks.append(akk)
-            #result = my_pool.apply_async(pipeline, arguments)
-            #results.append(result)
+            #akks.append(akk)
+            result = my_pool.apply_async(pipeline, arguments)
+            results.append(result)
 
         # Wait for all procsses to finish
-        debug()
+        #debug()
         my_pool.close()
         my_pool.join()
 

@@ -156,7 +156,6 @@ class Cluster(object):
         self.coverage_50nt_downstream = str_to_intfloat(coverage_50nt_downstream)
         self.coverage_50nt_upstream = str_to_intfloat(coverage_50nt_upstream)
         self.annotated_polyA_distance = str_to_intfloat(annotated_polyA_distance)
-        self.rpkm = rpkm
 
         # PAS type and distance are space-delimited
         PAS_type = nearby_PAS.split(' ')
@@ -164,6 +163,8 @@ class Cluster(object):
 
         PAS_distance = PAS_distance.split(' ')
         self.PAS_distance = [str_to_intfloat(dist) for dist in PAS_distance]
+
+        self.rpkm = str_to_intfloat(rpkm.strip())
 
     def __repr__(self):
         return self.ID[-8:]+'_'+str(self.cluster_nr)
@@ -229,11 +230,58 @@ class Plotter(object):
         fig = plt.figure()
         ax = fig.add_subplot(111)
         ax.scatter(dset1, dset2)
-        ax.set_ylabel = label1
-        ax.set_xlabel = label2
+        ax.set_xlabel = label1
+        ax.set_ylabel = label2
         ax.set_title(title)
         ax.set_xlim = xlim
         ax.set_ylim = ylim
+        fig.show()
+
+    def triangleplot_scatter(self, datas, titles):
+        """
+        A scatterplot of multiple variables. Plots all the variables in 'datas'
+        aginst each other. To remove redundancy, only the upper triangle of the
+        matrix is shown.
+        """
+        var_nr = len(datas)
+        plots = range(var_nr)
+
+        fig = plt.figure()
+        axis_nr = 0
+
+        max_plot =  var_nr*var_nr
+
+        # Determine which should have xlabel and which should have ylabel
+        xlables = range(max_plot-var_nr+1, max_plot+1)
+        ylables = range(1,max_plot,var_nr)
+
+        remove_indices = []
+        for v in range(2, var_nr+1):
+            mymax = v*v
+            remove_indices += range(v,mymax,var_nr)
+
+        for indx_1 in plots:
+            for indx_2 in plots:
+                axis_nr += 1
+
+                ax = fig.add_subplot(var_nr, var_nr, axis_nr)
+                if axis_nr not in remove_indices:
+                    ax.scatter(datas[indx_2], datas[indx_1])
+
+                # Set only labels where they should be
+                if axis_nr in xlables:
+                    ax.set_xlabel(titles[indx_2], size=15)
+                if axis_nr in ylables:
+                    ax.set_ylabel(titles[indx_1], size=15)
+
+                # Remove axis when not needed
+                if axis_nr not in xlables:
+                    ax.set_xticks([])
+                if axis_nr not in ylables:
+                    ax.set_yticks([])
+
+        fig.show()
+        debug()
 
 
 def get_lengths(settings):
@@ -344,21 +392,27 @@ def polyadenylation_comparison(settings, polyAs):
     p = Plotter()
 
     # What is a good framework to call correlations from?
+    # Is every 
     #
     # 0) Control: what is the correlation between rpkm and # of supporting
     # polyA-reads (first, second, third, etc)? First: scatterplots.
     for dset in polyAs:
-        # Get lists of data for correlation analysis
-        rpkm = dset.get_rpkm()
-        # Create a plotting directory to easily multiplot
-        plot_dict = {}
-        plot_dict['Nr Supporting Reads'] = dset.get_supporting_reads()
-        plot_dict['Downstream Coverage'] = dset.get_coverage_downstream()
-        plot_dict['Upstream Coverage'] = dset.get_coverage_upstream()
-        plot_dict['Distance to annotated TTS'] = dset.get_annotated_distance()
-        plot_dict['RPKM'] = dset.get_rpkm()
 
-        nr_variables = len(plot_dict)
+        # Get array of data for triangle-scatterplot
+        arrays = []
+        arrays.append(dset.get_supporting_reads())
+        arrays.append(dset.get_coverage_downstream())
+        arrays.append(dset.get_coverage_upstream())
+        #arrays.append(dset.get_annotated_distance())
+        arrays.append(dset.get_rpkm())
+
+        # Titles for the above variables
+        #titles = ['Nr Supporting Reads', 'Downstream Coverage',
+                  #'Upstream Coverage', 'Distance to annotated TTS', 'RPKM']
+        titles = ['Nr Supporting Reads', 'Downstream Coverage',
+                  'Upstream Coverage', 'RPKM']
+
+        p.triangleplot_scatter(arrays, titles)
 
 
     def get_annotated_distance(self):
