@@ -5,6 +5,7 @@ Script for displaying and summarizing the results from utr_finder.py.
 import os
 import ConfigParser
 import sys
+import matplotlib.pyplot as plt
 
 ########################################
 # only get the debug function if run from Ipython #
@@ -24,7 +25,73 @@ else:
         pass
 ########################################
 
-class Length(object):
+class PolyaCluster(object):
+    """
+    Class that contains helper functions to work on datasets.
+    """
+
+    def __init__(self, dset_list, dset_name):
+        self.pAclusters = dset_list
+        self.name = dset_name
+
+    def get_supporting_reads(self):
+        return [cluster.nr_support_reads for cluster in self.pAclusters]
+
+    def get_coverage_downstream(self):
+        return [cluster.coverage_50nt_downstream for cluster in self.pAclusters]
+
+    def get_coverage_upstream(self):
+        return [cluster.coverage_50nt_upstream for cluster in self.pAclusters]
+
+    def get_annotated_distance(self):
+        return [cluster.annotated_polyA_distance for cluster in self.pAclusters]
+
+    def get_rpkm(self):
+        return [cluster.rpkm for cluster in self.pAclusters]
+
+
+class LengthDataset(object):
+    """
+    Class that contains helper functions to work on datasets.
+    """
+
+    def __init__(self, dset_list, dset_name):
+        self.utrs = dset_list
+        self.name = dset_name
+
+    def get_eps_length(self, minRPKM, IDs=False):
+        """
+        Return a list of epsilon-lengths for this datsets. Specify a minimum
+        RPKM for the UTR in question. Optionally, specify a list or set of
+        IDs that should be included.
+        """
+
+        eps_lengths = []
+
+        # If a list of utrIDs have been supplied, include only those in that list
+        if IDs:
+            for utr in self.utrs:
+                if (utr.eps_rel_size != 'NA') and (utr.RPKM > minRPKM):
+                    if utr.ID in IDs:
+                        eps_lengths.append(utr.eps_rel_size)
+
+        # Include all utr objects
+        else:
+            for utr in self.utrs:
+                if utr.eps_rel_size != 'NA' and utr.RPKM > minRPKM:
+                    eps_lengths.append(utr.eps_rel_size)
+
+        return eps_lengths
+
+    def expressed_IDs(self):
+        """
+        Return list (or set) of IDs of utrs that are expressed in this dataset. The
+        criterion for 'expressed' is that eps_rel_size is not 'NA'.
+        """
+        return [utr.ID for utr in self.utrs if utr.eps_rel_size != 'NA']
+
+
+class UTR(object):
     """
     For UTR objects from the 'length' output file in the 'output' directory.
     """
@@ -32,7 +99,7 @@ class Length(object):
     def __init__(self, input_line):
 
         # Read all the parameters from line
-        (chrm, beg, end, utr_extended_by, strand, utr_ID, epsilon_coord,
+        (chrm, beg, end, utr_extended_by, strand, ID, epsilon_coord,
         epsilon_rel_size, epsilon_downstream_covrg, epsilon_upstream_covrg,
         annot_downstream_covrg, annot_upstream_covrg, epsilon_PAS_type,
         epsilon_PAS_distance, utr_RPKM) = input_line.split('\t')
@@ -42,7 +109,7 @@ class Length(object):
         self.end = str_to_intfloat(end)
         self.extended_by = str_to_intfloat(utr_extended_by)
         self.strand = strand
-        self.utr_ID = utr_ID
+        self.ID = ID
         self.eps_coord = str_to_intfloat(epsilon_coord)
         self.eps_rel_size = str_to_intfloat(epsilon_rel_size)
         self.eps_downstream_covrg = str_to_intfloat(epsilon_downstream_covrg)
@@ -60,28 +127,28 @@ class Length(object):
         self.RPKM = str_to_intfloat(utr_RPKM.strip())
 
     def __repr__(self):
-        return self.utr_ID[-8:]
+        return self.ID[-8:]
 
     def __str__(self):
         return "\nChrm\t{0}\nBeg\t{1}\nEnd\t{2}\nStrand\t{3}\n"\
                 .format(self.chrm, self.beg, self.end, self.strand)
 
-class PolyA(object):
+class Cluster(object):
     """
-    For polyA objects from the 'polyA' output file in the 'output' directory
+    For polyA cluster objects from the 'polyA' output file in the 'output' directory
     """
 
     def __init__(self, input_line):
         #
-        (chrm, beg, end, utr_ID, polyA_number, strand, polyA_coordinate,
+        (chrm, beg, end, ID, polyA_number, strand, polyA_coordinate,
          number_supporting_reads, coverage_50nt_downstream,
          coverage_50nt_upstream, annotated_polyA_distance, nearby_PAS,
-         PAS_distance) = input_line.split('\t')
+         PAS_distance, rpkm) = input_line.split('\t')
 
         self.chrm = chrm
         self.beg = str_to_intfloat(beg)
         self.end = str_to_intfloat(end)
-        self.utr_ID = utr_ID
+        self.ID = ID
         self.cluster_nr = str_to_intfloat(polyA_number)
         self.strand = strand
         self.polyA_coordinate = str_to_intfloat(polyA_coordinate)
@@ -89,6 +156,7 @@ class PolyA(object):
         self.coverage_50nt_downstream = str_to_intfloat(coverage_50nt_downstream)
         self.coverage_50nt_upstream = str_to_intfloat(coverage_50nt_upstream)
         self.annotated_polyA_distance = str_to_intfloat(annotated_polyA_distance)
+        self.rpkm = rpkm
 
         # PAS type and distance are space-delimited
         PAS_type = nearby_PAS.split(' ')
@@ -98,7 +166,7 @@ class PolyA(object):
         self.PAS_distance = [str_to_intfloat(dist) for dist in PAS_distance]
 
     def __repr__(self):
-        return self.utr_ID[-8:]
+        return self.ID[-8:]+'_'+str(self.cluster_nr)
 
     def __str__(self):
         return "\nChrm\t{0}\nBeg\t{1}\nEnd\t{2}\nStrand\t{3}\n#\t{4}\n"\
@@ -135,47 +203,79 @@ class Settings(object):
         return dict((d, os.path.join(self.here, self.outputdir,'cumul_'+d+'.stat'))
                     for d in self.datasets)
 
+class Plotter(object):
+    """
+    Collection of plot-methods
+    """
+
+    def boxplot(self, arrays, dsets, ylim):
+        """
+        A basic box plot
+        """
+
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+        ax.boxplot(arrays)
+        ax.set_xticklabels(dsets)
+        #ax.set_ylabel('Some label', size=20)
+        #ax.set_title('Some title')
+        ax.set_ylim(*ylim)
+        fig.show()
+
+    def scatterplot(self, dset1, dset2, label1, label2, title, xlim, ylim):
+        """
+        A basic scatter plot
+        """
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+        ax.scatter(dset1, dset2)
+        ax.set_ylabel = label1
+        ax.set_xlabel = label2
+        ax.set_title(title)
+        ax.set_xlim = xlim
+        ax.set_ylim = ylim
+
+
 def get_lengths(settings):
     """
-    Return a dictionary of class
+    Return a list of LengthDataset instances. Each LengthDataset instance is
+    instanciated with a list of UTR objects and the name of the datset.
     """
     length_files = settings.length_files()
 
     # Check if all length files exist or that you have access
     [verify_access(f) for f in length_files.values()]
 
-    l_dict = {}
-    for dset, f in length_files.items():
+    lengths = []
+    for dset_name, f in length_files.items():
         file_obj = open(f, 'rb')
         header = file_obj.next()
-        # For each dset, make a dictionary:[UTR_ID]-> Length object
-        # line.split()[5] is the utr_id column
-        l_dict[dset] = dict((line.split()[5], Length(line)) for line in file_obj)
+        utr_list = [UTR(line) for line in file_obj]
 
-    return l_dict
+        lengths.append(LengthDataset(utr_list, dset_name))
+
+    return lengths
 
 
-def get_polyAs(settings):
+def get_pAclusters(settings):
     """
-    Return a dictionary of class
+    Return a list of polyA cluster instances. Each polyA cluster instance is
+    instanciated with a list of Cluster objects.
     """
     length_files = settings.polyA_files()
 
     # Check if all length files exist or that you have access
     [verify_access(f) for f in length_files.values()]
 
-    l_dict = {}
-    for dset, f in length_files.items():
+    pAclusters = []
+    for dset_name, f in length_files.items():
         file_obj = open(f, 'rb')
         header = file_obj.next()
-        l_dict[dset] = {}
-        # For each dset, make a dictionary:[UTR_ID]-> Length object
-        # line.split()[5] is the utr_id column
-        for line in file_obj:
-            identifier = '_'.join(line.split()[3:5])
-            l_dict[dset][identifier] = PolyA(line)
+        cluster_list = [Cluster(line) for line in file_obj]
 
-    return l_dict
+        pAclusters.append(PolyaCluster(cluster_list, dset_name))
+
+    return pAclusters
 
 
 def verify_access(f):
@@ -207,22 +307,69 @@ def str_to_intfloat(element):
 
     return element
 
-def utr_length_comparison(settings):
+def utr_length_comparison(settings, lengths):
     """
-    * compare 3UTR length in general
-    * compare 3UTR length UTR-to-UTR
+    * compare 3UTR length in general (with boxplot)
+    * compare 3UTR length UTR-to-UTR (with boxplot)
     """
+    # Get the plotter object
+    p = Plotter()
+
     # 1) Box plot of 3UTR lengths in all utrs
+    # get dset names and an array of arrays [[], [],...,[]], of lengths
+    names = [dset.name for dset in lengths]
+    eps_lengths = [dset.get_eps_length(minRPKM=2) for dset in lengths]
 
-    # 2) Box plot of 
+    ylim = (0, 1.2)
+    #p.boxplot(eps_lengths, names, ylim)
 
-    pass
+    # 2) Box plot of 3UTR lengths for utrs expressed in all datasets.
+    # Get the IDs of utrs that are expressed in each datset
+    utrID_sets = [set(dset.expressed_IDs()) for dset in lengths] # list of sets
 
-def polyadenylation_comparison(settings):
+    # Do the intersection of these sets to get only the ones that are expressed
+    # in all datsets
+    common = set.intersection(*utrID_sets)
+
+    # Get the lengths of only the commonly expressed utrs:
+    eps_lengths_c = [dset.get_eps_length(minRPKM=2, IDs=common) for dset in lengths]
+    p.boxplot(eps_lengths_c, names, ylim)
+
+def polyadenylation_comparison(settings, polyAs):
     """
     * compare 3UTR polyadenylation in general
     * compare 3UTR polyadenylation UTR-to-UTR
     """
+    # How to compare polyAdenylation between compartments?
+    p = Plotter()
+
+    # What is a good framework to call correlations from?
+    #
+    # 0) Control: what is the correlation between rpkm and # of supporting
+    # polyA-reads (first, second, third, etc)? First: scatterplots.
+    for dset in polyAs:
+        # Get lists of data for correlation analysis
+        rpkm = dset.get_rpkm()
+        # Create a plotting directory to easily multiplot
+        plot_dict = {}
+        plot_dict['Nr Supporting Reads'] = dset.get_supporting_reads()
+        plot_dict['Downstream Coverage'] = dset.get_coverage_downstream()
+        plot_dict['Upstream Coverage'] = dset.get_coverage_upstream()
+        plot_dict['Distance to annotated TTS'] = dset.get_annotated_distance()
+        plot_dict['RPKM'] = dset.get_rpkm()
+
+        nr_variables = len(plot_dict)
+
+
+    def get_annotated_distance(self):
+        return [cluster.annotated_polyA_distance for cluster in self.pAclusters]
+    debug()
+    # 0) Control: what is the correlation between # supporting reads; change in
+    # coverage; PAS-type; PAS-distance; rpkm; and total reads for experiment?
+    #
+    # 1) Usage of multiple polyadenylation sites in each UTR
+    # 2) When multiple sites, what is the read frequency of the sites?
+    # 3) Compare utr-by-utr: is there a difference in polyA usage?
 
     pass
 
@@ -231,9 +378,9 @@ def reads(settings):
     * number of reads for each compartment
     * number of putative poly(A) reads for each compartment
     * ratio of the two above
-    * number of putative poly(A) reads that map to clusters
-    * number of clusters with different sizes
-    * number of clusters in 'wrong' direction, as a function of the numbers of
+    * number of putative poly(A) reads that map to pAclusters
+    * number of pAclusters with different sizes
+    * number of pAclusters in 'wrong' direction, as a function of the numbers of
     * poly(A) reads in that cluster
     """
 
@@ -270,10 +417,10 @@ def data_annotation_correspondence(settings):
 
 def rouge_polyA_sites(settings):
     """
-    * polyA clusters in the different annotation regions
+    * polyA pAclusters in the different annotation regions
     * comparison with polyA_db and recent publications.
     * "extended 3UTRs": non-overlapping 3'end downstream regions with read
-        coverage and poly(A) clusters
+        coverage and poly(A) pAclusters
     * novel polyA sites in annotated 3UTRs: compared to polyA_db and
         publications
     * presence of PAS and PAS type for novel sites
@@ -285,7 +432,7 @@ def classic_polyA_stats(settings):
     """
     * distances from polyA cluster to PAS site
     * PAS variant distribution
-    * variance within polyA clusters
+    * variance within polyA pAclusters
     * degree of usage of early and late polyA sites
     """
 
@@ -310,13 +457,13 @@ def main():
     settings = Settings(os.path.join(here, 'UTR_SETTINGS'), savedir, outputdir, here)
 
     # Get the length-datasets
-    length_dict = get_lengths(settings)
-    # Get the polyA-datasets
-    polyA_dict = get_polyAs(settings)
+    lengths = get_lengths(settings)
+    # Get the polyA-datasets (polyA cluster datasets)
+    polyAs = get_pAclusters(settings)
 
-    utr_length_comparison(settings, length_dict)
+    #utr_length_comparison(settings, lengths)
 
-    polyadenylation_comparison(settings)
+    polyadenylation_comparison(settings, polyAs)
 
     reads(settings)
 

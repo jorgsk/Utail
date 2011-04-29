@@ -68,7 +68,6 @@ from subprocess import Popen
 from subprocess import PIPE
 import time
 import math
-import matplotlib.pyplot as plt
 
 # Your own imports
 import annotation_parser as genome
@@ -110,14 +109,14 @@ class Settings(object):
         #self.bed_reads = False
         #self.bed_reads = '/users/rg/jskancke/phdproject/3UTR/the_project/temp_files'\
                 #'/reads_K562_Chromatin.bed'
-        self.chr1 = True
-        #self.chr1 = False
-        self.read_limit = False
-        self.read_limit = 20000000
+        #self.chr1 = True
+        self.chr1 = False
+        #self.read_limit = False
+        self.read_limit = 10000
         #self.read_limit = 1000000
         self.max_cores = 3
-        self.polyA = True
-        #self.polyA = False
+        #self.polyA = True
+        self.polyA = False
         #self.polyA = '/users/rg/jskancke/phdproject/3UTR/the_project/temp_files'\
                 #'/polyA_reads_K562_Chromatin_processed_mapped.bed'
 
@@ -590,6 +589,7 @@ class PolyAReads(object):
                     ('annotated_polyA_distance', frmt(annotpA_dist)),
                     ('nearby_PAS', nearbyPAS),
                     ('PAS_distance', frmt(PAS_dist)),
+                    ('3utr_RPKM', frmt(this_utr.rpkm))
                     ))
 
     def header_order(self):
@@ -610,6 +610,7 @@ class PolyAReads(object):
         annotated_polyA_distance
         nearby_PAS
         PAS_distance
+        3utr_RPKM
         """.split()
 
     def write_output(self, outobject, this_utr):
@@ -1315,8 +1316,9 @@ def get_utr_path(settings, beddir):
     utr_bed_path = os.path.join(beddir, utr_filename)
 
     # If the file already exists, don't make it again
-    if os.path.isfile(utr_bed_path):
-        return utr_bed_path
+    # XXX
+    #if os.path.isfile(utr_bed_path):
+        #return utr_bed_path
 
     # If a utrfile is provided, never re-make from annotation, but shape it to
     # your needs? This is a bit unfinished.
@@ -1330,8 +1332,11 @@ def get_utr_path(settings, beddir):
 
         t1 = time.time()
         print('3UTR-bedfile not found. Generating from annotation ...')
-        #reload(genome)
+        reload(genome)
+        settings.annotation_path = '/users/rg/jskancke/phdproject/3UTR/gencode5/'\
+                'gencode5_annotation_chr10.gtf'
         genome.get_3utr_bed_all_exons(settings, utr_bed_path)
+        debug()
 
         print('\tTime taken to generate 3UTR-bedfile: {0}\n'\
               .format(time.time()-t1))
@@ -1844,9 +1849,6 @@ def output_analyzer(final_output, utrs, utrs_path):
                         #'GM12878' in key)
     filtered_output = final_output
 
-    # Do basic statistics and make a box-plot
-    statistics_boxplot(filtered_output, utrs, utrs_path)
-
 def rel_len_variation(measure_dict, dset_indx):
     # Output: histograms of differences
 
@@ -1866,101 +1868,6 @@ def rel_len_variation(measure_dict, dset_indx):
 
     pprint(without_zeros)
     pprint(len(strict_rel_len))
-
-
-def statistics_boxplot(filtered_output, utrs, utrs_path):
-
-    # Make a relationship between dset and index for future use
-    dset_indx = dict((dset, indx) for indx, dset in enumerate(filtered_output))
-    exp_nr = len(filtered_output)
-
-    # Prepare a dictionary of iutr_id with relative lenghts of compartments
-    cuml_99_dict = dict((utr_id, [0 for val in range(exp_nr)]) for utr_id in utrs)
-
-    # Get the ids of the transcripts whose extensions do not overlap exons in
-    # the gencode annotation. (it's a set() by default)
-    exons = '/users/rg/jskancke/phdproject/3UTR/gencode5/just_exons/just_exons.bed'
-
-    rpkm_threshold = 1
-    for dset, path in filtered_output.items():
-        for line in open(path, 'rb'):
-            # Skip lines that don't start with chr (it's fast enough)
-            if line[:3] != 'chr':
-                continue
-            (chrm, beg, end, utr_id, strand, cuml99, int_mean_99, ext_mean_99,
-             int_mean_annot, ext_mean_annot, PAS_type,\
-             pas_distance, rpkm) = line.split()
-            rpkm = float(rpkm)
-            # Get 3utrs with rpkm above a set threshold
-            if rpkm > rpkm_threshold:
-                cuml_99_dict[utr_id][dset_indx[dset]] = float(cuml99)
-
-    # Get how many of the transcripts are 0 or > 0.999 in rel_len.
-    # count 0, > 99
-    one_or_zero = [[0,0], [0,0], [0,0]]
-    zeros = [0,0,0,0]
-
-    for utr_id, rel_values in cuml_99_dict.items():
-        if rel_values.count(0) == 3:
-            zeros[3] += 1
-        if rel_values.count(0) == 2:
-            zeros[2] += 1
-        if rel_values.count(0) == 1:
-            zeros[1] += 1
-        if rel_values.count(0) == 0:
-            zeros[0] += 1
-
-        for ind, val in enumerate(rel_values):
-            if val == 0:
-                one_or_zero[ind][0] += 1
-            if val > 0.95:
-                one_or_zero[ind][1] += 1
-
-    print('One or zero: {0}'.format(one_or_zero))
-    print('Zeros: {0}').format(zeros)
-
-    # Find these things [0.3, 0.5, 0.8] as opposed to [0.3, 0.3, 0.3] and [0.8,
-    # 0.8, 0.8]
-    print("Total transcripts: {0}".format(len(utrs)))
-
-    #rel_len_variation(cuml_99_dict, dset_indx)
-
-    # Do some statistics and boxpolot for your measure of choice
-    measure_dict = cuml_99_dict
-    # Boxplot needs[[3,4,....,4], [4,3,...3]]
-    # Average normalized_len for each condition
-    for_boxplot = [[] for val in range(exp_nr)]
-    avr_len = dict((dset, 0) for dset in dset_indx)
-
-    # For boxplot, get only the utrs with expression in all tissues
-    for dset, dset_ind in dset_indx.items():
-        for_boxplot[dset_ind] = [val[dset_ind] for (key, val) in
-                                 measure_dict.items() if 0 not in val]
-
-        dset_vals = [val[dset_ind] for (key, val) in measure_dict.items()]
-        avr_len[dset] = (np.mean(dset_vals), np.std(dset_vals))
-
-    print('For boxplot: {0}'.format(len(for_boxplot[0])))
-
-    # Split the utrs into size categories, since you are doing relative size
-    # increases.
-    ranges = [(0,100), (101, 500), (501, 1000), (1001, 1500), (1501, 2000),
-              (2501, 3000), (3001, 3500), (3501, 4000), (4001, 20000)]
-
-    # Make boxplot
-    boxplot(for_boxplot, dset_indx.keys())
-
-
-def boxplot(arrays, dsets):
-
-    fig = plt.figure()
-    ax = fig.add_subplot(111)
-    ax.boxplot(arrays)
-    ax.set_xticklabels(dsets)
-    ax.set_ylabel('Relative 3UTR length', size=20)
-    ax.set_title(dsets[0].split('_')[0])
-    ax.set_ylim(0,1.2)
-    fig.show()
 
 
 def make_utr_plots(final_output, utrs, coverage):
@@ -2182,8 +2089,8 @@ def main():
 
     # This option should be set only in case of debugging. It makes sure you
     # just run chromosome 1 and only extract a tiny fraction of the total reads.
-    #DEBUGGING = True
-    DEBUGGING = False
+    DEBUGGING = True
+    #DEBUGGING = False
     if DEBUGGING:
         settings.DEBUGGING()
 
@@ -2228,6 +2135,7 @@ def main():
         t1 = time.time()
 
         # dset_id and dset_reads are as given in UTR_SETTINGS
+        akks = []
         for dset_id, dset_reads in settings.datasets.items():
 
             # The arguments needed for the pipeline
@@ -2235,14 +2143,16 @@ def main():
                          settings, annotation, DEBUGGING)
 
             ###### WORK IN PROGRESS
-            #akk = pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs,
-                           #settings, annotation, DEBUGGING)
+            akk = pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs,
+                           settings, annotation, DEBUGGING)
 
 
-            result = my_pool.apply_async(pipeline, arguments)
-            results.append(result)
+            akks.append(akk)
+            #result = my_pool.apply_async(pipeline, arguments)
+            #results.append(result)
 
         # Wait for all procsses to finish
+        debug()
         my_pool.close()
         my_pool.join()
 

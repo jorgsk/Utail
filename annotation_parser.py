@@ -159,6 +159,13 @@ class Transcript(object):
 
             return zip(chrm, useful[1::2], useful[2::2], strnd)
 
+    def __repr__(self):
+        return self.ts_id
+
+    def __str__(self):
+        return "\nChrm\t{0}\nBeg\t{1}\nEnd\t{2}\nStrand\t{3}\n"\
+                .format(self.chrm, self.beg, self.end, self.strand)
+
 
 def make_transcripts(annotation):
     """Loop through a (GENCODE) annotation file and get the exon fields.
@@ -550,6 +557,19 @@ def get_3utr_bed_all_exons(settings, outfile_path):
     Make sure that the last exon in each UTR is extended by the value set in
     settings.extendby"""
 
+    # XXX THERE IS A BUG IN THE OUTPUT. IN CHRM10, THERE IS A UTRID THAT IS
+    # PRINTED TWICE WITH THE SAME  GREP:
+    # chr10	134137540	134137740	ENSG00000165752_1_1_EXTENDME	1	-
+    # chr10	134143784	134143984	ENSG00000165752_2_1_EXTENDME	1	-
+    # chr10	134020995	134021516	ENSG00000165752_1_1_EXTENDME	1	-
+    # chr10	134020995	134021655	ENSG00000165752_2_1_EXTENDME	8	-
+    # chr10	134022537	134022605	ENSG00000165752_2_2	8	-
+
+    # 1) this gene_ID is not counted correctly: it should have a _3_1_EXTENDME
+    # for one starting in 134020995. The fourth, multiexon one, should have a
+    # _4_1_EXTENDME etc.
+
+
     raw_path = os.path.splitext(outfile_path)[0] + '_raw.bed'
     raw_handle = open(raw_path, 'wb')
     extendby = settings.extendby
@@ -565,6 +585,7 @@ def get_3utr_bed_all_exons(settings, outfile_path):
     # 1) single out the transcripts that belong to genes with only 1-exon
     # 3UTRS. Give them the old clustering treatment.
     one_exon_transcripts = {}
+
     # 2) For the rest, make a new clustering method
     multi_exon_transcripts = {}
 
@@ -582,13 +603,16 @@ def get_3utr_bed_all_exons(settings, outfile_path):
                     continue
 
                 keeper = True
-                # see if all other transcripts of this gene also has only one
+                # see if all other transcripts of this gene also have only one
                 # exon utrs (as long as the utr is long enough)
                 for other_id in genes[ts_obj.gene_id]:
                     other_obj = transcripts[other_id]
 
                     if other_obj.three_utr.exons != []:
-                        if ts_obj.three_utr.length > settings.min_utrlen:
+
+                        # if other object is long enough to be allowed to
+                        # intervene
+                        if other_obj.three_utr.length > settings.min_utrlen:
                             if len(other_obj.three_utr.exons) != 1:
                                 keeper = False
 
@@ -608,6 +632,9 @@ def get_3utr_bed_all_exons(settings, outfile_path):
 
 
     # Cluster and write single-exon utrs
+
+    # DEBUGGING I think it is in one_exon_transcripts.
+
     one_exon_cluster_write(one_exon_transcripts, all_transcripts,  genes,
                            extendby, raw_handle)
 
@@ -637,7 +664,6 @@ def remove_intersects_and_extend(unfiltered_path, outfile_path, all_transcripts,
                 temp_cds_handle.write('\t'.join([cds[0], str(cds[1]),
                                                  str(cds[2]), cds[3]])+'\n')
     temp_cds_handle.close()
-    print('temp_cds_exons.bed file found, not overwriting')
 
     # Set of utrs to remove
     remove_these_utrs = set()
@@ -1004,9 +1030,9 @@ def get_seqs(utr_dict, hgfasta):
 def main():
     t1 = time.time()
 
-    chr1 = True
+    #chr1 = True
 
-    #chr1 = False
+    chr1 = False
 
     annotation = '/users/rg/jskancke/phdproject/3UTR/'\
             'gencode5/gencode5_annotation.gtf'
@@ -1014,6 +1040,7 @@ def main():
         annotation = '/users/rg/jskancke/phdproject/3UTR/'\
                 'gencode5/gencode5_annotation_chr1.gtf'
 
+    algo = get_3utr_bed_all_exons(annotation, 'somewhere')
     ### TESTING START
 
     #(transcripts, genes) = make_transcripts(annotation)
