@@ -394,8 +394,8 @@ def polyadenylation_comparison(settings, polyAs):
     # What is a good framework to call correlations from?
     # Is every 
     #
-    # 0) Control: what is the correlation between rpkm and # of supporting
-    # polyA-reads (first, second, third, etc)? First: scatterplots.
+    # 0) Control: what is the correlation between # supporting reads; change in
+    # coverage; PAS-type; PAS-distance; and rpkm?
     for dset in polyAs:
 
         # Get array of data for triangle-scatterplot
@@ -417,10 +417,9 @@ def polyadenylation_comparison(settings, polyAs):
 
     def get_annotated_distance(self):
         return [cluster.annotated_polyA_distance for cluster in self.pAclusters]
-    debug()
-    # 0) Control: what is the correlation between # supporting reads; change in
-    # coverage; PAS-type; PAS-distance; rpkm; and total reads for experiment?
-    #
+
+    # TODO you seem to be here: make more plots! They make the world a better
+    # place.
     # 1) Usage of multiple polyadenylation sites in each UTR
     # 2) When multiple sites, what is the read frequency of the sites?
     # 3) Compare utr-by-utr: is there a difference in polyA usage?
