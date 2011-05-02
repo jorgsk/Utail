@@ -557,19 +557,6 @@ def get_3utr_bed_all_exons(settings, outfile_path):
     Make sure that the last exon in each UTR is extended by the value set in
     settings.extendby"""
 
-    # XXX THERE IS A BUG IN THE OUTPUT. IN CHRM10, THERE IS A UTRID THAT IS
-    # PRINTED TWICE WITH THE SAME  GREP:
-    # chr10	134137540	134137740	ENSG00000165752_1_1_EXTENDME	1	-
-    # chr10	134143784	134143984	ENSG00000165752_2_1_EXTENDME	1	-
-    # chr10	134020995	134021516	ENSG00000165752_1_1_EXTENDME	1	-
-    # chr10	134020995	134021655	ENSG00000165752_2_1_EXTENDME	8	-
-    # chr10	134022537	134022605	ENSG00000165752_2_2	8	-
-
-    # 1) this gene_ID is not counted correctly: it should have a _3_1_EXTENDME
-    # for one starting in 134020995. The fourth, multiexon one, should have a
-    # _4_1_EXTENDME etc.
-
-
     raw_path = os.path.splitext(outfile_path)[0] + '_raw.bed'
     raw_handle = open(raw_path, 'wb')
     extendby = settings.extendby
@@ -632,9 +619,6 @@ def get_3utr_bed_all_exons(settings, outfile_path):
 
 
     # Cluster and write single-exon utrs
-
-    # DEBUGGING I think it is in one_exon_transcripts.
-
     one_exon_cluster_write(one_exon_transcripts, all_transcripts,  genes,
                            extendby, raw_handle)
 

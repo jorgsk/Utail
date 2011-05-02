@@ -106,19 +106,19 @@ class Settings(object):
         Modify settings for debugging ONLY!
         """
 
-        #self.bed_reads = False
-        #self.bed_reads = '/users/rg/jskancke/phdproject/3UTR/the_project/temp_files'\
-                #'/reads_K562_Chromatin.bed'
         #self.chr1 = True
         self.chr1 = False
-        #self.read_limit = False
-        self.read_limit = 10000000
+        self.read_limit = False
+        #self.read_limit = 10000000
         #self.read_limit = 1000000
         self.max_cores = 3
-        self.polyA = True
+        #self.polyA = True
         #self.polyA = False
-        #self.polyA = '/users/rg/jskancke/phdproject/3UTR/the_project/temp_files'\
-                #'/polyA_reads_K562_Chromatin_processed_mapped.bed'
+        self.polyA = '/users/rg/jskancke/phdproject/3UTR/the_project/temp_files'\
+                '/polyA_reads_K562_Cytoplasm_processed_mapped.bed'
+        #self.bed_reads = False
+        self.bed_reads = '/users/rg/jskancke/phdproject/3UTR/the_project/temp_files'\
+                '/reads_K562_Cytoplasm.bed'
 
 class Annotation(object):
     """
@@ -175,6 +175,12 @@ class UTR(object):
     that has been calculated in the pipeline. Attributes are either
     variables that are written to output files, or variables that assist in
     calculating the output variables.
+
+    The UTR object is created from individual exon objects. Often, there is only
+    one exon for the UTR object. In these cases, the beg_ext/non_ext variables
+    are clear. However, when a UTR object consists of two or more exons, the
+    internal exons have not been extended, so for them the beg/end_ext and
+    beg/end_nonext attributes have the same value.
     """
 
     def __init__(self, chrm, beg, end, strand, val, utr_ID, rpkm, extendby,
@@ -182,8 +188,8 @@ class UTR(object):
 
         # variables you have to initialize
         self.chrm = chrm
-        # Note that beg and end might be subject to extensions! See the
-        # nonext versions further down
+
+        # ASSUME that the exon has been extended. This might not be the case. 
         self.beg_ext = int(beg)
         self.end_ext = int(end)
         self.val = int(val)
@@ -196,42 +202,74 @@ class UTR(object):
         self.a_polyA_sites = [int(site[1]) for site in a_polyA_sites] # annotated sites
         self.rel_pos = 'NA' # it might not be updated
 
+        # The length of the extended UTR
+        self.length_ext = self.end_ext - self.beg_ext
+
         # Assume not a multi exon
         if self.val == 1:
             self.multi_exon = False
         elif self.val > 1:
             self.multi_exon = True
-        else:
-            print('Exon number must be an integer larger than 1')
-            sys.exit()
 
-        self.exon_nr =int(utr_ID[-1])
+        # The exon_nr for this exon in the utr.
+        self.this_exnr = int(utr_ID.split('_')[-1])
 
-        # If multi exon, update values
+        # Total number of exons in UTR
         self.tot_exnr = self.val
 
         # the coverage vectors
         self.covr_vector = [int(first_covr)]
         self.cumul_covr = [int(first_covr)]
 
-        # Get the non-extended begs and ends as well!
+        # If this exon has been extended, get the non-extended begs and ends. If
+        # the exon has not been extended, set them as the same value as the
+        # beg.ext. This is confusing, but I'm too tired to sort it out.
+
+        # Start off by assuming no extensions: set non_extended to the same as
+        # extended
+        self.end_nonext = self.end_ext
+        self.beg_nonext = self.beg_ext
+        self.length_nonext = self.length_ext
+
+        # TODO you are in the process of making sure that the non_extended is
+        # only performed on exons that have in fact been extended.
+        # If extended, update these values
         if extendby > 0:
-            if strand == '+':
+
+            # This UTR has only one exon
+            one_exon = (self.this_exnr == self.tot_exnr == 1)
+
+            # This is the 3' exon on the + strand
+            fin_ex_plus = (strand == '+') and (self.this_exnr == self.tot_exnr > 1)
+
+            # This is the 3' exon on the - strand
+            fin_ex_min = (strand == '-') and (self.tot_exnr > 1) and (self.this_exnr == 1)
+
+            if one_exon:
+                if strand == '+':
+                    self.end_nonext = self.end_ext - extendby
+                if strand == '-':
+                    self.beg_nonext = self.beg_ext + extendby
+
+            if fin_ex_plus:
                 self.end_nonext = self.end_ext - extendby
-                self.beg_nonext = self.beg_ext
-            if strand == '-':
-                self.end_nonext = self.end_ext
+
+            if fin_ex_min:
                 self.beg_nonext = self.beg_ext + extendby
 
-        # Get the UNEXTENDED length
-        self.length_ext = self.end_ext - self.beg_ext
-        self.length_nonext = self.end_nonext - self.beg_nonext
+            # if either of the cases were encountered, update the unextended
+            # length
+            if one_exon or fin_ex_plus or fin_ex_min:
+                self.length_nonext = self.end_nonext - self.beg_nonext
+                if self.length_nonext <= 0:
+                    debug()
 
         # if multi exon, make a beg-end list (extended and nonext) for the
         # utrs
         if self.multi_exon:
             self.begends_ext = [(self.beg_ext, self.end_ext)]
-            self.begends_nonext = [(self.beg_nonext, self.end_nonext)]
+            if extendby > 0:
+                self.begends_nonext = [(self.beg_nonext, self.end_nonext)]
 
     def is_empty(self):
         """
@@ -761,7 +799,7 @@ class PolyAReads(object):
 
 def zcat_wrapper(bed_reads, read_limit, out_path, polyA, polyA_path):
     """
-    Wrapper around zcat. Called on gem-mapped reads. Write uniquely mapped
+    Wrapper around zcat. Call on gem-mapped reads. Write uniquely mapped
     reads (up to 2 mismatches) to .bed file.
 
     If polyA parameter was passed as True, write unmapped reads with leading
@@ -1426,7 +1464,9 @@ def get_rpkm(reads, utrfile_path, total_reads, utrs, extendby, dset_id):
     # Length of UTR
     # # of reads landing in the UTR.
     rpkm = {}
-    # If the bed-file has been extended, we need to unextend it.
+    # If the bed-file has been extended, we need to unextend it. HOWEVER, we
+    # should ONLY un-extend the 3' exons of the UTR. Internal exons have not
+    # been extended and should not be touched.
     if extendby:
         temp_bed_path = os.path.join(os.path.dirname(utrfile_path), dset_id+
                                      '_temp_bed')
@@ -1436,26 +1476,25 @@ def get_rpkm(reads, utrfile_path, total_reads, utrs, extendby, dset_id):
             (chrm, beg, end, utr_id, val, strand) = line.split()
 
             # Reverse the extensions so you get correct RPKM!
-            # Only extend those that were extended!
-            # consider exNr_TotExNr
-            # The 1_4 should be unextended for the - strand
-            # the 4_4 should be unextended for the + strand
-            # the 1_1 should be unextended for both strands
+            # Only extend those that were extended in the first place!
+            #ENSG00000078369_1_2	2	-
+            # This means UTR number 1 from this gene, exon number 2 from this
+            # UTR, and there are 2 utrs in total.
 
-            ex_nr = int(utr_id.split('_')[-1])
+            this_ex_nr = int(utr_id.split('_')[-1])
             tot_exnr = int(val)
 
-            if ex_nr == tot_exnr == 1:
+            if this_ex_nr == tot_exnr == 1:
                 if strand == '+':
                     end = int(end) - extendby
                 if strand == '-':
                     beg = int(beg) + extendby
 
-            if ex_nr == tot_exnr > 1:
+            if this_ex_nr == tot_exnr > 1:
                 if strand == '+':
                     end = int(end) - extendby
 
-            if (tot_exnr > 1) and (ex_nr == 1):
+            if (tot_exnr > 1) and (this_ex_nr == 1):
                 if strand == '-':
                     beg = int(beg) + extendby
 
@@ -1647,7 +1686,7 @@ def concat_bedfiles(dset_reads, out_path, polyA, polyA_path):
 def get_polyA_utr(polyAbed, utrfile_path):
     """
     Call intersectBed on the poly(A) reads and on the 3UTR file. Return
-    the surviving poly(A) reads in a dictionary, where each 3UTR (key) is points
+    the surviving poly(A) reads in a dictionary, where each 3UTR (key) points
     to all its polyA sites.
     """
     # A dictionary to hold the utr_id -> poly(A)-reads relation
@@ -1791,7 +1830,7 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs, settings,
     # If polyA is True, trim the extracte polyA reads, remap them, and save the
     # uniquely mappign ones to bed format
     elif polyA == True:
-        # Do the polyA pipeline: remove low-quality reads, remap, and -> .bed-format:
+        # PolyA pipeline: remove low-quality reads, remap, and -> .bed-format:
 
         # 1) Process reads by removing those with low-quality, and removing the
         #    leading Ts and/OR trailing As.
@@ -1805,7 +1844,8 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs, settings,
         utr_polyAs = get_polyA_utr(polyA_bed_path, utrfile_path)
 
     # Cluster the poly(A) reads for each utr_id. If polyA is false or no polyA
-    # reads were found, return a placeholder.
+    # reads were found, return a placeholder, since this variable is assumed to
+    # exist in downstream code.
     polyA_reads = cluster_polyAs(utr_polyAs, annotation.utr_exons, polyA)
 
     # Get the RPKM
@@ -1979,6 +2019,32 @@ def make_directories(here, dirnames):
 
     return outdirs
 
+# Make a bedfile for the 'length' UTRs.
+def parse_length(in_length, out_length):
+
+    in_handle = open(in_length, 'rb')
+    header = in_handle.next() # get the header
+
+    out_handle = open(out_length, 'wb')
+
+    for line in in_handle:
+        (chrm, beg, end, extendby, strand, ID, eps_coord) = line.split()[:7]
+        # Skip the utrs without coverage
+        if eps_coord == 'NA':
+            continue
+
+        # Calculate the new 'end' (strand dependent)
+        eps_coord = int(eps_coord)
+        if strand == '+':
+            end = str(int(beg) + eps_coord)
+        if strand == '-':
+            beg = str(int(beg) + eps_coord)
+
+        out_handle.write('\t'.join([chrm, beg, end, ID, '0', strand])+'\n')
+
+    out_handle.close()
+    in_handle.close()
+
 def make_bigwigs(settings, annotation, here):
     """
     Make bigwig files of the polyA reads and the normal reads of the datasets
@@ -1987,14 +2053,18 @@ def make_bigwigs(settings, annotation, here):
     Turn the read coverage and polyA read .bedfiles into bigWig files.
     These files can in turn be viewed on the UCSC genome browser.
 
-    Finally print out a USCS custom track line for usage with the bigWig file.
+    Finally print out a USCS custom track line for the bigWig file.
 
     Steps:
 
         1) Intersect with 3UTR (or whatever original bedfile was used)
         2) Do .bed -> .bedgraph
         3) Do .bedgraph -> bigWig
-        4) Print USCS line
+        5) Print USCS line
+
+    As well, get a bedfile for the relative lengths:
+        1) Parse lengths_datset in output
+        2) Save to output-dir
     """
 
     # Define shortcut variables
@@ -2009,43 +2079,64 @@ def make_bigwigs(settings, annotation, here):
     for dset in dsets:
         polyAfile = 'polyA_reads_'+ dset +'_processed_mapped.bed'
         readfile = 'reads_'+ dset +'.bed'
+        lengthfile = 'length_' + dset
         polyApath = os.path.join(here, 'temp_files', polyAfile)
         readpath = os.path.join(here, 'temp_files', readfile)
+        lengthpath = os.path.join(here, 'output', lengthfile)
 
-        for bedfile in [polyApath, readpath]:
+        for bedfile in [polyApath, readpath, lengthpath]:
             try:
                 open(bedfile, 'rb')
                 keepers.append(bedfile)
             except:
                 print('Not found or no access:\n{0}\nSkipping file...\n'\
                       .format(bedfile))
+
     print('Done checking.\n')
 
+    # do the bedTools work
     for dset in keepers:
 
         # Do intersectBed again and keep the polyA reads. Good for plotting.
         (dirname, filename) = os.path.split(dset)
-        # Shorten filename for polyA reads (remove processign and mapped parts)
+
+        if dset.startswith('length'):
+            continue # skip the length files and deal with them further down
+
+        # Shorten filename for polyA reads (remove processing and mapped parts)
         if filename.startswith('polyA'):
             shortname = '_'.join(filename.split('_')[:-2])
         if filename.startswith('reads'):
             shortname = os.path.splitext(filename)[0]
+
         bedG_path = os.path.join(savedir, shortname + '.bedGraph')
         bigW_path = os.path.join(savedir, shortname + '.bigWig')
 
-        # 0) intersectBed (it will also sort the first file -- no need for
-        # resorting)
         hg19 = '/users/rg/jskancke/phdproject/3UTR/the_project/source_bedfiles/hg19'
         bedGtoBigWig = '/users/rg/jskancke/programs/other/bedGraphToBigWig'
 
-        cmd_intersect = ['intersectBed', '-wb', '-a', dset, '-b', utrfile_path]
+        # First, sort the input. Can take a long time.
+        # check if sorted file exists
+        print('Sorting {0} ...'.format(dset))
+        dset_sort = dset+'_sorted'
+        # Don't sort file if sorted file exists. DANGEROUS BUT FASTER.
+        if not os.path.isfile(dset_sort):
+            sort_cmd = ['sort', '-k', '1,1', dset]
+            e = Popen(sort_cmd, bufsize=-1, stdout = open(dset_sort, 'wb'))
+            e.wait()
+
+        cmd_intersect = ['intersectBed', '-a', dset_sort, '-b', utrfile_path]
         cmd_bedGraph = ['genomeCoverageBed', '-bg', '-i', 'stdin', '-g', hg19]
         cmd_bedGtoBW = [bedGtoBigWig, bedG_path, hg19, bigW_path]
 
         f = Popen(cmd_intersect, stdout = PIPE)
-        g = Popen(cmd_bedGraph, stdin = f.stdout, stdout = open(bedG_path, 'wb'))
+        g = Popen(cmd_bedGraph, stdin = f.stdout,
+                  stdout = open(bedG_path, 'wb'))
+
+        print('Running intersectBed + genomeCoverageBed on {0} ...'.format(dset_sort))
         g.wait() # wait for bedGraph to finish
         h = Popen(cmd_bedGtoBW)
+        print('Running bedGraphToBigWig on {0} ...'.format(bedG_path))
         h.wait() # wait for bigWig to finish
 
         UCSC = """track type=bigWig
@@ -2056,9 +2147,28 @@ def make_bigwigs(settings, annotation, here):
         print('Printing USCS custom track line:\n')
         print UCSC
 
+    # parse the bedfile
+    for dset in keepers:
+
+        (dirname, filename) = os.path.split(dset)
+
+        if filename.startswith('length'):
+            shortname = filename[7:]
+        else:
+            continue # skip the rest
+
+        length_path = os.path.join(savedir, shortname + '_length_by_coverage.bed')
+
+        # parse the output length-file to make a bedfile for how long the 3UTRs
+        # are given the read coverage
+        if filename.startswith('length'):
+            parse_length(dset, length_path)
+
+
+
 def main():
     """
-    The main method. This method is called if script is run as __main__.
+    This method is called if script is run as __main__.
     """
 
     # The path to the directory the script is located in
@@ -2078,8 +2188,8 @@ def main():
     # When a simulation is over, the paths to the output files are pickled. When
     # simulate is False, the program will not read rna-seq files but will
     # instead try to get the output files from the last simulation.
-    #simulate = False
-    simulate = True
+    simulate = False
+    #simulate = True
     #settings.bigwig = False
 
     # This option should be set only in case of debugging. It makes sure you
@@ -2088,6 +2198,8 @@ def main():
     DEBUGGING = False
     if DEBUGGING:
         settings.DEBUGGING()
+
+    #settings.polyA = False
 
     # The program reads a lot of information from the annotation. The annotation
     # object will hold this information (file-paths and datastructures).
@@ -2098,6 +2210,8 @@ def main():
     annotation.utrfile_path = get_utr_path(settings, beddir)
 
     # Get dictionary with (chrm, beg, end, strand) values for each 3utr-exon key
+    # NOTE: for the 3'terminal exons, the beg/end is the extended value. For
+    # internal exons, the beg/end are not extended.
     print('Making 3UTR data structures ...\n')
     annotation.utr_exons = annotation.get_utrdict()
 
@@ -2130,7 +2244,6 @@ def main():
         t1 = time.time()
 
         # dset_id and dset_reads are as given in UTR_SETTINGS
-        akks = []
         for dset_id, dset_reads in settings.datasets.items():
 
             # The arguments needed for the pipeline
@@ -2190,8 +2303,8 @@ def main():
         #coverage = file_path_dict['coverage']
 
     # if set, make bigwig files
-    if settings.bigwig:
-        make_bigwigs(settings, annotation, here)
+    #if settings.bigwig:
+        #make_bigwigs(settings, annotation, here)
 
     # Present output graphically
     #output_analyzer(final_output, utrs, utrfile_path)
@@ -2203,6 +2316,10 @@ def main():
 if __name__ == '__main__':
     main()
 
+# It seems that you correctly extend only those that should be extended. Now,
+# when you read the file and calculate RPKM and everything, you must do the
+# extend-not-extend stuff in all steps, only for those that should be extended.
+# How the hell to find out? Damn... but this bug is important.
 
 # XXX NOTE TO SELF XXX
 # Before the holiday you updated a lot of docstrings and you started with the

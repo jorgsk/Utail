@@ -2,6 +2,7 @@
 Script for displaying and summarizing the results from utr_finder.py.
 """
 
+from __future__ import division
 import os
 import ConfigParser
 import sys
@@ -25,6 +26,14 @@ else:
         pass
 ########################################
 
+# Horrible, global variables
+
+first_pas = 'AATAAA'
+second_pas = 'ATTAAA'
+top_pas = set([first_pas, second_pas])
+lower_pas = set(['AGTAAA', 'TATAAA', 'CATAAA', 'GATAAA', 'AATATA', 'AATACA',
+                 'AATAGA', 'AAAAAG', 'ACUAAA'])
+
 class PolyaCluster(object):
     """
     Class that contains helper functions to work on datasets.
@@ -38,10 +47,10 @@ class PolyaCluster(object):
         return [cluster.nr_support_reads for cluster in self.pAclusters]
 
     def get_coverage_downstream(self):
-        return [cluster.coverage_50nt_downstream for cluster in self.pAclusters]
+        return [cluster.dstream_covrg for cluster in self.pAclusters]
 
     def get_coverage_upstream(self):
-        return [cluster.coverage_50nt_upstream for cluster in self.pAclusters]
+        return [cluster.ustream_covrg for cluster in self.pAclusters]
 
     def get_annotated_distance(self):
         return [cluster.annotated_polyA_distance for cluster in self.pAclusters]
@@ -141,9 +150,9 @@ class Cluster(object):
     def __init__(self, input_line):
         #
         (chrm, beg, end, ID, polyA_number, strand, polyA_coordinate,
-         number_supporting_reads, coverage_50nt_downstream,
-         coverage_50nt_upstream, annotated_polyA_distance, nearby_PAS,
-         PAS_distance, rpkm) = input_line.split('\t')
+         number_supporting_reads, dstream_covrg, ustream_covrg,
+         annotated_polyA_distance, nearby_PAS, PAS_distance,
+         rpkm) = input_line.split('\t')
 
         self.chrm = chrm
         self.beg = str_to_intfloat(beg)
@@ -153,8 +162,8 @@ class Cluster(object):
         self.strand = strand
         self.polyA_coordinate = str_to_intfloat(polyA_coordinate)
         self.nr_support_reads = str_to_intfloat(number_supporting_reads)
-        self.coverage_50nt_downstream = str_to_intfloat(coverage_50nt_downstream)
-        self.coverage_50nt_upstream = str_to_intfloat(coverage_50nt_upstream)
+        self.dstream_covrg = str_to_intfloat(dstream_covrg)
+        self.ustream_covrg = str_to_intfloat(ustream_covrg)
         self.annotated_polyA_distance = str_to_intfloat(annotated_polyA_distance)
 
         # PAS type and distance are space-delimited
@@ -253,12 +262,12 @@ class Plotter(object):
 
         # Determine which should have xlabel and which should have ylabel
         xlables = range(max_plot-var_nr+1, max_plot+1)
-        ylables = range(1,max_plot,var_nr)
+        ylables = range(1, max_plot, var_nr)
 
         remove_indices = []
         for v in range(2, var_nr+1):
             mymax = v*v
-            remove_indices += range(v,mymax,var_nr)
+            remove_indices += range(v, mymax, var_nr)
 
         for indx_1 in plots:
             for indx_2 in plots:
@@ -281,7 +290,35 @@ class Plotter(object):
                     ax.set_yticks([])
 
         fig.show()
-        debug()
+
+    def poly_cluster(self, cluster_utr):
+
+        for (max_cluster, utrs) in cluster_utr.items():
+            fig = plt.figure()
+            for cl_nr in range(1, max_cluster+1):
+                clusters = cluster_utr[cl_nr] # utrs with cl_nr clusters
+                ax = fig.add_subplot(1,max_cluster,cl_nr)
+
+                # Classify the ratios depending on zeros
+                ratios = []
+                dstream_zeros = []
+                ustream_zeros = []
+                udstream_zero = []
+
+                for cl in clusters:
+                    if cl.dstream_covrg == 0 and cl.ustream_covrg == 0:
+                        udstream_zero.append(cl)
+
+                    if cl.dstream_covrg != 0 and cl.ustream_covrg != 0:
+                        ratios.append(cl.ustream_covrg/cl.dstream_covrg)
+
+                    if cl.dstream_covrg == 0 and cl.ustream_covrg != 0:
+                        dstream_zeros.append(cl)
+
+                    if cl.dstream_covrg != 0 and cl.ustream_covrg == 0:
+                        ustream_zeros.append(cl)
+
+                debug()
 
 
 def get_lengths(settings):
@@ -396,6 +433,8 @@ def polyadenylation_comparison(settings, polyAs):
     #
     # 0) Control: what is the correlation between # supporting reads; change in
     # coverage; PAS-type; PAS-distance; and rpkm?
+    # It depends on PAS-type, PAS-distance, polyA-number (1, 2, .., last)
+
     for dset in polyAs:
 
         # Get array of data for triangle-scatterplot
@@ -405,21 +444,50 @@ def polyadenylation_comparison(settings, polyAs):
         arrays.append(dset.get_coverage_upstream())
         #arrays.append(dset.get_annotated_distance())
         arrays.append(dset.get_rpkm())
+        debug()
 
         # Titles for the above variables
         #titles = ['Nr Supporting Reads', 'Downstream Coverage',
                   #'Upstream Coverage', 'Distance to annotated TTS', 'RPKM']
+
         titles = ['Nr Supporting Reads', 'Downstream Coverage',
                   'Upstream Coverage', 'RPKM']
 
-        p.triangleplot_scatter(arrays, titles)
+        #p.triangleplot_scatter(arrays, titles)
+
+    # For the ones with 1, 2, 3, 4, ... polyA sites:
+        #1) box-plots of the ratio of downstream/upstream 
+        #2) box-plots of the # of covering reads
+
+    for dset in polyAs:
+
+        # Count the number of clusters for each 3UTR
+        utr_cluster_nr = {}
+        for cl in dset.pAclusters:
+            if cl.ID not in utr_cluster_nr:
+                utr_cluster_nr[cl.ID] = cl.cluster_nr
+            else:
+                utr_cluster_nr[cl.ID] = max(utr_cluster_nr[cl.ID], cl.cluster_nr)
+
+        # Get the maximum nr of polyA sites in one utr
+        max_cluster = max(utr_cluster_nr.itervalues())
+
+        # Turn the thing around: make a dict where the key is the max nr of
+        # clusters, and the values are cluster instances
+        cluster_nr_utr = dict((val, []) for val in range(1, max_cluster+1))
+
+        for cl in dset.pAclusters:
+            cluster_nr_utr[utr_cluster_nr[cl.ID]].append(cl)
+
+        p.poly_cluster(cluster_nr_utr)
+
+        debug()
+
+        # Classify 3
+
+    debug()
 
 
-    def get_annotated_distance(self):
-        return [cluster.annotated_polyA_distance for cluster in self.pAclusters]
-
-    # TODO you seem to be here: make more plots! They make the world a better
-    # place.
     # 1) Usage of multiple polyadenylation sites in each UTR
     # 2) When multiple sites, what is the read frequency of the sites?
     # 3) Compare utr-by-utr: is there a difference in polyA usage?

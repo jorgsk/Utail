@@ -129,7 +129,7 @@ tuning = true
 # Note that if bigWig files are found, they will not be overwritten. Delete
 # files you want to re-make.
 bigwig = true
-datasets = HeLa-S3_Cytoplasm:non_existing_dataset
+datasets = K562_Cytoplasm
 save_dir = /users/rg/jskancke/public_html/bigWigs
 url = http://genome.crg.es/~jskancke/bigWigs
 
