@@ -106,19 +106,19 @@ class Settings(object):
         Modify settings for debugging ONLY!
         """
 
-        #self.chr1 = True
-        self.chr1 = False
-        self.read_limit = False
+        self.chr1 = True
+        #self.chr1 = False
+        #self.read_limit = False
         #self.read_limit = 10000000
-        #self.read_limit = 1000000
+        self.read_limit = 1000000
         self.max_cores = 3
         #self.polyA = True
         #self.polyA = False
         self.polyA = '/users/rg/jskancke/phdproject/3UTR/the_project/temp_files'\
                 '/polyA_reads_K562_Cytoplasm_processed_mapped.bed'
         #self.bed_reads = False
-        self.bed_reads = '/users/rg/jskancke/phdproject/3UTR/the_project/temp_files'\
-                '/reads_K562_Cytoplasm.bed'
+        #self.bed_reads = '/users/rg/jskancke/phdproject/3UTR/the_project/temp_files'\
+                #'/reads_K562_Cytoplasm.bed'
 
 class Annotation(object):
     """
@@ -217,7 +217,7 @@ class UTR(object):
         # Total number of exons in UTR
         self.tot_exnr = self.val
 
-        # the coverage vectors
+        # initiate the coverage vectors with the first 'coverage'
         self.covr_vector = [int(first_covr)]
         self.cumul_covr = [int(first_covr)]
 
@@ -261,8 +261,6 @@ class UTR(object):
             # length
             if one_exon or fin_ex_plus or fin_ex_min:
                 self.length_nonext = self.end_nonext - self.beg_nonext
-                if self.length_nonext <= 0:
-                    debug()
 
         # if multi exon, make a beg-end list (extended and nonext) for the
         # utrs
@@ -270,6 +268,14 @@ class UTR(object):
             self.begends_ext = [(self.beg_ext, self.end_ext)]
             if extendby > 0:
                 self.begends_nonext = [(self.beg_nonext, self.end_nonext)]
+
+    def __repr__(self):
+        return self.utr_ID[-8:]
+
+    def __str__(self):
+        return "\nChrm\t{0}\nBeg\t{1}\nEnd\t{2}\nStrand\t{3}\n"\
+                .format(self.chrm, self.beg_nonext, self.end_nonext, self.strand)
+
 
     def is_empty(self):
         """
@@ -492,14 +498,13 @@ class FullLength(object):
         # rel_pos according to extended 3utr
         er_pos = rel_pos + extendby
 
-        # Then calculate the mean coverage on both sides of this.
-        # Note for ext_mean_99: ext_rel_pos - extendby = ind
-        self.eps_dstream_coverage = sum(covr_vector[er_pos:er_pos+50])/float(50)
-        self.eps_ustream_coverage = sum(covr_vector[er_pos-50:er_pos])/float(50)
+        # Calculate the mean coverage on both sides of rel_pos
+        self.eps_dstream_coverage = sum(covr_vector[er_pos-50:er_pos])/float(50)
+        self.eps_ustream_coverage = sum(covr_vector[er_pos:er_pos+50])/float(50)
 
         # Get the mean values 'extendby' around the annotated end too
-        self.annot_dstream_coverage = sum(covr_vector[extendby: 2*extendby])/extendby
-        self.annot_ustream_coverage = sum(covr_vector[:extendby])/extendby
+        self.annot_ustream_coverage = sum(covr_vector[extendby: 2*extendby])/extendby
+        self.annot_dstream_coverage = sum(covr_vector[:extendby])/extendby
 
 
     def cumul_plus(self, this_utr):
@@ -533,12 +538,12 @@ class FullLength(object):
         # Calculate the mean coverage on both sides of this.
         # Note for ext_mean_99: ext_rel_pos + extendby = rel_pos
         # ext_mean_99 -> upstream_coverage
-        self.eps_ustream_coverage = sum(covr_vector[rel_pos:rel_pos+50])/float(50)
-        self.eps_dstream_coverage = sum(covr_vector[rel_pos-50:rel_pos])/float(50)
+        self.eps_dstream_coverage = sum(covr_vector[rel_pos:rel_pos+50])/float(50)
+        self.eps_ustream_coverage = sum(covr_vector[rel_pos-50:rel_pos])/float(50)
 
         # Get the mean values extendby around the annotated end too
-        self.annot_ustream_coverage = sum(covr_vector[-extendby:])/extendby
         self.annot_dstream_coverage = sum(covr_vector[-2*extendby:-extendby])/extendby
+        self.annot_ustream_coverage = sum(covr_vector[-extendby:])/extendby
 
     def get_pas(self, pas_patterns, this_utr):
         """
@@ -597,7 +602,8 @@ class PolyAReads(object):
         # variables to be printed
         self.polyRead_sites = 'NA'
         self.rel_polyRead_sites = 'NA'
-        self.read_coverage_change = 'NA'
+        self.ds_covrg = 'NA'
+        self.us_covrg = 'NA'
         self.annotation_support = 'NA'
         self.all_PAS = 'NA'
 
@@ -607,8 +613,8 @@ class PolyAReads(object):
         """
         outfile.write('\t'.join(self.header_order()) + '\n')
 
-    def header_dict(self, this_utr, polA_nr, pAcoord, nr_supp_pA, covR, covL,
-                    annotpA_dist, nearbyPAS, PAS_dist):
+    def header_dict(self, this_utr, polA_nr, pAcoord, nr_supp_pA, ds_covr,
+                    us_covr, annotpA_dist, nearbyPAS, PAS_dist):
         """
         See the equivalent method for the 'FullLength' class.
         """
@@ -622,8 +628,8 @@ class PolyAReads(object):
                     ('strand', this_utr.strand),
                     ('polyA_coordinate', frmt(pAcoord)),
                     ('number_supporting_reads', frmt(nr_supp_pA)),
-                    ('coverage_50nt_downstream', frmt(covR)),
-                    ('coverage_50nt_upstream', frmt(covL)),
+                    ('coverage_50nt_downstream', frmt(ds_covr)),
+                    ('coverage_50nt_upstream', frmt(us_covr)),
                     ('annotated_polyA_distance', frmt(annotpA_dist)),
                     ('nearby_PAS', nearbyPAS),
                     ('PAS_distance', frmt(PAS_dist)),
@@ -670,7 +676,8 @@ class PolyAReads(object):
             polAnr = indx + 1
             rel_polyA_site = self.rel_polyRead_sites[indx]
             nr_supp_pA = len(this_utr.polyA_reads[1][indx])
-            (covL, covR) = self.read_coverage_change[indx]
+            ds_covrg = self.ds_covrg[indx]
+            us_covrg = self.us_covrg[indx]
             annotpA_dist = self.annotation_support[indx]
 
             # One site might have several PAS sites
@@ -681,11 +688,10 @@ class PolyAReads(object):
                 nearbyPAS = ' '.join([str(pas) for pas in nearbyPAS])
                 PAS_dist = ' '.join([str(dist) for dist in PAS_dist])
 
-
             # Get the output dictionary with updated values
             output_dict = self.header_dict(this_utr, polAnr, site, nr_supp_pA,
-                                           covR, covL, annotpA_dist, nearbyPAS,
-                                           PAS_dist)
+                                           ds_covrg, us_covrg, annotpA_dist,
+                                           nearbyPAS, PAS_dist)
 
             output = [output_dict[hedr] for hedr in output_order]
 
@@ -731,11 +737,19 @@ class PolyAReads(object):
         #1) Get coverage on both sides of polyA read
         # This variable should be printed relative to polyA_read count divided
         # by the rpkm
-        rccp = [(sum(this_utr.covr_vector[point:point-50])/float(50),
-                  sum(this_utr.covr_vector[point:point+50])/float(50)) for point in
-                 self.rel_polyRead_sites]
+        left_covrg = [sum(this_utr.covr_vector[p-50:p])/float(50) for p in
+                      self.rel_polyRead_sites]
+        right_covrg = [sum(this_utr.covr_vector[p:p+50])/float(50) for p in
+                      self.rel_polyRead_sites]
 
-        self.read_coverage_change = rccp
+        # Find upstream/downstream from left/right depending on strand
+        if this_utr.strand == '+':
+            self.ds_covrg = right_covrg
+            self.us_covrg = left_covrg
+
+        if this_utr.strand == '-':
+            self.ds_covrg = left_covrg
+            self.us_covrg = right_covrg
 
         #2) Is there an annotated polyA site nearby?
         # Report if there is one within +/- 40 nt and report the distance. Also
@@ -2020,12 +2034,14 @@ def make_directories(here, dirnames):
     return outdirs
 
 # Make a bedfile for the 'length' UTRs.
-def parse_length(in_length, out_length):
+def parse_length(in_length, out_length, out_header):
 
     in_handle = open(in_length, 'rb')
-    header = in_handle.next() # get the header
+    orig_head = in_handle.next() # remove the header before reading
 
     out_handle = open(out_length, 'wb')
+    # print the header of the output file
+    out_handle.write(out_header+'\n')
 
     for line in in_handle:
         (chrm, beg, end, extendby, strand, ID, eps_coord) = line.split()[:7]
@@ -2044,6 +2060,30 @@ def parse_length(in_length, out_length):
 
     out_handle.close()
     in_handle.close()
+
+def parse_clusters(in_clusters, out_clusters, out_header):
+    """
+    Parse the polyA cluster file from output and produce a bedfile of all the
+    polyA clusters. The name is the utr_id and the score is the nr of supporting
+    reads.
+    """
+    infile = open(in_clusters, 'rb')
+    in_header = infile.next()
+
+    outfile = open(out_clusters, 'wb')
+    outfile.write(out_header + '\n')
+    for line in infile:
+        (chrm, utr_beg, utr_end, utr_id, clr_nr, strand, cl_pos,
+         supp_reads) = line.split()[:8]
+
+        cl_beg = cl_pos
+        cl_end = str(int(cl_beg)+1)
+        outfile.write('\t'.join([chrm, cl_beg, cl_end, utr_id, supp_reads,
+                                 strand]) + '\n')
+
+    infile.close()
+    outfile.close()
+
 
 def make_bigwigs(settings, annotation, here):
     """
@@ -2068,103 +2108,256 @@ def make_bigwigs(settings, annotation, here):
     """
 
     # Define shortcut variables
-    dsets = settings.bigwig_datasets
+    dsets = settings.bigwig_datasets # the datsets we process
     utrfile_path = annotation.utrfile_path
     savedir = settings.bigwig_savedir
     url = settings.bigwig_url
 
-    keepers = []
+    # hg19 and bed->bigwig files
+    hg19 = '/users/rg/jskancke/phdproject/3UTR/the_project/source_bedfiles/hg19'
+    bedGtoBigWig = '/users/rg/jskancke/programs/other/bedGraphToBigWig'
+
+    for_wig = []
+    for_length = []
+    for_polyA = []
 
     print('Checking if files are available...\n')
     for dset in dsets:
         polyAfile = 'polyA_reads_'+ dset +'_processed_mapped.bed'
         readfile = 'reads_'+ dset +'.bed'
         lengthfile = 'length_' + dset
-        polyApath = os.path.join(here, 'temp_files', polyAfile)
+        clusterfile = 'polyA_' + dset
+
+        polyA_read_path = os.path.join(here, 'temp_files', polyAfile)
         readpath = os.path.join(here, 'temp_files', readfile)
         lengthpath = os.path.join(here, 'output', lengthfile)
+        cluster_polyA_path = os.path.join(here, 'output', clusterfile)
 
-        for bedfile in [polyApath, readpath, lengthpath]:
+        # Check if the files are there; if so add them to list
+        for bedfile in [polyA_read_path, readpath]:
             try:
                 open(bedfile, 'rb')
-                keepers.append(bedfile)
+                for_wig.append(bedfile)
             except:
                 print('Not found or no access:\n{0}\nSkipping file...\n'\
                       .format(bedfile))
 
+        # check length-file
+        try:
+            open(lengthpath, 'rb')
+            for_length.append(lengthpath)
+        except:
+            print('Not found or no access:\n{0}\nSkipping file...\n'\
+                  .format(lengthpath))
+
+        # check polyA-cluster file
+        try:
+            open(cluster_polyA_path, 'rb')
+            for_polyA.append(cluster_polyA_path)
+        except:
+            print('Not found or no access:\n{0}\nSkipping file...\n'\
+                  .format(cluster_polyA_path))
+
     print('Done checking.\n')
 
-    # do the bedTools work
-    for dset in keepers:
+    ######################## BedTools reads -> BigWig ##################
+    # do the bedTools work to make BigWig files for the genome browser
+    for dset in for_wig:
 
-        # Do intersectBed again and keep the polyA reads. Good for plotting.
         (dirname, filename) = os.path.split(dset)
 
-        if dset.startswith('length'):
-            continue # skip the length files and deal with them further down
-
-        # Shorten filename for polyA reads (remove processing and mapped parts)
+        # Adapt file names
         if filename.startswith('polyA'):
             shortname = '_'.join(filename.split('_')[:-2])
+            co = '255,0,0' # red color
         if filename.startswith('reads'):
             shortname = os.path.splitext(filename)[0]
+            co = '0,0,255' # blue color
 
         bedG_path = os.path.join(savedir, shortname + '.bedGraph')
         bigW_path = os.path.join(savedir, shortname + '.bigWig')
 
-        hg19 = '/users/rg/jskancke/phdproject/3UTR/the_project/source_bedfiles/hg19'
-        bedGtoBigWig = '/users/rg/jskancke/programs/other/bedGraphToBigWig'
-
-        # First, sort the input. Can take a long time.
-        # check if sorted file exists
-        print('Sorting {0} ...'.format(dset))
         dset_sort = dset+'_sorted'
         # Don't sort file if sorted file exists. DANGEROUS BUT FASTER.
         if not os.path.isfile(dset_sort):
+            print('Sorting {0} ...'.format(dset))
             sort_cmd = ['sort', '-k', '1,1', dset]
             e = Popen(sort_cmd, bufsize=-1, stdout = open(dset_sort, 'wb'))
             e.wait()
 
-        cmd_intersect = ['intersectBed', '-a', dset_sort, '-b', utrfile_path]
-        cmd_bedGraph = ['genomeCoverageBed', '-bg', '-i', 'stdin', '-g', hg19]
-        cmd_bedGtoBW = [bedGtoBigWig, bedG_path, hg19, bigW_path]
+        if os.path.isfile(bigW_path):
+            print('')
+            print('Found: {0}\nDelete it if you want to remake BigWig from source.'\
+                  .format(bigW_path))
+            print('')
 
-        f = Popen(cmd_intersect, stdout = PIPE)
-        g = Popen(cmd_bedGraph, stdin = f.stdout,
-                  stdout = open(bedG_path, 'wb'))
+        # Only make bigwig files if they don't exist. Delete to remake.
+        else:
+            cmd_intersect = ['intersectBed', '-a', dset_sort, '-b', utrfile_path]
+            cmd_bedGraph = ['genomeCoverageBed', '-bg', '-i', 'stdin', '-g', hg19]
+            cmd_bedGtoBW = [bedGtoBigWig, bedG_path, hg19, bigW_path]
 
-        print('Running intersectBed + genomeCoverageBed on {0} ...'.format(dset_sort))
-        g.wait() # wait for bedGraph to finish
-        h = Popen(cmd_bedGtoBW)
-        print('Running bedGraphToBigWig on {0} ...'.format(bedG_path))
-        h.wait() # wait for bigWig to finish
+            f = Popen(cmd_intersect, stdout = PIPE)
+            g = Popen(cmd_bedGraph, stdin = f.stdout, stdout = open(bedG_path, 'wb'))
 
-        UCSC = """track type=bigWig
-        name="{0}"
-        description="{0}"
-        bigDataUrl={1}
-        """.format(shortname, os.path.join(url, shortname + '.bigWig'))
-        print('Printing USCS custom track line:\n')
+            print('Running intersectBed + genomeCoverageBed on {0} ...'\
+                  .format(dset_sort))
+
+            g.wait() # wait for bedGraph to finish
+            h = Popen(cmd_bedGtoBW)
+
+            print('Running bedGraphToBigWig on {0} ...'.format(bedG_path))
+            h.wait() # wait for bigWig to finish
+
+        UCSC = 'track type=bigWig name="{0}" description="{0}" bigDataUrl={1} '\
+        'color={2} visibility=2'\
+                .format(shortname, os.path.join(url, shortname + '.bigWig'), co)
+        print('Provide this USCS custom track line:\n')
         print UCSC
+        print('')
 
-    # parse the bedfile
-    for dset in keepers:
+    ############### Parse Length output ##########################
+    for dset in for_length:
 
         (dirname, filename) = os.path.split(dset)
 
-        if filename.startswith('length'):
-            shortname = filename[7:]
-        else:
-            continue # skip the rest
+        shortname = 'epsilon_' + filename
 
-        length_path = os.path.join(savedir, shortname + '_length_by_coverage.bed')
+        length_path = os.path.join(savedir, shortname)
+
+        # Header of the bedfile
+        header = 'track type=bed name="{0}" description="{0}" color=0,255,0'\
+                .format(shortname, os.path.join(url, length_path))
+        print('Parsing the file with epsilon-lengths ...')
 
         # parse the output length-file to make a bedfile for how long the 3UTRs
         # are given the read coverage
-        if filename.startswith('length'):
-            parse_length(dset, length_path)
+        parse_length(dset, length_path, header)
 
+        print('')
+        print('Upload this file to the genome browser:\n')
+        print length_path
+        print('')
 
+        # Get the upstream/downstream stuff as well
+        length_ud = 'udstream_' + shortname
+        length_ud_path = os.path.join(savedir, length_ud+'.bedGraph')
+        header = 'track type=bed name="{0}" description="{0}" color=0,255,0'\
+                .format(length_ud)
+        length_udstream_covr(dset, length_ud_path, header)
+
+    ############### Parse the polyA output ########################
+    for dset in for_polyA:
+        (dirname, filename) = os.path.split(dset)
+
+        shortname = 'clusters_' + filename
+
+        cluster_path = os.path.join(savedir, shortname)
+
+        header = 'track type=bed name="{0}" description="{0}" color=0,255,255'\
+                .format(shortname, os.path.join(url, cluster_path))
+        print('Parsing the file with polyA-clusters ...')
+
+        parse_clusters(dset, cluster_path, header)
+
+        print('')
+        print('Upload this file to the genome browser:\n')
+        print cluster_path
+        print('')
+
+        # Get the upstream, downstraem stuff as well
+        cluster_ud = 'udstream_' + shortname
+        cluster_ud_path = os.path.join(savedir, cluster_ud+'.bedGraph')
+        header = 'track type=bed name="{0}" description="{0}" color=0,255,255'\
+                .format(cluster_ud)
+        cluster_udstream_covr(dset, cluster_ud_path, header)
+
+    # While debugging: print out tracks for the coverage upstream and downstream
+    # of the length and polyA output respectively.
+
+def length_udstream_covr(in_length, out_length, out_header):
+    infile = open(in_length, 'rb')
+    orig_head = infile.next() # remove the header before reading
+
+    outfile = open(out_length, 'wb')
+    # print the header of the output file
+    outfile.write(out_header+'\n')
+
+    for line in infile:
+        (chrm, beg, end, ext, strand, ID, eps_coord, eps_rz, eps_ds_covr,
+         eps_us_covr) = line.split()[:10]
+        # Skip the utrs without coverage
+        if eps_coord == 'NA':
+            continue
+        eps_coord = int(beg) + int(eps_coord)
+        ds_covr = float(eps_ds_covr)
+        us_covr = float(eps_us_covr)
+        # Write 50 lines upstream/downstream (depending on strand) in bedgraph
+        # format for easy viewing on the browser
+
+        # Strand differene: what is ustream dn what is dstream
+        if strand == '+':
+            beg = eps_coord - 50
+            end = eps_coord
+            outfile.write('\t'.join([chrm, str(beg), str(end), str(us_covr)])+'\n')
+
+            beg = eps_coord
+            end = eps_coord + 50
+            outfile.write('\t'.join([chrm, str(beg), str(end), str(ds_covr)])+'\n')
+
+        if strand == '-':
+            beg = eps_coord - 50
+            end = eps_coord
+            outfile.write('\t'.join([chrm, str(beg), str(end), str(ds_covr)])+'\n')
+
+            beg = eps_coord
+            end = eps_coord + 50
+            outfile.write('\t'.join([chrm, str(beg), str(end), str(us_covr)])+'\n')
+
+    outfile.close()
+    infile.close()
+
+def cluster_udstream_covr(in_cluster, out_cluster, out_header):
+    infile = open(in_cluster, 'rb')
+    orig_head = infile.next() # remove the header before reading
+
+    outfile = open(out_cluster, 'wb')
+    # print the header of the output file
+    outfile.write(out_header+'\n')
+
+    for line in infile:
+        (chrm, beg, end, ID, pA_nr, strand, cl_coord, supp_reads, ds_covr,
+         us_covr) = line.split()[:10]
+
+        # YOU ARE WRITING THE POLYA CLUSTER DOWNSTREAM UPSTREAM
+        ds_covr = float(ds_covr)
+        us_covr = float(us_covr)
+        cl_coord = int(cl_coord)
+
+        # Write 50 lines upstream/downstream (depending on strand) in bedgraph
+        # format for easy viewing on the browser
+
+        # Strand differene: what is ustream dn what is dstream
+        if strand == '+':
+            beg = cl_coord - 50
+            end = cl_coord
+            outfile.write('\t'.join([chrm, str(beg), str(end), str(us_covr)])+'\n')
+
+            beg = cl_coord
+            end = cl_coord + 50
+            outfile.write('\t'.join([chrm, str(beg), str(end), str(ds_covr)])+'\n')
+
+        if strand == '-':
+            beg = cl_coord - 50
+            end = cl_coord
+            outfile.write('\t'.join([chrm, str(beg), str(end), str(ds_covr)])+'\n')
+
+            beg = cl_coord
+            end = cl_coord + 50
+            outfile.write('\t'.join([chrm, str(beg), str(end), str(us_covr)])+'\n')
+
+    outfile.close()
+    infile.close()
 
 def main():
     """
@@ -2188,14 +2381,14 @@ def main():
     # When a simulation is over, the paths to the output files are pickled. When
     # simulate is False, the program will not read rna-seq files but will
     # instead try to get the output files from the last simulation.
-    simulate = False
-    #simulate = True
+    #simulate = False
+    simulate = True
     #settings.bigwig = False
 
     # This option should be set only in case of debugging. It makes sure you
     # just run chromosome 1 and only extract a tiny fraction of the total reads.
-    #DEBUGGING = True
-    DEBUGGING = False
+    DEBUGGING = True
+    #DEBUGGING = False
     if DEBUGGING:
         settings.DEBUGGING()
 
@@ -2251,16 +2444,15 @@ def main():
                          settings, annotation, DEBUGGING)
 
             ###### WORK IN PROGRESS
-            #akk = pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs,
-                           #settings, annotation, DEBUGGING)
+            akk = pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs,
+                           settings, annotation, DEBUGGING)
 
 
-            #akks.append(akk)
-            result = my_pool.apply_async(pipeline, arguments)
-            results.append(result)
+            #result = my_pool.apply_async(pipeline, arguments)
+            #results.append(result)
 
         # Wait for all procsses to finish
-        #debug()
+        debug()
         my_pool.close()
         my_pool.join()
 
@@ -2303,8 +2495,8 @@ def main():
         #coverage = file_path_dict['coverage']
 
     # if set, make bigwig files
-    #if settings.bigwig:
-        #make_bigwigs(settings, annotation, here)
+    if settings.bigwig:
+        make_bigwigs(settings, annotation, here)
 
     # Present output graphically
     #output_analyzer(final_output, utrs, utrfile_path)
@@ -2316,10 +2508,8 @@ def main():
 if __name__ == '__main__':
     main()
 
-# It seems that you correctly extend only those that should be extended. Now,
-# when you read the file and calculate RPKM and everything, you must do the
-# extend-not-extend stuff in all steps, only for those that should be extended.
-# How the hell to find out? Damn... but this bug is important.
+# TODO the upstream/downstream coverage is plain wrong. Maybe you use the wrong
+# coverage file; maybe you use the cumulative one!!!!!!!!!!!!!122
 
 # XXX NOTE TO SELF XXX
 # Before the holiday you updated a lot of docstrings and you started with the
@@ -2331,6 +2521,7 @@ if __name__ == '__main__':
 # they need to provide the path in the SETTINGS file. If you do this yourself,
 # it will be easier to switch to an index file on your own hard-disc, makign
 # loading the index into memory much faster.
+
 
 # TODO: go through the entire program and improve documentation.
 # TODO: write external documentation file for the program
