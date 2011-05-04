@@ -110,15 +110,15 @@ class Settings(object):
         #self.chr1 = False
         #self.read_limit = False
         #self.read_limit = 10000000
-        self.read_limit = 1000000
+        self.read_limit = 10000
         self.max_cores = 3
         #self.polyA = True
         #self.polyA = False
         self.polyA = '/users/rg/jskancke/phdproject/3UTR/the_project/temp_files'\
-                '/polyA_reads_K562_Cytoplasm_processed_mapped.bed'
+                '/polyA_reads_K562_Whole_Cell_processed_mapped.bed'
         #self.bed_reads = False
         #self.bed_reads = '/users/rg/jskancke/phdproject/3UTR/the_project/temp_files'\
-                #'/reads_K562_Cytoplasm.bed'
+                #'/reads_K562_Whole_Cell.bed'
 
 class Annotation(object):
     """
@@ -374,7 +374,7 @@ class FullLength(object):
         self.annot_ustream_coverage = 'NA'
         self.cuml_rel_size = 'NA'
 
-        self.epsilon = 0.998
+        self.epsilon = 0.999
 
     def header_dict(self, this_utr):
         """
@@ -540,6 +540,10 @@ class FullLength(object):
         # ext_mean_99 -> upstream_coverage
         self.eps_dstream_coverage = sum(covr_vector[rel_pos:rel_pos+50])/float(50)
         self.eps_ustream_coverage = sum(covr_vector[rel_pos-50:rel_pos])/float(50)
+
+        # Check for the occasions when rel_pos -50 is less than 0
+        if rel_pos - 50 < 0:
+            self.eps_ustream_coverage = sum(covr_vector[:rel_pos])/float(rel_pos)
 
         # Get the mean values extendby around the annotated end too
         self.annot_dstream_coverage = sum(covr_vector[-2*extendby:-extendby])/extendby
@@ -716,8 +720,9 @@ class PolyAReads(object):
         # If there are no polyA reads in the UTR, pass on
         if self.polyRead_sites == []:
             return
-        # Get the relative to non-extended utr(!) location of the polyA sites.
-        self.rel_polyRead_sites = [pos-this_utr.beg_nonext for pos in
+        # Get the relative to EXTENDED utr(!) location of the polyA sites,
+        # because it's from the extended utr we take the coverage values.
+        self.rel_polyRead_sites = [pos-this_utr.beg_ext for pos in
                                        self.polyRead_sites]
 
         ############# TEST #################
@@ -737,10 +742,31 @@ class PolyAReads(object):
         #1) Get coverage on both sides of polyA read
         # This variable should be printed relative to polyA_read count divided
         # by the rpkm
-        left_covrg = [sum(this_utr.covr_vector[p-50:p])/float(50) for p in
-                      self.rel_polyRead_sites]
-        right_covrg = [sum(this_utr.covr_vector[p:p+50])/float(50) for p in
-                      self.rel_polyRead_sites]
+
+        # The question: are the sits in rel_polyRead_sites relative to the
+        # extended or the non-extended utr?
+        #if this_utr.utr_ID.startswith('ENSG00000142632_1'):
+            #debug()
+        #ENSG00000142632_1
+        #and
+        #ENSG00000097021_1
+
+        # bug source: the 'relative' positions in rel_polyRead_sites can be
+        # negative... which messes up list indexing completely of course.
+
+        # Determine coverage relative to the vector
+        left_covrg = []
+        right_covrg = []
+
+        for p in self.rel_polyRead_sites:
+            right_covrg.append(sum(this_utr.covr_vector[p:p+50])/float(50))
+
+            # Left-covrg depends on if you are close to the beg of cover vector
+            if p < 50:
+                left_covrg.append(sum(this_utr.covr_vector[:p])/float(p))
+            else:
+                left_covrg.append(sum(this_utr.covr_vector[p-50:p])/float(50))
+
 
         # Find upstream/downstream from left/right depending on strand
         if this_utr.strand == '+':
@@ -755,8 +781,6 @@ class PolyAReads(object):
         # Report if there is one within +/- 40 nt and report the distance. Also
         # report if no distance is found.
         self.annotation_support = self.read_annotation_support(this_utr)
-        # Result: a lot of support for the final site; less support for 'within'
-        # sites
 
         #3) If there is a PAS nearby? all_PAS hold all the PAS and their
         #distances for all the polyA read clusters in the 3UTR
@@ -771,6 +795,11 @@ class PolyAReads(object):
         all_PAS = {}
         for rpoint in self.rel_polyRead_sites:
             pas_seq = this_utr.sequence[rpoint-40:rpoint]
+
+            # special case if the polyA read is is early in the sequence
+            if rpoint < 40:
+                pas_seq = this_utr.sequence[:rpoint]
+
             temp_PAS = []
             for pas_exp in pas_patterns:
                 temp_PAS.append([(m.group(), m.start()) for m in
@@ -802,7 +831,12 @@ class PolyAReads(object):
                 if rpoint-40 < apoint < rpoint+40:
                     found = True
                     found_point = apoint
-                    found_distance = rpoint-apoint
+                    if this_utr.strand == '+':
+                        found_distance = rpoint-apoint + 1
+                    else:
+                        found_distance = rpoint-apoint
+                    # RESULT: for +, distance is one too little
+                    # Otherwise, it seems good.
                     break
             if found:
                 supp.append(found_distance)
@@ -1885,136 +1919,6 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs, settings,
     return {dset_id: {'coverage': coverage_path, 'length': length_output,
                       'polyA':polyA_output}}
 
-
-def output_analyzer(final_output, utrs, utrs_path):
-
-    ##########
-    # Restrict final output according to cell_line
-    #filtered_output = dict((key, final_output[key]) for key in final_output if
-                        #'K562' in key)
-    #filtered_output = dict((key, final_output[key]) for key in final_output if
-                        #'HeLa' in key)
-    #filtered_output = dict((key, final_output[key]) for key in final_output if
-                        #'GM12878' in key)
-    filtered_output = final_output
-
-def rel_len_variation(measure_dict, dset_indx):
-    # Output: histograms of differences
-
-    strict_rel_len = {}
-    without_zeros = 0
-    for iutr_id, el_sizes in measure_dict.items():
-        if 0 in el_sizes:
-            continue
-        else:
-            without_zeros += 1
-            # Calculate distances between all rel_dist
-            parw_dist = [abs(val1-val2) for val1 in el_sizes for val2 in
-                         el_sizes]
-            sig_dist = ['yes' for val in parw_dist if val > 0.3]
-            if 'yes' in sig_dist:
-                strict_rel_len[iutr_id] = el_sizes
-
-    pprint(without_zeros)
-    pprint(len(strict_rel_len))
-
-
-def make_utr_plots(final_output, utrs, coverage):
-    # Choose a utr_id from final_output where there is a clear difference between
-    # the different tissues (one has 0.4, one has 0.6, one has 0.8 rel_len)
-    # from the final_output files. Also make sure they have reasonably high
-    # RPKMs. Then look through the coverage files for these utr_ids, and
-    # calculate the average coverage per 10 reads or so and produce a plot of
-    # this.
-
-    # Select the transcripts that have rpkm over 2
-    exp_nr = len(final_output)
-    rel_len_dict = dict((utr_id, [0]*exp_nr) for utr_id in utrs)
-    index = 0
-    count = 0
-    for dset, path in final_output.items():
-        # Skip the first line starting with '#'
-        for line in open(path, 'rb'):
-            # Skip lines that don't start with chr
-            if line[:3] != 'chr':
-                continue
-            (chrm, beg, end, utr_id, last_utr_read, strand, rel_size, mean_cvr,
-             std_cvr, PAS_type, pas_distance, rpkm) = line.split()
-            rpkm = float(rpkm)
-            if rpkm > 2:
-                count = count+1
-                rel_len_dict[utr_id][index] = float(rel_size)
-        index = index + 1
-
-    print count
-
-    # Keep only the transcripts that 1) have no 0 rel_lens AND 2) have a minimum
-    # distance of 0.4 btween two of the rel_lens.
-    strict_rel_len = {}
-    for iutr_id, el_sizes in rel_len_dict.items():
-        if 0 in el_sizes:
-            continue
-        else:
-            # Calculate distances between all rel_dist
-            parw_dist = [abs(val1-val2) for val1 in el_sizes for val2 in
-                         el_sizes]
-            sig_dist = ['yes' for val in parw_dist if val > 0.4]
-            if 'yes' in sig_dist:
-                strict_rel_len[iutr_id] = el_sizes
-
-    print len(strict_rel_len)
-
-    # If more than 5 subjects, make a random sample of the ones in the set
-    if len(strict_rel_len) > 1:
-        strict_rel_len = dict((rankey, strict_rel_len[rankey]) for rankey in
-                              strict_rel_len.keys()[:3])
-
-    # For each element in strict_rel_len, do a graphical presentation of the
-    # read distribution
-    # Method: go through each coverage file and grep the coverage into a list.
-    # Make averages over that list. Print the output.
-    key_ids = strict_rel_len.keys()
-    covrg_dict = dict((key, [[] for bla in range(exp_nr)]) for key in key_ids)
-    indx=0
-    for dset, cvrg_path in coverage.items():
-        for line in open(cvrg_path):
-            (chrm, beg, end, utr_id, d, strnd, rel_pos, covrg) = line.split()
-            if utr_id in key_ids:
-                covrg_dict[utr_id][indx].append(int(covrg))
-        indx = indx+1
-
-    for utr_id, covregs in covrg_dict.items():
-        plot_3utr_ends(utr_id, covregs, utrs[utr_id][3])
-
-def plot_3utr_ends(utr_id, coverages, strand):
-    fig = plt.figure()
-    ax = fig.add_subplot(111)
-    new_sries0 = moving_average(coverages[0])
-    new_sries1 = moving_average(coverages[1])
-    ax.plot(moving_average(coverages[0]))
-    ax.plot(moving_average(coverages[1]))
-    fig.show()
-    pass
-
-def moving_average(dataseries):
-    # Divide the dataseries into blocks of size 10nt.
-    newseries = []
-    for pos, val in enumerate(dataseries):
-        newseries.append(sum(dataseries[pos-3:pos+3])/6)
-
-    return newseries
-
-    # Divide the dataseries into averages of a fixed length, so that all utrs
-    # can be compared.
-    pass
-
-def polyA_analysis(final_outp_polyA):
-    myfile = final_outp_polyA['k562_whole_cell']
-    for line in myfile:
-        debug()
-
-    pass
-
 def make_directories(here, dirnames):
     """
     For each name in dirnames, return a list of paths to newly created
@@ -2212,6 +2116,7 @@ def make_bigwigs(settings, annotation, here):
         UCSC = 'track type=bigWig name="{0}" description="{0}" bigDataUrl={1} '\
         'color={2} visibility=2'\
                 .format(shortname, os.path.join(url, shortname + '.bigWig'), co)
+
         print('Provide this USCS custom track line:\n')
         print UCSC
         print('')
@@ -2246,6 +2151,15 @@ def make_bigwigs(settings, annotation, here):
                 .format(length_ud)
         length_udstream_covr(dset, length_ud_path, header)
 
+        # Get the location of the PAS and their distances.
+        length_PAS = 'PAS_distance_' + shortname
+        length_PAS_path = os.path.join(savedir, length_PAS+'.bedGraph')
+        header = 'track type=bed name="{0}" description="{0}" color=158,35,135'\
+                .format(length_PAS)
+
+        pas_dist_bed_length(dset, length_PAS_path, header)
+
+
     ############### Parse the polyA output ########################
     for dset in for_polyA:
         (dirname, filename) = os.path.split(dset)
@@ -2265,12 +2179,22 @@ def make_bigwigs(settings, annotation, here):
         print cluster_path
         print('')
 
-        # Get the upstream, downstraem stuff as well
+        # FOR DEBUGGING #
+
+        # Get the upstream, downstraem coverage 
         cluster_ud = 'udstream_' + shortname
         cluster_ud_path = os.path.join(savedir, cluster_ud+'.bedGraph')
         header = 'track type=bed name="{0}" description="{0}" color=0,255,255'\
                 .format(cluster_ud)
         cluster_udstream_covr(dset, cluster_ud_path, header)
+
+        # Get the location of the PAS and their distances.
+        cluster_PAS = 'PAS_distance_' + shortname
+        cluster_PAS_path = os.path.join(savedir, cluster_PAS+'.bedGraph')
+        header = 'track type=bed name="{0}" description="{0}" color=128,35,175'\
+                .format(cluster_PAS)
+
+        pas_dist_bed_clusters(dset, cluster_PAS_path, header)
 
     # While debugging: print out tracks for the coverage upstream and downstream
     # of the length and polyA output respectively.
@@ -2359,6 +2283,77 @@ def cluster_udstream_covr(in_cluster, out_cluster, out_header):
     outfile.close()
     infile.close()
 
+
+def pas_dist_bed_clusters(in_PAS, out_PAS, header):
+    """
+    Write bedfile with positions and distances of PASes to their clusters so you
+    can check the result in the genome browser.
+    """
+    infile = open(in_PAS, 'rb')
+    in_header = infile.next()
+
+    outfile = open(out_PAS, 'wb')
+    outfile.write(header + '\n')
+
+    for line in infile:
+        (chrm, beg, end, d, d, strand, cl_coord) = line.split('\t')[:7]
+        (cl_PAS, cl_PAS_dist, rpkm) = line.split('\t')[-3:]
+        cl_PAS = cl_PAS.split(' ')
+        cl_PAS_dist = cl_PAS_dist.split(' ')
+
+        for (pas, dist) in zip(cl_PAS, cl_PAS_dist):
+            if pas != 'NA':
+                # get the beg and end of the PAS
+                if strand == '+':
+                    pas_beg = str(int(cl_coord) - int(dist)-7)
+                    pas_end = str(int(cl_coord) - int(dist)-1)
+
+                if strand == '-':
+                    pas_beg = str(int(cl_coord) + int(dist)-1)
+                    pas_end = str(int(cl_coord) + int(dist)+5)
+
+                pas_and_dist = pas+'_'+dist
+
+                outfile.write('\t'.join([chrm, pas_beg, pas_end, pas_and_dist])+'\n')
+
+    outfile.close()
+
+def pas_dist_bed_length(in_PAS, out_PAS, header):
+    """
+    Write bedfile with positions and distances of PASes to their clusters so you
+    can check the result in the genome browser.
+    """
+    infile = open(in_PAS, 'rb')
+    in_header = infile.next()
+
+    outfile = open(out_PAS, 'wb')
+    outfile.write(header + '\n')
+
+    for line in infile:
+        (chrm, beg, end, d, strand, d, eps_coord) = line.split('\t')[:7]
+        (eps_PAS, eps_PAS_dist, rpkm) = line.split('\t')[-3:]
+        eps_PAS = eps_PAS.split(' ')
+        eps_PAS_dist = eps_PAS_dist.split(' ')
+
+        for (pas, dist) in zip(eps_PAS, eps_PAS_dist):
+            if pas != 'NA':
+                # get the beg and end of the PAS
+                if strand == '+':
+                    pas_beg = str(int(eps_coord)+int(beg) - int(dist)-7)
+                    pas_end = str(int(eps_coord)+int(beg) - int(dist)-1)
+
+                if strand == '-':
+                    pas_beg = str(int(eps_coord)+int(beg) + int(dist)-1)
+                    pas_end = str(int(eps_coord)+int(beg) + int(dist)+5)
+
+                pas_and_dist = pas+'_'+dist
+
+                outfile.write('\t'.join([chrm, pas_beg, pas_end, pas_and_dist])+'\n')
+
+    outfile.close()
+
+    pass
+
 def main():
     """
     This method is called if script is run as __main__.
@@ -2381,8 +2376,8 @@ def main():
     # When a simulation is over, the paths to the output files are pickled. When
     # simulate is False, the program will not read rna-seq files but will
     # instead try to get the output files from the last simulation.
-    #simulate = False
-    simulate = True
+    simulate = False
+    #simulate = True
     #settings.bigwig = False
 
     # This option should be set only in case of debugging. It makes sure you
@@ -2447,7 +2442,6 @@ def main():
             akk = pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs,
                            settings, annotation, DEBUGGING)
 
-
             #result = my_pool.apply_async(pipeline, arguments)
             #results.append(result)
 
@@ -2498,31 +2492,20 @@ def main():
     if settings.bigwig:
         make_bigwigs(settings, annotation, here)
 
-    # Present output graphically
-    #output_analyzer(final_output, utrs, utrfile_path)
-    #polyA_analysis(final_outp_polyA)
-
-    # Make some plots that compare utr_ends between tissues
-    #make_utr_plots(final_output, utrs, coverage)
-
 if __name__ == '__main__':
     main()
 
-# TODO the upstream/downstream coverage is plain wrong. Maybe you use the wrong
-# coverage file; maybe you use the cumulative one!!!!!!!!!!!!!122
+# HOPEFULLY NOW THERE ARE NO MORE BUGS.........
 
 # XXX NOTE TO SELF XXX
 # Before the holiday you updated a lot of docstrings and you started with the
 # documentation  (see doc folder). You had a meeting with Roderic: see message
-# below. You ran the program for a lot of datasets. Curious about how long that
-# took! Check out some todos below for things to do.
+# below.
 
 # TODO: the path to the gem-mapper index... if people are going to use this,
 # they need to provide the path in the SETTINGS file. If you do this yourself,
-# it will be easier to switch to an index file on your own hard-disc, makign
+# it will be easier to switch to an index file on your own hard disk, makign
 # loading the index into memory much faster.
-
-
 # TODO: go through the entire program and improve documentation.
 # TODO: write external documentation file for the program
 # TODO: generate the figures. one button!

@@ -22,7 +22,8 @@ else:
 
 def main():
     here = os.path.dirname(os.path.realpath(__file__))
-    filenames = ['cumul_k562_whole_cell.stat']
+    filenames = ['cumul_K562_Whole_Cell.stat']
+    #filenames = ['cumul_K562_Nucleus.stat']
     for filename in filenames:
         tuning_file = os.path.join(os.path.split(here)[0], 'output', filename)
         #tuning_file = os.path.join(os.path.split(here)[0], 'output', 'test.stat')
@@ -64,7 +65,7 @@ def main():
         (n_ratio, min_max_ratio, mean_ratio, var_ratio) = stats.describe(pA_cumuls)[:4]
 
 
-        #box_plot(pA_cumuls)
+        box_plot(pA_cumuls)
     debug()
 
 def box_plot(values):
