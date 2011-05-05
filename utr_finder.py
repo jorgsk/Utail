@@ -41,12 +41,10 @@ print('Loading modules ...\n')
 import os
 import sys
 import shutil
-import numpy as np
 import cPickle
 import ConfigParser
 from multiprocessing import Pool
 from multiprocessing import cpu_count
-from pprint import pprint
 from operator import attrgetter
 
 import re
@@ -110,12 +108,12 @@ class Settings(object):
         #self.chr1 = False
         #self.read_limit = False
         #self.read_limit = 10000000
-        self.read_limit = 10000
+        self.read_limit = 100000
         self.max_cores = 3
         #self.polyA = True
         #self.polyA = False
         self.polyA = '/users/rg/jskancke/phdproject/3UTR/the_project/temp_files'\
-                '/polyA_reads_K562_Whole_Cell_processed_mapped.bed'
+                '/polyA_reads_HeLa-S3_Whole_Cell_processed_mapped.bed'
         #self.bed_reads = False
         #self.bed_reads = '/users/rg/jskancke/phdproject/3UTR/the_project/temp_files'\
                 #'/reads_K562_Whole_Cell.bed'
@@ -542,8 +540,11 @@ class FullLength(object):
         self.eps_ustream_coverage = sum(covr_vector[rel_pos-50:rel_pos])/float(50)
 
         # Check for the occasions when rel_pos -50 is less than 0
-        if rel_pos - 50 < 0:
+        if rel_pos < 50 and rel_pos != 0:
             self.eps_ustream_coverage = sum(covr_vector[:rel_pos])/float(rel_pos)
+
+        if rel_pos == 0:
+            self.eps_ustream_coverage = 0
 
         # Get the mean values extendby around the annotated end too
         self.annot_dstream_coverage = sum(covr_vector[-2*extendby:-extendby])/extendby
@@ -762,8 +763,10 @@ class PolyAReads(object):
             right_covrg.append(sum(this_utr.covr_vector[p:p+50])/float(50))
 
             # Left-covrg depends on if you are close to the beg of cover vector
-            if p < 50:
+            if p < 50 and p != 0:
                 left_covrg.append(sum(this_utr.covr_vector[:p])/float(p))
+            elif p == 0:
+                left_covrg.append(0)
             else:
                 left_covrg.append(sum(this_utr.covr_vector[p-50:p])/float(50))
 
@@ -1786,13 +1789,21 @@ def cluster_loop(ends):
 
     # Append the last cluster
     clusters.append(this_cluster)
-    # Get only the clusters with length more than one
-    res_clus = [clus for clus in clusters if len(clus) > 1]
-    # Get the mean of the clusters with length greater than one
-    mixed_cluster = [int(math.floor(sum(clus)/len(clus))) for clus in res_clus]
+
+    ## Get only the clusters with length more than one
+    #res_clus = [clus for clus in clusters if len(clus) > 1]
+
+    # Get the mean of the clusters
+    averages_cluster = []
+
+    for clus in clusters:
+        # skip empty clusters
+        if clus == []:
+            continue
+        averages_cluster.append(int(math.floor(sum(clus)/len(clus))))
 
     # Return the clusters and their average
-    return (mixed_cluster, res_clus)
+    return (averages_cluster, clusters)
 
 def cluster_polyAs(utr_polyAs, utrs, polyA):
     """
@@ -2489,13 +2500,11 @@ def main():
         #coverage = file_path_dict['coverage']
 
     # if set, make bigwig files
-    if settings.bigwig:
-        make_bigwigs(settings, annotation, here)
+    #if settings.bigwig:
+        #make_bigwigs(settings, annotation, here)
 
 if __name__ == '__main__':
     main()
-
-# HOPEFULLY NOW THERE ARE NO MORE BUGS.........
 
 # XXX NOTE TO SELF XXX
 # Before the holiday you updated a lot of docstrings and you started with the

@@ -7,6 +7,10 @@ import os
 import ConfigParser
 import sys
 import matplotlib.pyplot as plt
+from operator import attrgetter
+import math
+
+import numpy as np
 
 ########################################
 # only get the debug function if run from Ipython #
@@ -59,14 +63,17 @@ class PolyaCluster(object):
         return [cluster.rpkm for cluster in self.pAclusters]
 
 
-class LengthDataset(object):
+class UTRDataset(object):
     """
     Class that contains helper functions to work on datasets.
     """
 
-    def __init__(self, dset_list, dset_name):
-        self.utrs = dset_list
+    def __init__(self, dset_dict, dset_name):
+        self.utrs = dset_dict
         self.name = dset_name
+
+    def __repr__(self):
+        return self.name
 
     def get_eps_length(self, minRPKM, IDs=False):
         """
@@ -135,6 +142,11 @@ class UTR(object):
 
         self.RPKM = str_to_intfloat(utr_RPKM.strip())
 
+        # The UTR potentially has polyA read clusters. They will be added to
+        # this list. The number of clusters will also be added.
+        self.clusters = []
+        self.cluster_nr = 0
+
     def __repr__(self):
         return self.ID[-8:]
 
@@ -154,12 +166,7 @@ class Cluster(object):
          annotated_polyA_distance, nearby_PAS, PAS_distance,
          rpkm) = input_line.split('\t')
 
-        self.chrm = chrm
-        self.beg = str_to_intfloat(beg)
-        self.end = str_to_intfloat(end)
-        self.ID = ID
         self.cluster_nr = str_to_intfloat(polyA_number)
-        self.strand = strand
         self.polyA_coordinate = str_to_intfloat(polyA_coordinate)
         self.nr_support_reads = str_to_intfloat(number_supporting_reads)
         self.dstream_covrg = str_to_intfloat(dstream_covrg)
@@ -173,14 +180,12 @@ class Cluster(object):
         PAS_distance = PAS_distance.split(' ')
         self.PAS_distance = [str_to_intfloat(dist) for dist in PAS_distance]
 
-        self.rpkm = str_to_intfloat(rpkm.strip())
-
     def __repr__(self):
-        return self.ID[-8:]+'_'+str(self.cluster_nr)
+        return str(self.polyA_coordinate)
 
     def __str__(self):
-        return "\nChrm\t{0}\nBeg\t{1}\nEnd\t{2}\nStrand\t{3}\n#\t{4}\n"\
-                .format(self.chrm, self.beg, self.end, self.strand, self.cluster_nr)
+        return "\nCl nr\t{0}\nCoord\t{1}\nRead nr\t{2}\n"\
+                .format(self.cluster_nr,self.polyA_coordinate,self.nr_support_reads)
 
 class Settings(object):
     """
@@ -291,76 +296,115 @@ class Plotter(object):
 
         fig.show()
 
-    def poly_cluster(self, cluster_utr):
+    def last_three_clustersites(self, clus_list):
+        """
+        The input are the last X clusters (counting from the end -- 'first'
+        is the last cluster in the utr). You want to make a sublot with two
+        rows, each with boxplots: first row are the coverage ratio of the first,
+        second, and third cluster, and the second row the read coverage.
 
-        for (max_cluster, utrs) in cluster_utr.items():
-            fig = plt.figure()
-            for cl_nr in range(1, max_cluster+1):
-                clusters = cluster_utr[cl_nr] # utrs with cl_nr clusters
-                ax = fig.add_subplot(1,max_cluster,cl_nr)
+        Clus list comes in order: element 0 is the 3'most element, and the -1
+        element is the 5' most.
 
-                # Classify the ratios depending on zeros
-                ratios = []
-                dstream_zeros = []
-                ustream_zeros = []
-                udstream_zero = []
+        The data has been normalized. For each gene, the feature (ud_ratio or
+        coverage count), are normalized to the largest value. After
+        normalization, all values are subtracted by 1; in this way, a negative
+        value indicates that downstream is larger than upstream. Further, a cap
+        is set on the values before normalization. Otherwise, since we divide by
+        numbers close to zero, values can be very high. A ratio cap is set to 10.
+        """
 
-                for cl in clusters:
-                    if cl.dstream_covrg == 0 and cl.ustream_covrg == 0:
-                        udstream_zero.append(cl)
+        fig = plt.figure()
 
-                    if cl.dstream_covrg != 0 and cl.ustream_covrg != 0:
-                        ratios.append(cl.ustream_covrg/cl.dstream_covrg)
+        cluster_nr = len(clus_list)
+        ratios = [dic['ud_ratio'] for dic in clus_list]
+        supports = [dic['support'] for dic in clus_list]
+        plot_array = ratios + supports # 1 to 6 traverse through
 
-                    if cl.dstream_covrg == 0 and cl.ustream_covrg != 0:
-                        dstream_zeros.append(cl)
+        max_plotnr = len(plot_array)
+        row_nr = 2
+        col_nr = max_plotnr/2
 
-                    if cl.dstream_covrg != 0 and cl.ustream_covrg == 0:
-                        ustream_zeros.append(cl)
+        for plotnr in range(1, max_plotnr+1):
+            array = plot_array[plotnr-1]
 
-                debug()
+            # mean and std
+            median = np.median(array)
+            std = np.std(array)
+            mean = np.mean(array)
+            ax = fig.add_subplot(2, col_nr, plotnr)
+
+            median = format(median, '.2f')
+            std = format(std, '.2f')
+            mean = format(mean, '.2f')
+            lbl = 'median: '+median+'\nmean: '+mean+'\nstd: '+std
+
+            ax.boxplot(array)
+
+            # Plot text right onto the image
+            ax.text(0.55,0.9,lbl, size=13)
+
+            # Set y limits depending on if log(ratio) or read count
+            if plotnr in range(1, cluster_nr+1):
+                ax.set_ylim(-3.2, 13.2)
+
+            if plotnr in range(cluster_nr+1, max_plotnr+1):
+                ax.set_ylim(-1,60)
+
+            if plotnr == 1:
+                ax.set_ylabel('Log2-ratio of upstream/downstream coverage',size=20)
+
+            if plotnr == max_plotnr - cluster_nr+1:
+                ax.set_ylabel('Poly(A)-read count', size=20)
+
+            if plotnr in range(cluster_nr+1, max_plotnr+1):
+                ax.set_xlabel("Poly(A) cluster nr. {0} from 3' end"\
+                              .format(plotnr-cluster_nr))
+
+        plt.show()
 
 
-def get_lengths(settings):
+def get_utrs(settings):
     """
-    Return a list of LengthDataset instances. Each LengthDataset instance is
+    Return a list of UTR instances. Each UTR instance is
     instanciated with a list of UTR objects and the name of the datset.
+
+    1) Read through the length file, create UTR objects for each line
+    2) If present, read through the polyA file, updating the UTR object created
+    in step 1
+
     """
+    # Do everything for the length files
     length_files = settings.length_files()
+    cluster_files = settings.polyA_files()
 
     # Check if all length files exist or that you have access
     [verify_access(f) for f in length_files.values()]
 
-    lengths = []
-    for dset_name, f in length_files.items():
-        file_obj = open(f, 'rb')
-        header = file_obj.next()
-        utr_list = [UTR(line) for line in file_obj]
+    all_utrs = []
+    for dset_name in settings.datasets:
 
-        lengths.append(LengthDataset(utr_list, dset_name))
+        lengthfile = open(length_files[dset_name], 'rb')
+        clusterfile = open(cluster_files[dset_name], 'rb')
 
-    return lengths
+        # Get headers
+        l_header = lengthfile.next()
+        c_header = clusterfile.next()
 
+        # Create the utr objects
+        utr_dict = dict((line.split()[5], UTR(line)) for line in lengthfile)
 
-def get_pAclusters(settings):
-    """
-    Return a list of polyA cluster instances. Each polyA cluster instance is
-    instanciated with a list of Cluster objects.
-    """
-    length_files = settings.polyA_files()
+        # Add cluster objects to the utr objects (line[3] is UTR_ID
+        for line in clusterfile:
+            utr_dict[line.split()[3]].clusters.append(Cluster(line))
 
-    # Check if all length files exist or that you have access
-    [verify_access(f) for f in length_files.values()]
+        # Update the UTRs with some new info about their clusters
+        for (utr_id, utr_obj) in utr_dict.iteritems():
+            utr_dict[utr_id].cluster_nr = len(utr_obj.clusters)
 
-    pAclusters = []
-    for dset_name, f in length_files.items():
-        file_obj = open(f, 'rb')
-        header = file_obj.next()
-        cluster_list = [Cluster(line) for line in file_obj]
+        all_utrs.append(UTRDataset(utr_dict, dset_name))
 
-        pAclusters.append(PolyaCluster(cluster_list, dset_name))
-
-    return pAclusters
+    return all_utrs
 
 
 def verify_access(f):
@@ -392,7 +436,7 @@ def str_to_intfloat(element):
 
     return element
 
-def utr_length_comparison(settings, lengths):
+def utr_length_comparison(settings, utrs):
     """
     * compare 3UTR length in general (with boxplot)
     * compare 3UTR length UTR-to-UTR (with boxplot)
@@ -420,7 +464,121 @@ def utr_length_comparison(settings, lengths):
     eps_lengths_c = [dset.get_eps_length(minRPKM=2, IDs=common) for dset in lengths]
     p.boxplot(eps_lengths_c, names, ylim)
 
-def polyadenylation_comparison(settings, polyAs):
+def output_control(settings, dsets):
+    """
+    Control: what is the correlation between # supporting reads; change in
+    coverage; PAS-type; PAS-distance; and rpkm?
+    """
+    p = Plotter()
+
+    ## TRIANGLE PLOT ##
+
+    #for dset in dsets:
+
+        #nr_supp_reads = []
+        #covrg_down = []
+        #covrg_up = []
+        #rpkm = []
+
+        #for (utr_id, utr) in dset.utrs.iteritems():
+
+            ## For all polyA clusters get
+            ## 1) NR of supporting reads
+            ## 2) Coverage downstream
+            ## 3) Coverage upstream
+            ## 4) RPKM
+
+            #for cls in utr.clusters:
+                #nr_supp_reads.append(cls.nr_support_reads)
+                #covrg_down.append(cls.dstream_covrg)
+                #covrg_up.append(cls.ustream_covrg)
+                #rpkm.append(utr.RPKM)
+
+        ## Titles for the above variables
+        #titles = ['Nr Supporting Reads', 'Downstream Coverage',
+                  #'Upstream Coverage', 'RPKM']
+
+        #array = [nr_supp_reads, covrg_down, covrg_up, rpkm]
+        #p.triangleplot_scatter(array, titles)
+
+    # For the ones with 1, 2, 3, 4, ... polyA sites:
+        #1) box-plots of the ratio of downstream/upstream 
+        #2) box-plots of the # of covering reads
+
+    # Upstream/downstream ratios of polyA sites.
+
+    for dset in dsets:
+        # Get the maximum nr of polyA sites in one utr for max nr of plots
+        # Give a roof to the number of plots; 5?
+        max_cluster = max (utr.cluster_nr for utr in dset.utrs.itervalues())
+
+        # Git yourself some arrays 
+        # first second thrid and fourth
+        # nr of clusters
+        clrs_nr = 4
+        clus_list = [{'ud_ratio':[], 'support':[]} for val in range(clrs_nr)]
+
+        for (utr_id, utr) in dset.utrs.iteritems():
+
+            if utr.cluster_nr < clrs_nr:
+                continue
+
+            if utr.strand == '+':
+                clu = sorted(utr.clusters, key=attrgetter('polyA_coordinate'))
+                clu = clu[-clrs_nr:] # get only the last clrs_nr
+                # for + strand, reverse clu
+                clu = clu[::-1]
+
+            if utr.strand == '-':
+                clu = sorted(utr.clusters, key=attrgetter('polyA_coordinate'))
+                clu = clu[:clrs_nr] # get only the first clrs_nr
+
+            # The order of clsters in clu is '1st, 2nd, 3rd...'
+
+            eps_end = utr.beg + utr.eps_coord
+
+            # only get UTRs that have the final polyA cluster close to the
+            # coverage end!
+            if not (eps_end - 50 < clu[0].polyA_coordinate < eps_end + 50):
+                continue
+
+            # Normalize the ratios by the largest absolute deviation from 1
+            ud_ratios = []
+
+            for cl in clu:
+                # Make 0 into an almost-zero ...
+                if cl.dstream_covrg == 0:
+                    cl.dstream_covrg = 0.01
+
+                # do log2 ratios (if ==1, twice as big)
+                udratio = math.log(cl.ustream_covrg/cl.dstream_covrg,2)
+
+                ud_ratios.append(udratio)
+
+            #maxratio = max(max(ud_ratios), abs(min(ud_ratios)))
+            #norm_ud_ratios = [rat/maxratio for rat in ud_ratios]
+            norm_ud_ratios = ud_ratios
+
+            # Append the normailzed ratios to the arrays
+            for (indx, norm_rat) in enumerate(norm_ud_ratios):
+                clus_list[indx]['ud_ratio'].append(norm_rat)
+
+            # Normalize the read support
+            read_supp = [cl.nr_support_reads for cl in clu]
+            #maxsupp = max(read_supp)
+            #norm_read_supp = [supp/maxsupp for supp in read_supp]
+            norm_read_supp = read_supp
+
+            # Append normalized support ratios to arrays
+            for (indx, norm_supp) in enumerate(norm_read_supp):
+                clus_list[indx]['support'].append(norm_supp)
+
+        # Do teh plots
+        p.last_three_clustersites(clus_list)
+
+        # RESULT you see the trend you imagined.
+
+def polyadenylation_comparison(settings, utrs):
     """
     * compare 3UTR polyadenylation in general
     * compare 3UTR polyadenylation UTR-to-UTR
@@ -431,62 +589,11 @@ def polyadenylation_comparison(settings, polyAs):
     # What is a good framework to call correlations from?
     # Is every 
     #
-    # 0) Control: what is the correlation between # supporting reads; change in
-    # coverage; PAS-type; PAS-distance; and rpkm?
     # It depends on PAS-type, PAS-distance, polyA-number (1, 2, .., last)
 
-    for dset in polyAs:
-
-        # Get array of data for triangle-scatterplot
-        arrays = []
-        arrays.append(dset.get_supporting_reads())
-        arrays.append(dset.get_coverage_downstream())
-        arrays.append(dset.get_coverage_upstream())
-        #arrays.append(dset.get_annotated_distance())
-        arrays.append(dset.get_rpkm())
-        debug()
-
-        # Titles for the above variables
-        #titles = ['Nr Supporting Reads', 'Downstream Coverage',
-                  #'Upstream Coverage', 'Distance to annotated TTS', 'RPKM']
-
-        titles = ['Nr Supporting Reads', 'Downstream Coverage',
-                  'Upstream Coverage', 'RPKM']
-
-        #p.triangleplot_scatter(arrays, titles)
-
-    # For the ones with 1, 2, 3, 4, ... polyA sites:
-        #1) box-plots of the ratio of downstream/upstream 
-        #2) box-plots of the # of covering reads
-
-    for dset in polyAs:
-
-        # Count the number of clusters for each 3UTR
-        utr_cluster_nr = {}
-        for cl in dset.pAclusters:
-            if cl.ID not in utr_cluster_nr:
-                utr_cluster_nr[cl.ID] = cl.cluster_nr
-            else:
-                utr_cluster_nr[cl.ID] = max(utr_cluster_nr[cl.ID], cl.cluster_nr)
-
-        # Get the maximum nr of polyA sites in one utr
-        max_cluster = max(utr_cluster_nr.itervalues())
-
-        # Turn the thing around: make a dict where the key is the max nr of
-        # clusters, and the values are cluster instances
-        cluster_nr_utr = dict((val, []) for val in range(1, max_cluster+1))
-
-        for cl in dset.pAclusters:
-            cluster_nr_utr[utr_cluster_nr[cl.ID]].append(cl)
-
-        p.poly_cluster(cluster_nr_utr)
-
-        debug()
-
-        # Classify 3
-
-    debug()
-
+    # Do we observe loss in coverage after sucessive polyadenylation sites?
+    # Indeed, this will depend on the expression of each isomer, but still we
+    # should be able to see something.
 
     # 1) Usage of multiple polyadenylation sites in each UTR
     # 2) When multiple sites, what is the read frequency of the sites?
@@ -577,14 +684,14 @@ def main():
     # Read UTR_SETTINGS
     settings = Settings(os.path.join(here, 'UTR_SETTINGS'), savedir, outputdir, here)
 
-    # Get the length-datasets
-    lengths = get_lengths(settings)
-    # Get the polyA-datasets (polyA cluster datasets)
-    polyAs = get_pAclusters(settings)
+    # Get the dsets with utrs from the length and polyA files
+    dsets = get_utrs(settings)
 
-    #utr_length_comparison(settings, lengths)
+    output_control(settings, dsets)
 
-    polyadenylation_comparison(settings, polyAs)
+    #utr_length_comparison(settings, utrs)
+
+    polyadenylation_comparison(settings, dsets)
 
     reads(settings)
 
@@ -598,3 +705,20 @@ def main():
 
 if __name__ == '__main__':
     main()
+
+
+# DISCUSSION #
+
+# You have to convince the reviewers that the difference you see in
+# polyadenylation usage is not just down to low coverage or the biased effects
+# of sequencing.
+
+# Regardless, the datatype is poly(A)+, which should mean that we are only
+# dealing with polyadenylated RNA sequences.
+
+# XXX it seems clear that it's in your own interest to provide just one 3UTR
+# class. You keep coming back to comparing UTRs -- not comparing polyA sites.
+
+# How reproducable are the polyA reads?
+# If for the same gene, for a similar before/after coverage, what is the
+# variation within the number of polyA reads?

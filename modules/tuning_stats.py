@@ -5,6 +5,7 @@ from __future__ import division
 import os
 import matplotlib.pyplot as plt
 from scipy import stats
+import math
 
 # only get the debug function if run from Ipython
 def run_from_ipython():
@@ -22,7 +23,8 @@ else:
 
 def main():
     here = os.path.dirname(os.path.realpath(__file__))
-    filenames = ['cumul_K562_Whole_Cell.stat']
+    filenames = ['cumul_HeLa-S3_Cytoplasm.stat', 'cumul_HeLa-S3_Nucleus.stat',
+                 'cumul_HeLa-S3_Whole_Cell.stat']
     #filenames = ['cumul_K562_Nucleus.stat']
     for filename in filenames:
         tuning_file = os.path.join(os.path.split(here)[0], 'output', filename)
@@ -60,21 +62,29 @@ def main():
         pA_cumuls = [vals[2] for vals in data.itervalues()]
         (n_cumul, min_max_cumul, mean_cumul, var_cumul) = stats.describe(pA_cumuls)[:4]
 
+        print filename, mean_cumul, var_cumul
+
         # The before/after coverage ratio of the pA clusters
-        beg_aft = [vals[3]/vals[4] for vals in data.itervalues() if vals[4]!=0]
-        (n_ratio, min_max_ratio, mean_ratio, var_ratio) = stats.describe(pA_cumuls)[:4]
+        beg_aft = [math.log(vals[3]/vals[4], 2) for vals in data.itervalues() if vals[4]!=0]
+        (n_ratio, min_max_ratio, mean_ratio, var_ratio) = stats.describe(beg_aft)[:4]
 
+        print filename, mean_ratio, var_ratio
 
-        box_plot(pA_cumuls)
-    debug()
+        box_plot(beg_aft, filename)
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+        ax.hist(beg_aft, bins=30)
+        ax.set_title(filename)
+        plt.show()
 
-def box_plot(values):
+def box_plot(values, filename):
 
     fig = plt.figure()
     ax = fig.add_subplot(111)
     ax.boxplot(values)
-    ax.set_ylabel('Cumulative coverages of poly(A) clusters', size=20)
-    ax.set_ylim(0,1.2)
+    ax.set_title(filename)
+    #ax.set_ylabel('Cumulative coverages of poly(A) clusters', size=20)
+    #ax.set_ylim(0,1.2)
     fig.show()
     pass
 
