@@ -2029,7 +2029,7 @@ def make_bigwigs(settings, annotation, here):
     url = settings.bigwig_url
 
     # hg19 and bed->bigwig files
-    hg19 = '/users/rg/jskancke/phdproject/3UTR/the_project/source_bedfiles/hg19'
+    hg19 = '/users/rg/jskancke/phdproject/3UTR/the_project/ext_files/hg19'
     bedGtoBigWig = '/users/rg/jskancke/programs/other/bedGraphToBigWig'
 
     for_wig = []
@@ -2500,8 +2500,8 @@ def main():
         #coverage = file_path_dict['coverage']
 
     # if set, make bigwig files
-    #if settings.bigwig:
-        #make_bigwigs(settings, annotation, here)
+    if settings.bigwig:
+        make_bigwigs(settings, annotation, here)
 
 if __name__ == '__main__':
     main()

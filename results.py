@@ -6,9 +6,24 @@ from __future__ import division
 import os
 import ConfigParser
 import sys
+
+#import matplotlib
+#matplotlib.use('Qt4Agg')
+
 import matplotlib.pyplot as plt
 from operator import attrgetter
 import math
+
+#GTKAgg 	Agg rendering to a GTK canvas (requires PyGTK)
+#GTK 	GDK rendering to a GTK canvas (not recommended) (requires PyGTK)
+#GTKCairo 	Cairo rendering to a GTK Canvas (requires PyGTK)
+#WXAgg 	Agg rendering to to a wxWidgets canvas (requires wxPython)
+#WX 	Native wxWidgets drawing to a wxWidgets Canvas (not recommended) (requires wxPython)
+#TkAgg 	Agg rendering to a Tk canvas (requires TkInter)
+#QtAgg 	Agg rendering to a Qt canvas (requires PyQt)
+#Qt4Agg 	Agg rendering to a Qt4 canvas (requires PyQt4)
+#FLTKAgg 	Agg rendering to a FLTK canvas (requires pyFLTK)
+#macosx 	
 
 import numpy as np
 
@@ -319,50 +334,233 @@ class Plotter(object):
         cluster_nr = len(clus_list)
         ratios = [dic['ud_ratio'] for dic in clus_list]
         supports = [dic['support'] for dic in clus_list]
-        plot_array = ratios + supports # 1 to 6 traverse through
 
-        max_plotnr = len(plot_array)
-        row_nr = 2
-        col_nr = max_plotnr/2
+        xlab = ["Poly(A) cluster {0} from 3' end".format(val) for
+                val in range(1, cluster_nr+1)]
 
-        for plotnr in range(1, max_plotnr+1):
-            array = plot_array[plotnr-1]
+        for plotnr, plotarray in enumerate([ratios, supports]):
+
+            # adjust to get subplot-index correct
+            plotnr = plotnr+1
 
             # mean and std
-            median = np.median(array)
-            std = np.std(array)
-            mean = np.mean(array)
-            ax = fig.add_subplot(2, col_nr, plotnr)
+            medians = [format(np.median(ar), '.2f') for ar in plotarray]
+            stds = [format(np.std(ar), '.2f') for ar in plotarray]
+            means = [format(np.mean(ar), '.2f') for ar in plotarray]
 
-            median = format(median, '.2f')
-            std = format(std, '.2f')
-            mean = format(mean, '.2f')
-            lbl = 'median: '+median+'\nmean: '+mean+'\nstd: '+std
+            ax = fig.add_subplot(2, 1, plotnr)
 
-            ax.boxplot(array)
+            labels = []
+            for (med, std, mean) in zip(medians, stds, means):
+                labels.append('median: '+med+'\nmean: '+mean+'\nstd: '+std)
 
-            # Plot text right onto the image
-            ax.text(0.55,0.9,lbl, size=13)
+            ax.boxplot(plotarray)
+
+            n = str(len(plotarray[0]))
+
 
             # Set y limits depending on if log(ratio) or read count
-            if plotnr in range(1, cluster_nr+1):
+            if plotnr == 1:
+                ax.set_title("The 3'-most poly(A) cluster has most poly(A)"\
+                             "reads and highest drop in coverage", size=25)
                 ax.set_ylim(-3.2, 13.2)
+                ax.set_xticks([])
 
-            if plotnr in range(cluster_nr+1, max_plotnr+1):
+                ## Plot text right onto the image
+                for indx, lbl in enumerate(labels):
+                    ax.text(0.55+float(indx), 10, lbl, size=13)
+
+                ax.text(0.55, 8, 'n: '+n)
+
+            if plotnr == 2:
                 ax.set_ylim(-1,60)
+                ax.set_xticklabels(xlab, size=15)
+
+                ## Plot text right onto the image
+                for indx, lbl in enumerate(labels):
+                    ax.text(0.55+float(indx), 50, lbl, size=13)
+
+                ax.text(0.55, 40, 'n: '+n)
 
             if plotnr == 1:
-                ax.set_ylabel('Log2-ratio of upstream/downstream coverage',size=20)
+                ax.set_ylabel('Log2-ratio of upstream/downstream coverage', size=15)
 
-            if plotnr == max_plotnr - cluster_nr+1:
-                ax.set_ylabel('Poly(A)-read count', size=20)
-
-            if plotnr in range(cluster_nr+1, max_plotnr+1):
-                ax.set_xlabel("Poly(A) cluster nr. {0} from 3' end"\
-                              .format(plotnr-cluster_nr))
+            if plotnr == 2:
+                ax.set_ylabel('Poly(A)-read count', size=15)
 
         plt.show()
 
+    def cluster_count(self, cl_count):
+        """
+        Input is a matrix of the number of UTRs that have x nr of clusters,
+        given a minimum y number of supporting reads at that cluster. Plot each
+        row -- ignoring or keeping 0-counts as you wish.
+
+        If some UTRs have very many clusters, the plot becomes long. Provide a
+        '12 clusters or more'-feature. Take max-clusters, divide by two, and add
+        20% of maxclusters.
+
+        After that... look at the bottom of the script for things to do.
+        """
+        # include 0 or not?
+        start_pos = 1
+
+        # Slice matrix to remove 0s if set
+        cl_count = cl_count[:, start_pos:]
+
+        max_cluster = len(cl_count[0,:])
+        read_limits = len(cl_count[:,0])
+
+        # restrict to a certain maxcluster
+        up_lim = True
+        if up_lim:
+            lim = int(math.floor(max_cluster/float(2)))
+            lim = 5
+            # Sum columns after lim to the lim-colum
+            cl_count[:, lim] = cl_count[:, lim:].sum(axis=1)
+            # Remove columns after the lim-column
+            cl_count = cl_count[:, :lim+1]
+
+            # Update max cluster
+            max_cluster = len(cl_count[0,:])
+
+        max_height = max(cl_count[:,0])
+
+        fig = plt.figure()
+
+        for lim in range(read_limits):
+            row_nr = lim+1
+            ax = fig.add_subplot(read_limits+1, 1, row_nr)
+
+            ax.bar(range(start_pos, max_cluster+start_pos), cl_count[lim,:],
+                   align = 'center', facecolor='#777777', width=0.5)
+
+            if row_nr == 1:
+                ax.set_title('The number of poly(A) clusters per 3UTR is stable')
+                ax.set_ylabel('Min 1 read', rotation='horizontal',
+                              horizontalalignment = 'right')
+            else:
+                ax.set_ylabel('Min {0} reads'.format(row_nr), rotation='horizontal')
+
+            ax.set_xlim((start_pos-1, max_cluster+1))
+            ax.set_ylim((0, max_height + 0.2*max_height))
+            ax.set_yticks(range(0, int(math.ceil(max_height+0.2*max_height)), 2000))
+            ax.yaxis.grid(True)
+
+            if row_nr == read_limits:
+                ax.set_xticks(range(start_pos,max_cluster+start_pos))
+                ax.set_xlabel('Number of poly(A) cluster per 3UTR')
+
+                # If you have limited the plot, say so in the last xtick
+                if up_lim:
+                    xticks = range(start_pos, max_cluster+start_pos)
+                    xticks[-1] = ' > {0}'.format(max_cluster)
+                    ax.set_xticklabels([str(tick) for tick in xticks])
+
+            else:
+                ax.set_xticks([])
+
+        plt.show()
+
+    def join_clusters(self, cluster_dicts, titles):
+        """
+        Show side-by-side the number of clusters with a given read count from
+        the dicts where the number of clusters have been obtained by different
+        means (all of them, just annotated ones, etc)
+        """
+
+        cutoff = 20
+        dset_nr = len(cluster_dicts)
+        counter = np.zeros([dset_nr, cutoff]) # 0-based
+
+        for (dset_indx, cl_dict) in enumerate(cluster_dicts):
+            for (read_nr, cluster_nr) in cl_dict.iteritems():
+                if read_nr > cutoff-1:
+                    counter[dset_indx, cutoff-1] += cluster_nr # add up if > cutoff
+                else:
+                    counter[dset_indx, read_nr-1] = cluster_nr
+
+        # Calculate the percentage of the last rows of the first one
+        # The first row is always the all_clusters
+        percentages = counter[1,:]/counter[0,:]
+        form_perc = [format(val, '.2f') for val in percentages]
+
+        # Get x-axis range
+        ind = range(1,cutoff+1)
+        max_height = counter.max()
+
+        # get the plot
+        (fig, ax) = plt.subplots()
+
+        colors = ['#777777', '#FF00FF']
+        axes = []
+
+        for dset_ind in range(dset_nr):
+            array = counter[dset_ind,:]
+            title = titles[dset_ind]
+            color = colors[dset_ind]
+            ll = ax.bar(ind, array, align = 'center', facecolor=color, width=0.5)
+            axes.append(ll)
+
+        # put numbers on top of the bars
+        for (rect_nr, rect) in enumerate(axes[0]):
+            height = rect.get_height()
+            #ax.text(xpos, ypos, your_text)
+            ax.text(rect.get_x()+rect.get_width()/2., 1.05*height,
+                     form_perc[rect_nr], ha='center', va='bottom')
+
+        ax.set_xlim((0, cutoff+1))
+        ax.set_ylim((0, max_height + 0.2*max_height))
+        ax.set_yticks(range(0, int(math.floor(max_height+0.05*max_height)), 1000))
+        ax.yaxis.grid(True)
+
+        ax.set_title('Clusters with high coverage are more often in the annotation',
+                     size=20)
+
+        fig.legend((axes[0][0], axes[1][0]), ('All', 'Found in annotation'),
+                   loc=10)
+
+        # OK this stuff is working. Now do the same but with the number from
+        # poly(A) db as well as the number from other datasets etc. Then
+        # organize your functions better... this is a mess!
+        plt.draw()
+
+    def all_clusters(self, cl_read_counter, my_title):
+        """
+        Simply plot the number of clusters with X nr of reads. Make a cut-off at
+        about 15
+        """
+        cutoff = 20
+        counter = np.zeros(cutoff) # 0-based (# of 1-size clusters are in [0])
+
+        for (read_nr, cluster_nr) in cl_read_counter.iteritems():
+            if read_nr > cutoff-1:
+                counter[cutoff-1] += cluster_nr # add up those bigger than cutoff
+            else:
+                counter[read_nr-1] = cluster_nr
+
+        max_height = max(counter)
+        (fig, ax) = plt.subplots()
+
+        # the arbitrary x axis range
+        ind = range(1,cutoff+1)
+
+        ax.bar(ind, counter, align = 'center', facecolor='#777777', width=0.5)
+
+        ax.set_title('Distribution of read counts of poly(A) cluster for {0}'\
+                     .format(my_title))
+
+        ax.set_xlim((0, cutoff+1))
+        ax.set_ylim((0, max_height + 0.2*max_height))
+        ax.set_yticks(range(0, int(math.ceil(max_height+0.2*max_height)), 1000))
+        ax.yaxis.grid(True)
+
+        # update the last value of the xtick
+        ax.set_xticks(ind)
+        ind[-1] = ' > {0}'.format(cutoff)
+        ax.set_xticklabels([str(tick) for tick in ind])
+
+        plt.draw()
 
 def get_utrs(settings):
     """
@@ -507,93 +705,178 @@ def output_control(settings, dsets):
 
     # Upstream/downstream ratios of polyA sites.
 
-    for dset in dsets:
-        # Get the maximum nr of polyA sites in one utr for max nr of plots
-        # Give a roof to the number of plots; 5?
-        max_cluster = max (utr.cluster_nr for utr in dset.utrs.itervalues())
 
-        # Git yourself some arrays 
-        # first second thrid and fourth
-        # nr of clusters
-        clrs_nr = 4
-        clus_list = [{'ud_ratio':[], 'support':[]} for val in range(clrs_nr)]
-
-        for (utr_id, utr) in dset.utrs.iteritems():
-
-            if utr.cluster_nr < clrs_nr:
-                continue
-
-            if utr.strand == '+':
-                clu = sorted(utr.clusters, key=attrgetter('polyA_coordinate'))
-                clu = clu[-clrs_nr:] # get only the last clrs_nr
-                # for + strand, reverse clu
-                clu = clu[::-1]
-
-            if utr.strand == '-':
-                clu = sorted(utr.clusters, key=attrgetter('polyA_coordinate'))
-                clu = clu[:clrs_nr] # get only the first clrs_nr
-
-            # The order of clsters in clu is '1st, 2nd, 3rd...'
-
-            eps_end = utr.beg + utr.eps_coord
-
-            # only get UTRs that have the final polyA cluster close to the
-            # coverage end!
-            if not (eps_end - 50 < clu[0].polyA_coordinate < eps_end + 50):
-                continue
-
-            # Normalize the ratios by the largest absolute deviation from 1
-            ud_ratios = []
-
-            for cl in clu:
-                # Make 0 into an almost-zero ...
-                if cl.dstream_covrg == 0:
-                    cl.dstream_covrg = 0.01
-
-                # do log2 ratios (if ==1, twice as big)
-                udratio = math.log(cl.ustream_covrg/cl.dstream_covrg,2)
-
-                ud_ratios.append(udratio)
-
-            #maxratio = max(max(ud_ratios), abs(min(ud_ratios)))
-            #norm_ud_ratios = [rat/maxratio for rat in ud_ratios]
-            norm_ud_ratios = ud_ratios
-
-            # Append the normailzed ratios to the arrays
-            for (indx, norm_rat) in enumerate(norm_ud_ratios):
-                clus_list[indx]['ud_ratio'].append(norm_rat)
-
-            # Normalize the read support
-            read_supp = [cl.nr_support_reads for cl in clu]
-            #maxsupp = max(read_supp)
-            #norm_read_supp = [supp/maxsupp for supp in read_supp]
-            norm_read_supp = read_supp
-
-            # Append normalized support ratios to arrays
-            for (indx, norm_supp) in enumerate(norm_read_supp):
-                clus_list[indx]['support'].append(norm_supp)
-
-        # Do teh plots
-        p.last_three_clustersites(clus_list)
-
-        # RESULT you see the trend you imagined.
-
-def polyadenylation_comparison(settings, utrs):
+def polyadenylation_comparison(settings, dsets):
     """
     * compare 3UTR polyadenylation in general
     * compare 3UTR polyadenylation UTR-to-UTR
     """
-    # How to compare polyAdenylation between compartments?
     p = Plotter()
 
-    # What is a good framework to call correlations from?
-    # Is every 
-    #
-    # It depends on PAS-type, PAS-distance, polyA-number (1, 2, .., last)
+    ## Simply: the distribution of read count of the poly(A) clusters
+    ##
+    # Method: 
+    #  for each dset, go through all 3utrs and count the number of clusters
+    # i)    with a given read count
+    # ii)   CLOSE TO ANNOTATION
+    # 
+    # 2) 
 
-    # Do we observe loss in coverage after sucessive polyadenylation sites?
-    # Indeed, this will depend on the expression of each isomer, but still we
-    # should be able to see something.
+    for dset in dsets:
+
+        all_read_counter = {}
+        annot_read_counter = {}
+
+        for (utr_id, utr) in dset.utrs.iteritems():
+
+            if utr.clusters == []:
+                continue
+
+            for cls in utr.clusters:
+
+                if cls.nr_support_reads in all_read_counter:
+                    all_read_counter[cls.nr_support_reads] += 1
+                else:
+                    all_read_counter[cls.nr_support_reads] = 1
+
+                if cls.nr_support_reads in annot_read_counter:
+                    if cls.annotated_polyA_distance != 'NA':
+                        annot_read_counter[cls.nr_support_reads] += 1
+                else:
+                    if cls.annotated_polyA_distance != 'NA':
+                        annot_read_counter[cls.nr_support_reads] = 1
+
+        clusters = (all_read_counter, annot_read_counter)
+        titles = ('All clusters', 'Annotated_clusters')
+
+        p.join_clusters(clusters, titles)
+
+        # Now you have which ones, in each dataset, which are found in the
+        # annotation.
+        # I would also like to have a counter of how many ones of size 1,2, etc,
+        # are found in either of the other two datasets with read count higher
+        # than 2/3/4/5 something.
+
+
+    ## Comparing upstream/downstream coverage and read coverage for the 3-4 last
+    ## polyA clusters in a 3UTR
+    #for dset in dsets:
+        ## Get the maximum nr of polyA sites in one utr for max nr of plots
+        ## Give a roof to the number of plots; 5?
+        #max_cluster = max (utr.cluster_nr for utr in dset.utrs.itervalues())
+
+        ## Git yourself some arrays 
+        ## first second thrid and fourth
+        ## nr of clusters
+        #clrs_nr = 3
+        #clus_list = [{'ud_ratio':[], 'support':[]} for val in range(clrs_nr)]
+
+        #for (utr_id, utr) in dset.utrs.iteritems():
+
+            #if utr.cluster_nr < clrs_nr:
+                #continue
+
+            #if utr.strand == '+':
+                #clu = sorted(utr.clusters, key=attrgetter('polyA_coordinate'))
+                #clu = clu[-clrs_nr:] # get only the last clrs_nr
+                ## for + strand, reverse clu
+                #clu = clu[::-1]
+
+            #if utr.strand == '-':
+                #clu = sorted(utr.clusters, key=attrgetter('polyA_coordinate'))
+                #clu = clu[:clrs_nr] # get only the first clrs_nr
+
+            ## The order of clsters in clu is '1st, 2nd, 3rd...'
+
+            #eps_end = utr.beg + utr.eps_coord
+
+            ## only get UTRs that have the final polyA cluster close to the
+            ## coverage end!
+            #if not (eps_end - 50 < clu[0].polyA_coordinate < eps_end + 50):
+                #continue
+
+            ## Normalize the ratios by the largest absolute deviation from 1
+            #ud_ratios = []
+
+            #for cls in clu:
+                ## Make 0 into an almost-zero ...
+                #if cls.dstream_covrg == 0:
+                    #cls.dstream_covrg = 0.01
+
+                #if cls.ustream_covrg == 0:
+                    #cls.ustream_covrg = 0.01
+
+                ## do log2 ratios (if ==1, twice as big)
+                #udratio = math.log(cls.ustream_covrg/cls.dstream_covrg,2)
+
+                #ud_ratios.append(udratio)
+
+            ##maxratio = max(max(ud_ratios), abs(min(ud_ratios)))
+            ##norm_ud_ratios = [rat/maxratio for rat in ud_ratios]
+            #norm_ud_ratios = ud_ratios
+
+            ## Append the normailzed ratios to the arrays
+            #for (indx, norm_rat) in enumerate(norm_ud_ratios):
+                #clus_list[indx]['ud_ratio'].append(norm_rat)
+
+            ## Normalize the read support
+            #read_supp = [cl.nr_support_reads for cl in clu]
+            ##maxsupp = max(read_supp)
+            ##norm_read_supp = [supp/maxsupp for supp in read_supp]
+            #norm_read_supp = read_supp
+
+            ## Append normalized support ratios to arrays
+            #for (indx, norm_supp) in enumerate(norm_read_supp):
+                #clus_list[indx]['support'].append(norm_supp)
+
+        ## Do teh plots
+        #p.last_three_clustersites(clus_list)
+         ##RESULT you see the trend you imagined.
+
+    #debug()
+
+    # 1) Investiage the sensitivity to the number of mapping poly(A) reads
+    # Make plots like Pedro suggested AND check out how many of the 1-reads and
+    # 2-reads clusters are found in the other compartments. This gives a measure
+    # of how sensitive the poly(A) clusters are.
+    # For the ones that don't get a re-confirmation, and those that do, compare
+    # PAS presence and SVM presence?
+
+    # Get number of utrs that have X clusters with minimum poly(A) read coverage
+    # of Y
+    #for dset in dsets:
+
+        #min_covrg = [1, 2, 3, 4, 5, 6 ,7] # minimum coverage for each cluster
+        #max_cluster = max(utr.cluster_nr for utr in dset.utrs.itervalues())
+
+        ## number of clusters in each dset. matrix, use numpy.
+        #cl_counter = np.zeros([len(min_covrg), max_cluster+1], dtype=int)
+
+        #for (utr_id, utr) in dset.utrs.iteritems():
+            ## If no clusters, add 1 to all the zeros
+            #if utr.clusters == []:
+                #cl_counter[:,0] += 1
+                #continue
+
+            ## you are here, so there are some 
+            #for minc in min_covrg:
+                ## For each cluster that has more or equal support to the minc
+                ## value, give a +1 to the cluster count (x) at this mic level (y)
+                #cl_count = 0
+                #for cls in utr.clusters:
+                    #if cls.nr_support_reads >= minc:
+                        #cl_count += 1
+
+                #if cl_count > 0:
+                    ## minc must be adjusted with 1 to have 0-index of array
+                    #cl_counter[minc-1, cl_count] += 1
+                #else:
+                    #cl_counter[minc-1, 0] += 1
+
+        #p.cluster_count(cl_counter)
+
+    #####################################################################
+    # It depends on PAS-type, PAS-distance, polyA-number (1, 2, .., last)
 
     # 1) Usage of multiple polyadenylation sites in each UTR
     # 2) When multiple sites, what is the read frequency of the sites?
@@ -687,11 +970,12 @@ def main():
     # Get the dsets with utrs from the length and polyA files
     dsets = get_utrs(settings)
 
-    output_control(settings, dsets)
+    #output_control(settings, dsets)
 
     #utr_length_comparison(settings, utrs)
 
     polyadenylation_comparison(settings, dsets)
+    debug()
 
     reads(settings)
 
@@ -705,7 +989,6 @@ def main():
 
 if __name__ == '__main__':
     main()
-
 
 # DISCUSSION #
 
@@ -722,3 +1005,11 @@ if __name__ == '__main__':
 # How reproducable are the polyA reads?
 # If for the same gene, for a similar before/after coverage, what is the
 # variation within the number of polyA reads?
+
+# IDEA: measure of coverage-limitation: how many polyA clusters (>5 reads) are
+# found with only 1 read in other compartments/datasets?
+
+# Q: is there variation between datasets in polyA-cluster usage in utrs that are
+# expressed in all datsets?
+
+# Q: what should we call a reliable cluster?
