@@ -137,5 +137,5 @@ url = http://genome.crg.es/~jskancke/bigWigs
 [PLOTTING]
 # List the datasets from which you wish plots to be generated
 # These datasets must at a previous point have been analyzed.
-datasets = HeLa-S3_Cytoplasm
-# :HeLa-S3_Nucleus:HeLa-S3_Whole_Cell
+datasets = HeLa-S3_Cytoplasm:HeLa-S3_Whole_Cell
+#:HeLa-S3_Nucleus

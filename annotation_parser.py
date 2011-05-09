@@ -1004,8 +1004,6 @@ def get_seqs(utr_dict, hgfasta):
     of the human genome fasta file"""
     f = Fasta(hgfasta)
     seq_dict = {}
-    # TODO for + starnd, beg should be +'ed by 1, and end - by 1
-    # TODO the - strand ones are 2 nts too long :S
     for ts_id, ts_param in utr_dict.iteritems():
         (chrm, beg, end, strand) = ts_param
         if strand == '+':

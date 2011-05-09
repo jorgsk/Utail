@@ -6,24 +6,14 @@ from __future__ import division
 import os
 import ConfigParser
 import sys
-
-#import matplotlib
-#matplotlib.use('Qt4Agg')
+import itertools
 
 import matplotlib.pyplot as plt
-from operator import attrgetter
-import math
+plt.ion() # turn on the interactive mode so you can play with plots
 
-#GTKAgg 	Agg rendering to a GTK canvas (requires PyGTK)
-#GTK 	GDK rendering to a GTK canvas (not recommended) (requires PyGTK)
-#GTKCairo 	Cairo rendering to a GTK Canvas (requires PyGTK)
-#WXAgg 	Agg rendering to to a wxWidgets canvas (requires wxPython)
-#WX 	Native wxWidgets drawing to a wxWidgets Canvas (not recommended) (requires wxPython)
-#TkAgg 	Agg rendering to a Tk canvas (requires TkInter)
-#QtAgg 	Agg rendering to a Qt canvas (requires PyQt)
-#Qt4Agg 	Agg rendering to a Qt4 canvas (requires PyQt4)
-#FLTKAgg 	Agg rendering to a FLTK canvas (requires pyFLTK)
-#macosx 	
+from operator import attrgetter
+from operator import itemgetter
+import math
 
 import numpy as np
 
@@ -174,12 +164,19 @@ class Cluster(object):
     For polyA cluster objects from the 'polyA' output file in the 'output' directory
     """
 
-    def __init__(self, input_line):
+    def __init__(self, input_line, full_info = True):
         #
         (chrm, beg, end, ID, polyA_number, strand, polyA_coordinate,
          number_supporting_reads, dstream_covrg, ustream_covrg,
          annotated_polyA_distance, nearby_PAS, PAS_distance,
          rpkm) = input_line.split('\t')
+
+        if full_info:
+            self.chrm = chrm
+            self.beg = str_to_intfloat(beg)
+            self.end = str_to_intfloat(end)
+            self.strand = strand
+            self.ID = ID
 
         self.cluster_nr = str_to_intfloat(polyA_number)
         self.polyA_coordinate = str_to_intfloat(polyA_coordinate)
@@ -252,7 +249,7 @@ class Plotter(object):
         ax.set_ylim(*ylim)
         fig.show()
 
-    def scatterplot(self, dset1, dset2, label1, label2, title, xlim, ylim):
+    def scatterplot(self, dset1, dset2, label1, label2, title):#, xlim, ylim):
         """
         A basic scatter plot
         """
@@ -262,8 +259,8 @@ class Plotter(object):
         ax.set_xlabel = label1
         ax.set_ylabel = label2
         ax.set_title(title)
-        ax.set_xlim = xlim
-        ax.set_ylim = ylim
+        #ax.set_xlim = xlim
+        #ax.set_ylim = ylim
         fig.show()
 
     def triangleplot_scatter(self, datas, titles):
@@ -468,17 +465,54 @@ class Plotter(object):
         the dicts where the number of clusters have been obtained by different
         means (all of them, just annotated ones, etc)
         """
+        #cluster_dicts = cluster_dicts[:2]
+        #titles = titles[:2]
 
         cutoff = 20
+
         dset_nr = len(cluster_dicts)
         counter = np.zeros([dset_nr, cutoff]) # 0-based
 
+        percenter = np.zeros([dset_nr, cutoff]) # 0-based
+
+        # Get the number of clusters with read count 1, 2, etc
         for (dset_indx, cl_dict) in enumerate(cluster_dicts):
-            for (read_nr, cluster_nr) in cl_dict.iteritems():
+            for (read_nr, clusters) in cl_dict.iteritems():
                 if read_nr > cutoff-1:
-                    counter[dset_indx, cutoff-1] += cluster_nr # add up if > cutoff
+                    counter[dset_indx, cutoff-1] += len(clusters) # add if > cutoff
                 else:
-                    counter[dset_indx, read_nr-1] = cluster_nr
+                    counter[dset_indx, read_nr-1] = len(clusters)
+
+        # Get the intersection of all clusters with the rest of the sets. That
+        # intersection should be divided by the total clusters after.
+        def intersect_percent(read_nr):
+            """
+            Take the union of all datasets (annotated, support in other
+            datasets, svm ...), and finally do an intersection with ALL
+            clusters. Return the percentage that intersect in the end.
+            """
+            cl_sets = [set(cl_dict[read_nr]) for cl_dict in cluster_dicts[1:]]
+            uni = set.union(*cl_sets)
+            uni = set(cluster_dicts[2][read_nr])
+            intrsction = set.intersection(uni, set(cluster_dicts[0][read_nr]))
+            return len(intrsction)/counter[0, read_nr-1]
+
+
+        # TODO
+        # Make a function that takes the pairwise intersection between all sets
+        # and find a way to display the information.
+        # Then do the svm thing.
+        # Then figure out what this means for finding novel poly(A) sites.
+
+        # What you did today: merged all clusters into a mega cluster
+        # plotted the read count of two compartments against each other
+        # 
+
+        percentages = [intersect_percent(read_nr) for read_nr in range(1, cutoff+1)]
+
+        form_perc = [format(val, '.2f') for val in percentages]
+
+        debug()
 
         # Calculate the percentage of the last rows of the first one
         # The first row is always the all_clusters
@@ -523,6 +557,7 @@ class Plotter(object):
         # OK this stuff is working. Now do the same but with the number from
         # poly(A) db as well as the number from other datasets etc. Then
         # organize your functions better... this is a mess!
+
         plt.draw()
 
     def all_clusters(self, cl_read_counter, my_title):
@@ -562,6 +597,32 @@ class Plotter(object):
 
         plt.draw()
 
+def get_clusters(settings):
+
+    cluster_files = settings.polyA_files()
+
+    # Check if all length files exist or that you have access
+    [verify_access(f) for f in cluster_files.values()]
+
+    clusters = []
+    for dset_name in settings.datasets:
+
+        clusterfile = open(cluster_files[dset_name], 'rb')
+        # Get headers
+        c_header = clusterfile.next()
+
+        dset_clusters = []
+
+        for line in clusterfile:
+            ln = line.split()
+            hsh = '_'.join([ln[0], ln[6], ln[5]])
+            #Index should be the location of each cluster: chrm_pos_strand
+            dset_clusters.append(Cluster(line))
+
+        clusters.append(PolyaCluster(dset_clusters, dset_name))
+
+    return clusters
+
 def get_utrs(settings):
     """
     Return a list of UTR instances. Each UTR instance is
@@ -594,7 +655,8 @@ def get_utrs(settings):
 
         # Add cluster objects to the utr objects (line[3] is UTR_ID
         for line in clusterfile:
-            utr_dict[line.split()[3]].clusters.append(Cluster(line))
+            utr_dict[line.split()[3]].clusters.append(Cluster(line,
+                                                              full_info=False))
 
         # Update the UTRs with some new info about their clusters
         for (utr_id, utr_obj) in utr_dict.iteritems():
@@ -706,7 +768,7 @@ def output_control(settings, dsets):
     # Upstream/downstream ratios of polyA sites.
 
 
-def polyadenylation_comparison(settings, dsets):
+def polyadenylation_comparison(settings, dsets, clusters, super_clusters, dset_2super):
     """
     * compare 3UTR polyadenylation in general
     * compare 3UTR polyadenylation UTR-to-UTR
@@ -722,10 +784,14 @@ def polyadenylation_comparison(settings, dsets):
     # 
     # 2) 
 
+    # Create a mega-cluster of all the clusters in clusters...
+    # On the form [cluster_coord][dsetx][read_count]
+
     for dset in dsets:
 
-        all_read_counter = {}
-        annot_read_counter = {}
+        all_read_counter = {} # cluster_size : read_count for all clusters
+        annot_read_counter = {} # cluster_size : read_count for clusters w/annot
+        other_dsets = {} # cluster_size : read_count for clusters in other dsets
 
         for (utr_id, utr) in dset.utrs.iteritems():
 
@@ -734,20 +800,37 @@ def polyadenylation_comparison(settings, dsets):
 
             for cls in utr.clusters:
 
-                if cls.nr_support_reads in all_read_counter:
-                    all_read_counter[cls.nr_support_reads] += 1
-                else:
-                    all_read_counter[cls.nr_support_reads] = 1
+                # key that uniquely defines this polyA_cluster
+                # this key will be used to do unions and intersections
+                keyi = dset.name+utr.chrm+utr.strand+str(cls.polyA_coordinate)
 
+                # All clusters
+                if cls.nr_support_reads in all_read_counter:
+                    all_read_counter[cls.nr_support_reads].append(keyi)
+                else:
+                    all_read_counter[cls.nr_support_reads] = [keyi]
+
+                # Annotated clusters
                 if cls.nr_support_reads in annot_read_counter:
                     if cls.annotated_polyA_distance != 'NA':
-                        annot_read_counter[cls.nr_support_reads] += 1
+                        annot_read_counter[cls.nr_support_reads].append(keyi)
                 else:
                     if cls.annotated_polyA_distance != 'NA':
-                        annot_read_counter[cls.nr_support_reads] = 1
+                        annot_read_counter[cls.nr_support_reads] = [keyi]
 
-        clusters = (all_read_counter, annot_read_counter)
-        titles = ('All clusters', 'Annotated_clusters')
+                # Clusters in other datasets
+                all_key = dset_2super[keyi]
+
+                if cls.nr_support_reads in other_dsets:
+                    for (dn, sup_reads) in zip(*super_clusters[all_key]):
+                        if dn != dset.name: # don't count yourself!!
+                            if sup_reads > 1: # maybe set treshold?
+                                other_dsets[cls.nr_support_reads].append(keyi)
+                else:
+                    other_dsets[cls.nr_support_reads] = [keyi]
+
+        clusters = (all_read_counter, annot_read_counter, other_dsets)
+        titles = ('All clusters', 'Annotated_clusters', 'Clusters_in_other_dsets')
 
         p.join_clusters(clusters, titles)
 
@@ -756,10 +839,46 @@ def polyadenylation_comparison(settings, dsets):
         # I would also like to have a counter of how many ones of size 1,2, etc,
         # are found in either of the other two datasets with read count higher
         # than 2/3/4/5 something.
+        #
+        # make a scatter plot of the coverage of site 1 to site 2
+
+    ###
+    ### What is the correlation of read count for the same location in different
+    ### compartments? NOTE must be extended to 3 datasets or more
+    ###
+
+    ## For all the clusters with more than one dataset supporting it, get a list
+    ## of how many poly(A) reads are at that support.
+
+    #count_dset = dict((dset.name, []) for dset in dsets)
+    #for (chrpos, sup_cl) in super_clusters.iteritems():
+
+        #if (len(set(sup_cl[0])) == 2) and (len(sup_cl[0]) == 2):
+            #for (name, covrg) in zip(*sup_cl):
+                #if len(zip(*sup_cl)) != 2:
+                    #debug()
+                #count_dset[name].append(covrg)
+
+        ##if len(sup_cl[0]) > 2:
+            ### TODO a bug. a polyA cluster has double representation in both
+            ### datasets. whence this error?
+            ##debug()
 
 
+    ## get all pairwise combinations of the dsets
+    #pairs = [pa for pa in itertools.combinations([ds.name for ds in dsets], 2)]
+    #for pa in pairs:
+        #(p1, p2) = (pa[0], pa[1])
+    #title = 'PolyA-site read count variation'
+    ##xlim = 
+    #p.scatterplot(count_dset[p1], count_dset[p2], p1, p2, title)
+    #debug()
+
+    ##
     ## Comparing upstream/downstream coverage and read coverage for the 3-4 last
     ## polyA clusters in a 3UTR
+    ##
+
     #for dset in dsets:
         ## Get the maximum nr of polyA sites in one utr for max nr of plots
         ## Give a roof to the number of plots; 5?
@@ -956,6 +1075,98 @@ def epsilon_evaluation(settings):
 
     pass
 
+def itatr(tup):
+    """
+    Yield the attribute polyA_coordinate from the first element in a tuple
+    """
+    f = itemgetter(0)
+    g = attrgetter('polyA_coordinate')
+
+    return g(f(tup))
+
+def merge_clusters(clusters):
+    """
+    Merge all clusters from all datasets into one huge cluster.
+    """
+
+    all_clusters = {} # keys = cluster_centers
+    each_cluster_2all = {}
+
+    chrms = ['chr'+str(nr) for nr in range(1,23) + ['X','Y','M']]
+    tsdict = dict((chrm, {'+':[], '-':[]}) for chrm in chrms)
+
+    # Put all the polyAclusters in a dict with cluster pos and dset.name
+    for dset in clusters:
+        for cls in dset.pAclusters:
+            tsdict[cls.chrm][cls.strand].append((cls, dset.name))
+
+    for (chrm, strand_dict) in tsdict.items():
+        if strand_dict == {'+': [], '-': []}:
+            continue
+        for (strand, cls) in strand_dict.iteritems():
+            if cls == []:
+                # or put a placeholder?
+                continue
+
+            # initialize the first mega_cluster
+            clustsum = 0
+            clustcount = 0
+            this_mega_cluster = []
+            mega_clusters = []
+            mean = 0
+
+            for (val, dset_name) in sorted(cls, key = itatr):
+                ival = val.polyA_coordinate
+
+                # If dist between new entry and cluster mean is < 40, keep in cluster
+                if abs(ival - mean) < 20:
+                    this_mega_cluster.append((val, dset_name))
+
+                    # update cluster values
+                    clustsum = clustsum + ival
+                    clustcount += 1
+                    mean = clustsum/clustcount
+
+                else: # If not, start a new cluster, and save the old one
+                    mega_clusters.append(this_mega_cluster)
+                    clustsum = ival
+                    clustcount = 1
+                    this_mega_cluster = [(val, dset_name)]
+                    mean = ival
+
+            # Append the last cluster
+            mega_clusters.append(this_mega_cluster)
+
+            # if the first cluster is empty, remove it
+            if mega_clusters[0] == []:
+                mega_clusters.pop(0)
+
+            # Get the mean of the clusters and save to the all_clusters dict
+            for mega_cluster in mega_clusters:
+                coordinates = [clu.polyA_coordinate for (clu, dn) in mega_cluster]
+
+                mean = int(math.floor(sum(coordinates)/float(len(coordinates))))
+                key = chrm + strand + str(mean)
+
+                # The information you're looking for. You can add more later if
+                # needed. If you need everything, you can add the whole object.
+                coverages = [clu.nr_support_reads for (clu, dn) in mega_cluster]
+                dsets = [dn for (clu, dn) in mega_cluster]
+
+                # add entry to the all clusters
+                all_clusters[key] = ((dsets, coverages))
+
+                # store the key with the original polyA objects
+                # for now, make a each_cluster -> all_cluster mapping
+                # the idea is that you get the key for all_clusters by looking
+                # in each_keys for your dataset-polyAcluster combination
+                each_keys = [dset_name+cl.chrm+cl.strand+str(cl.polyA_coordinate) for
+                             (cl, dset_name) in mega_cluster]
+
+                for e_key in each_keys:
+                    each_cluster_2all[e_key] = key
+
+    return (all_clusters, each_cluster_2all)
 
 def main():
     # The path to the directory the script is located in
@@ -967,14 +1178,24 @@ def main():
     # Read UTR_SETTINGS
     settings = Settings(os.path.join(here, 'UTR_SETTINGS'), savedir, outputdir, here)
 
-    # Get the dsets with utrs from the length and polyA files
+    # Get the SVM coordinates
+    #svm = get_svm()
+
+    # Get the dsets with utrs and their clusters from the length and polyA files
     dsets = get_utrs(settings)
+
+    # Get just the clusters from the polyA files
+    clusters = get_clusters(settings)
+
+    # Merge all clusters in datset. Return interlocutor-dict for going from each
+    # poly(A) cluster in each dataset to the
+    (super_cluster, dset_2super) = merge_clusters(clusters)
 
     #output_control(settings, dsets)
 
     #utr_length_comparison(settings, utrs)
 
-    polyadenylation_comparison(settings, dsets)
+    polyadenylation_comparison(settings, dsets, clusters, super_cluster, dset_2super)
     debug()
 
     reads(settings)
