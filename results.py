@@ -506,7 +506,11 @@ class Plotter(object):
 
         # What you did today: merged all clusters into a mega cluster
         # plotted the read count of two compartments against each other
-        # 
+        # You need to make the table of intersections between all and the rest
+        # of the sets. do this for read counts 1...10 and print for display.
+        # Having done this for all 3 cell compartments, see what the data tells
+        # you. In what position are you to say that polyA clusters are novel or
+        # not?
 
         percentages = [intersect_percent(read_nr) for read_nr in range(1, cutoff+1)]
 
