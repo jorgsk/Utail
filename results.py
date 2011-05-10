@@ -468,12 +468,10 @@ class Plotter(object):
         #cluster_dicts = cluster_dicts[:2]
         #titles = titles[:2]
 
-        cutoff = 20
+        cutoff = 8
 
         dset_nr = len(cluster_dicts)
         counter = np.zeros([dset_nr, cutoff]) # 0-based
-
-        percenter = np.zeros([dset_nr, cutoff]) # 0-based
 
         # Get the number of clusters with read count 1, 2, etc
         for (dset_indx, cl_dict) in enumerate(cluster_dicts):
@@ -483,86 +481,114 @@ class Plotter(object):
                 else:
                     counter[dset_indx, read_nr-1] = len(clusters)
 
-        # Get the intersection of all clusters with the rest of the sets. That
-        # intersection should be divided by the total clusters after.
-        def intersect_percent(read_nr):
-            """
-            Take the union of all datasets (annotated, support in other
-            datasets, svm ...), and finally do an intersection with ALL
-            clusters. Return the percentage that intersect in the end.
-            """
-            cl_sets = [set(cl_dict[read_nr]) for cl_dict in cluster_dicts[1:]]
-            uni = set.union(*cl_sets)
-            uni = set(cluster_dicts[2][read_nr])
-            intrsction = set.intersection(uni, set(cluster_dicts[0][read_nr]))
-            return len(intrsction)/counter[0, read_nr-1]
+        dset_dict = dict(zip(titles, cluster_dicts))
 
+        # This is two tuples, each with two elements: a matrix and a
+        # row-identifer for the matrix
+        pairw_all_annot = pairwise_intersect(dset_dict, cutoff)
 
-        # TODO
-        # Make a function that takes the pairwise intersection between all sets
-        # and find a way to display the information.
-        # Then do the svm thing.
-        # Then figure out what this means for finding novel poly(A) sites.
+        # Print two figures; one where all_clusters is main and one where
+        # annotated_clusters are main
+        for (dset_ind, (pairw_matrix, pairw_mrows)) in enumerate(pairw_all_annot):
 
-        # What you did today: merged all clusters into a mega cluster
-        # plotted the read count of two compartments against each other
-        # You need to make the table of intersections between all and the rest
-        # of the sets. do this for read counts 1...10 and print for display.
-        # Having done this for all 3 cell compartments, see what the data tells
-        # you. In what position are you to say that polyA clusters are novel or
-        # not?
+            cols = ['#0000FF', '#3333FF', '#4C3380', '#8A5CE6', '#AD85FF']
 
-        percentages = [intersect_percent(read_nr) for read_nr in range(1, cutoff+1)]
+            # 1) Plot the first bars: the all_clusters ones.
 
-        form_perc = [format(val, '.2f') for val in percentages]
+            # Total number of bars in each complex
+            bar_nr = len(pairw_matrix[:,0,0]) # actually =  + all_cl and - union
+            # Set width of bars
+            bar_width = 0.6 # total width of bar-cluster = wid*bar_nr
+            # Get the width of the whole bar-compled
+            complex_width = bar_width*bar_nr
+            # Set how much space should be between the bar-complexes
+            complex_interspace = complex_width/2
+            # Total number of complexes is cutoff. Get the last x-coordinate.
+            final_x = math.ceil((complex_width + complex_interspace)*cutoff)
 
-        debug()
+            # Set your x-axis so that it will be wide enough for all complexes
+            # this will be the leftmost x-position of the first bar
+            ind = np.arange(1, final_x+1, complex_width+complex_interspace)
+            # Shorten to make sure that this is as long as the data-points
+            ind = ind[:cutoff]
 
-        # Calculate the percentage of the last rows of the first one
-        # The first row is always the all_clusters
-        percentages = counter[1,:]/counter[0,:]
-        form_perc = [format(val, '.2f') for val in percentages]
+            # Get max height of bars
+            max_height = counter[dset_ind].max() # original clusters always highest
 
-        # Get x-axis range
-        ind = range(1,cutoff+1)
-        max_height = counter.max()
+            # get the plot
+            (fig, ax) = plt.subplots()
 
-        # get the plot
-        (fig, ax) = plt.subplots()
+            # Plot the cluster counts (keep axis objects for later)
+            ax_list = [ax.bar(ind, counter[dset_ind], facecolor=cols[0],
+                          width=bar_width)]
+            # Plot the union-counts on top of the cluster counts
+            ax_list.append(ax.bar(ind, pairw_matrix[0, :, 0], facecolor=cols[1],
+                                  width=bar_width))
 
-        colors = ['#777777', '#FF00FF']
-        axes = []
+            # Plot the rest of the bars.
+            for int_ind in range(1, bar_nr):
 
-        for dset_ind in range(dset_nr):
-            array = counter[dset_ind,:]
-            title = titles[dset_ind]
-            color = colors[dset_ind]
-            ll = ax.bar(ind, array, align = 'center', facecolor=color, width=0.5)
-            axes.append(ll)
+                array = pairw_matrix[int_ind,:,0] # absolute numbers has dim 0
+                clr = cols[int_ind+2]
+                # ind+bar_width*(int_ind+1) adjusts the bars one 'bar_width' on the
+                # x-axis
+                ll = ax.bar(ind+bar_width*(int_ind), array, facecolor=clr,
+                            width=bar_width)
+                ax_list.append(ll)
 
-        # put numbers on top of the bars
-        for (rect_nr, rect) in enumerate(axes[0]):
-            height = rect.get_height()
-            #ax.text(xpos, ypos, your_text)
-            ax.text(rect.get_x()+rect.get_width()/2., 1.05*height,
-                     form_perc[rect_nr], ha='center', va='bottom')
+            # format the union percentages nicely
+            form_perc = [[format(el, '.2f') for el in pairw_matrix[ind,:,1]] for
+                         ind in range(bar_nr)]
 
-        ax.set_xlim((0, cutoff+1))
-        ax.set_ylim((0, max_height + 0.2*max_height))
-        ax.set_yticks(range(0, int(math.floor(max_height+0.05*max_height)), 1000))
-        ax.yaxis.grid(True)
+            # 4) put numbers on top of the bars (and skip the 'union' axis)
+            myaxes = [ax_list[0]] + ax_list[2:]
+            for (bars_nr, bars_axes) in enumerate(myaxes):
+                for (rect_nr, rect) in enumerate(bars_axes):
+                    height = rect.get_height()
+                    #ax.text(xpos, ypos, your_text) and ax is the CURRENT axes
+                    ax.text(rect.get_x()+rect.get_width()/2., 1.03*height,
+                             form_perc[bars_nr][rect_nr], ha='center',
+                            va='bottom', size='small')
 
-        ax.set_title('Clusters with high coverage are more often in the annotation',
-                     size=20)
+            # Set the x-axis and y-axis
+            ax.set_xlim((0, final_x+1))
+            ax.set_ylim((0, max_height + 0.2*max_height))
+            # Set the labels on the y axis
+            ax.set_yticks(range(0, int(math.floor(max_height+0.05*max_height)), 1000))
 
-        fig.legend((axes[0][0], axes[1][0]), ('All', 'Found in annotation'),
-                   loc=10)
+            # set the positions of the ticks on the x axis; they should be the
+            # centered on the bar clusters
+            comp_center = complex_width/2
+            complex_centers = np.arange(1+comp_center, final_x+comp_center,
+                                         complex_width+complex_interspace)
+            ax.set_xticks(complex_centers)
 
-        # OK this stuff is working. Now do the same but with the number from
-        # poly(A) db as well as the number from other datasets etc. Then
-        # organize your functions better... this is a mess!
+            # Set labels for those ticks (last one is > or more)
+            ticklabels = [str(val) for val in range(1, cutoff+1)]
+            ticklabels[-1] = ' > {0}'.format(cutoff)
 
-        plt.draw()
+            ax.set_xticklabels(ticklabels)
+
+            # Put grids on the y-axis
+            ax.yaxis.grid(True)
+
+            # Set labels on the axes
+            ax.set_xlabel('Number of reads covering poly(A) cluster')
+            ax.set_ylabel('Number of poly(A) clusters')
+
+            ax.set_title('Clusters with high coverage are often found in'
+                         'supporting data ', size=20)
+
+            legend_titles = [pairw_mrows[0][0]] + [tup[1] for tup in pairw_mrows]
+            legend_axes = (ax[0] for ax in ax_list)
+            fig.legend(legend_axes, legend_titles, loc=10)
+
+            # OK this stuff is working. Now get the SVMz! Then start on
+            # characterizing the differential usage of polyA sites in the
+            # different compartments.
+
+            plt.draw()
+            debug()
 
     def all_clusters(self, cl_read_counter, my_title):
         """
@@ -600,6 +626,147 @@ class Plotter(object):
         ax.set_xticklabels([str(tick) for tick in ind])
 
         plt.draw()
+
+def pairwise_intersect(dset_dict, cutoff):
+    """
+    For 'all clusters' and 'annotated clusters', get the intersection with all
+    other datasets; and the intersection with the union of all other datasets.
+    """
+    # Get the pairs: all with the rest
+    # Get the union: all except the rest
+
+    all_cl = 'All clusters'
+    annot = 'Annotated_clusters'
+
+    # Get the pairs of 'All_clusters' with the other datasets
+    all_pairs = [('All clusters', dset_name) for dset_name in
+                  dset_dict.keys() if dset_name != all_cl]
+
+    # Get the names of all the datasets except 'All clusters'
+    not_all = [dset_name for dset_name in dset_dict.keys() if dset_name !=
+               all_cl]
+
+    # Get the pairs of 'Annotated clusters' with the other datasets, except all
+    annot_pairs = [('Annotated_clusters', dset_name) for dset_name in
+                  dset_dict.keys() if (dset_name != annot) and (dset_name != all_cl)]
+
+    # Get the names of all the datasets except 'Annotatedusters'
+    not_annot = [dset_name for dset_name in dset_dict.keys() if (dset_name !=
+               annot) and (dset_name != all_cl)]
+
+    matr = []
+
+    # Get the intersection matrices themselves. Rows are (main_dset, sub_dset)
+    # intersection pars. Columns are the read count of the polyA sites.
+
+    for (pairs, unions) in [(all_pairs, not_all), (annot_pairs,  not_annot)]:
+        isec_matrix = get_intersection_matrix(pairs, unions, cutoff, dset_dict)
+        pairs = [(pairs[0][0], 'Union')] + pairs
+        matr.append((isec_matrix, pairs))
+
+    return matr
+
+def get_intersection_matrix(pair_names, unions_names, cutoff, dset_dict):
+    """
+    Get the intersection of all the 'pairs' datasets.
+    Create the union of all the 'union' datasets, and do the intersection of
+    this unition with the leading pair in the pair datasets.
+
+    Do all this for every read count up to cutoff.
+    """
+
+    dset_nr = len(pair_names)+1 #pairs and union
+
+    # Counter is 3-dimensional for keeping both abs number of intersection AND
+    # percentages. 
+
+    counter = np.zeros([dset_nr, cutoff, 2]) # 0-based
+
+    # Get the pairs 
+    for (indx1, (main_name, sub_name)) in enumerate(pair_names):
+        # Get the pair-dsets
+        main_dset = dset_dict[main_name]
+        sub_dset = dset_dict[sub_name]
+
+        # Iterate through all (polyA-cluster, read_count) points in the
+        # datasets, and add the polyA-clusters to two temporary lists, indexed
+        # by the read count from 0 to cutoff-1.
+        main_cls = [[] for val in range(cutoff)]
+        sub_cls = [[] for val in range(cutoff)]
+
+        for (dset, dset_l) in [(main_dset, main_cls), (sub_dset, sub_cls)]:
+
+            for (read_nr, clusters) in dset.iteritems():
+                if read_nr > cutoff-1:
+                    dset_l[cutoff-1].append(clusters) # add if > cutoff
+                else:
+                    dset_l[read_nr-1] = clusters
+
+            # Flatten the last array
+            dset_l[-1] = sum(dset_l[-1], [])
+
+        # Get number of intersections 
+        isect_nrs = [len(set.intersection(set(main_cls[count]), set(sub_cls[count])))
+                                      for count in range(0, cutoff)]
+
+        # Get percent of intersection relative to 'main' dataset (will be all or annot)
+        isect_pcnt = []
+        for (indx, isect_nr) in enumerate(isect_nrs):
+
+            # Only calculate percentage if more than 1 cluster with this read count
+            if main_cls[indx] != 0:
+                isect_pcnt.append(isect_nrs[indx]/len(main_cls[indx]))
+            else:
+                isect_pcnt.append(0)
+
+        # Add the number and intersection to the array
+        counter[indx1,:,0] = isect_nrs
+        counter[indx1,:,1] = isect_pcnt
+
+    # Now all the pairs have been added. Add the unions
+    # Take the union of all dsets except
+    all_cls = [[] for val in range(cutoff)]
+
+    # add all the clusters from the union datasets to all_cls
+    for u_name in unions_names:
+        for (read_nr, clusters) in dset_dict[u_name].iteritems():
+
+            if read_nr > cutoff-1:
+                all_cls[cutoff-1].append(clusters) # add if > cutoff
+            else:
+                all_cls[read_nr-1].append(clusters)
+
+    # flatten all_cls (which has all the clusters in the union dsets)
+    # and take union at the same tim
+    all_cls = [sum(el, []) for el in all_cls]
+
+    # Get number of intersections 
+    # (using main_cls from the previous for-loop -- dirty :S)
+    all_isect_nrs = [len(set.intersection(set(main_cls[count]), set(all_cls[count])))
+                                  for count in range(0, cutoff)]
+
+    # Get percent of intersection relative to 'main' dataset (will be all or annot)
+    all_isect_pcnt = []
+    for (indx, isect_nr) in enumerate(isect_nrs):
+
+        # Only calculate percentage if more than 1 cluster with this read count
+        if main_cls[indx] != 0:
+            all_isect_pcnt.append(all_isect_nrs[indx]/len(main_cls[indx]))
+        else:
+            all_isect_pcnt.append(0)
+
+    # Add the number and intersection to the array
+    counter[-1,:,0] = all_isect_nrs
+    counter[-1,:,1] = all_isect_pcnt
+
+    ### flip things around; put union row first. This is for better compliance
+    # with downstream code
+
+    newcount = np.zeros([dset_nr, cutoff, 2])
+    newcount[0] = counter[-1]
+    newcount[1:] = counter[0:-1]
+
+    return newcount
 
 def get_clusters(settings):
 
@@ -728,68 +895,166 @@ def utr_length_comparison(settings, utrs):
     eps_lengths_c = [dset.get_eps_length(minRPKM=2, IDs=common) for dset in lengths]
     p.boxplot(eps_lengths_c, names, ylim)
 
-def output_control(settings, dsets):
-    """
-    Control: what is the correlation between # supporting reads; change in
-    coverage; PAS-type; PAS-distance; and rpkm?
-    """
-    p = Plotter()
 
-    ## TRIANGLE PLOT ##
+### PLOTTING METHODS ###
 
+def cluster_size_sensitivity():
+    """
+    1) Investiage the sensitivity to the number of mapping poly(A) reads
+    Make plots like Pedro suggested AND check out how many of the 1-reads and
+    2-reads clusters are found in the other compartments. This gives a measure
+    of how sensitive the poly(A) clusters are.
+    """
+
+    # Get number of utrs that have X clusters with minimum poly(A) read coverage
+    # of Y
     #for dset in dsets:
 
-        #nr_supp_reads = []
-        #covrg_down = []
-        #covrg_up = []
-        #rpkm = []
+        #min_covrg = [1, 2, 3, 4, 5, 6 ,7] # minimum coverage for each cluster
+        #max_cluster = max(utr.cluster_nr for utr in dset.utrs.itervalues())
+
+        ## number of clusters in each dset. matrix, use numpy.
+        #cl_counter = np.zeros([len(min_covrg), max_cluster+1], dtype=int)
 
         #for (utr_id, utr) in dset.utrs.iteritems():
+            ## If no clusters, add 1 to all the zeros
+            #if utr.clusters == []:
+                #cl_counter[:,0] += 1
+                #continue
 
-            ## For all polyA clusters get
-            ## 1) NR of supporting reads
-            ## 2) Coverage downstream
-            ## 3) Coverage upstream
-            ## 4) RPKM
+            ## you are here, so there are some 
+            #for minc in min_covrg:
+                ## For each cluster that has more or equal support to the minc
+                ## value, give a +1 to the cluster count (x) at this mic level (y)
+                #cl_count = 0
+                #for cls in utr.clusters:
+                    #if cls.nr_support_reads >= minc:
+                        #cl_count += 1
 
-            #for cls in utr.clusters:
-                #nr_supp_reads.append(cls.nr_support_reads)
-                #covrg_down.append(cls.dstream_covrg)
-                #covrg_up.append(cls.ustream_covrg)
-                #rpkm.append(utr.RPKM)
+                #if cl_count > 0:
+                    ## minc must be adjusted with 1 to have 0-index of array
+                    #cl_counter[minc-1, cl_count] += 1
+                #else:
+                    #cl_counter[minc-1, 0] += 1
 
-        ## Titles for the above variables
-        #titles = ['Nr Supporting Reads', 'Downstream Coverage',
-                  #'Upstream Coverage', 'RPKM']
-
-        #array = [nr_supp_reads, covrg_down, covrg_up, rpkm]
-        #p.triangleplot_scatter(array, titles)
-
-    # For the ones with 1, 2, 3, 4, ... polyA sites:
-        #1) box-plots of the ratio of downstream/upstream 
-        #2) box-plots of the # of covering reads
-
-    # Upstream/downstream ratios of polyA sites.
+        #p.cluster_count(cl_counter)
 
 
-def polyadenylation_comparison(settings, dsets, clusters, super_clusters, dset_2super):
+def udstream_coverage_last_clusters(dsets):
     """
-    * compare 3UTR polyadenylation in general
-    * compare 3UTR polyadenylation UTR-to-UTR
+    Comparing upstream/downstream coverage and read coverage for the 3-4 last
+    polyA clusters in a 3UTR
+    """
+
+    p = Plotter()
+
+    for dset in dsets:
+
+        # first second thrid and fourth
+        # nr of clusters
+        clrs_nr = 3
+        clus_list = [{'ud_ratio':[], 'support':[]} for val in range(clrs_nr)]
+
+        for (utr_id, utr) in dset.utrs.iteritems():
+
+            if utr.cluster_nr < clrs_nr:
+                continue
+
+            if utr.strand == '+':
+                clu = sorted(utr.clusters, key=attrgetter('polyA_coordinate'))
+                clu = clu[-clrs_nr:] # get only the last clrs_nr
+                # for + strand, reverse clu
+                clu = clu[::-1]
+
+            if utr.strand == '-':
+                clu = sorted(utr.clusters, key=attrgetter('polyA_coordinate'))
+                clu = clu[:clrs_nr] # get only the first clrs_nr
+
+            # The order of clsters in clu is '1st, 2nd, 3rd...'
+
+            eps_end = utr.beg + utr.eps_coord
+
+            # only get UTRs that have the final polyA cluster close to the
+            # coverage end!
+            if not (eps_end - 50 < clu[0].polyA_coordinate < eps_end + 50):
+                continue
+
+            # Normalize the ratios by the largest absolute deviation from 1
+            ud_ratios = []
+
+            for cls in clu:
+                # Make 0 into an almost-zero ...
+                if cls.dstream_covrg == 0:
+                    cls.dstream_covrg = 0.01
+
+                if cls.ustream_covrg == 0:
+                    cls.ustream_covrg = 0.01
+
+                # do log2 ratios (if ==1, twice as big)
+                udratio = math.log(cls.ustream_covrg/cls.dstream_covrg,2)
+
+                ud_ratios.append(udratio)
+
+            #maxratio = max(max(ud_ratios), abs(min(ud_ratios)))
+            #norm_ud_ratios = [rat/maxratio for rat in ud_ratios]
+            norm_ud_ratios = ud_ratios
+
+            # Append the normailzed ratios to the arrays
+            for (indx, norm_rat) in enumerate(norm_ud_ratios):
+                clus_list[indx]['ud_ratio'].append(norm_rat)
+
+            # Normalize the read support
+            read_supp = [cl.nr_support_reads for cl in clu]
+            #maxsupp = max(read_supp)
+            #norm_read_supp = [supp/maxsupp for supp in read_supp]
+            norm_read_supp = read_supp
+
+            # Append normalized support ratios to arrays
+            for (indx, norm_supp) in enumerate(norm_read_supp):
+                clus_list[indx]['support'].append(norm_supp)
+
+        # Do teh plots
+        p.last_three_clustersites(clus_list)
+         #RESULT you see the trend you imagined.
+
+def correlate_polyA_coverage_counts(dsets, super_clusters):
+    """
+    What is the correlation of read count for the same location in different
+    compartments? NOTE must be extended to 3 datasets or more
     """
     p = Plotter()
 
-    ## Simply: the distribution of read count of the poly(A) clusters
-    ##
-    # Method: 
-    #  for each dset, go through all 3utrs and count the number of clusters
-    # i)    with a given read count
-    # ii)   CLOSE TO ANNOTATION
-    # 
-    # 2) 
+    # For all the clusters with more than one dataset supporting it, get a list
+    # of how many poly(A) reads are at that support.
+    count_dset = dict((dset.name, []) for dset in dsets)
+    for (chrpos, sup_cl) in super_clusters.iteritems():
 
-    # Create a mega-cluster of all the clusters in clusters...
-    # On the form [cluster_coord][dsetx][read_count]
+        if (len(set(sup_cl[0])) == 2) and (len(sup_cl[0]) == 2):
+            for (name, covrg) in zip(*sup_cl):
+                if len(zip(*sup_cl)) != 2:
+                    debug()
+                count_dset[name].append(covrg)
+
+        #if len(sup_cl[0]) > 2:
+            ## TODO a bug. a polyA cluster has double representation in both
+            ## datasets. whence this error?
+            #debug()
+
+    # get all pairwise combinations of the dsets
+    pairs = [pa for pa in itertools.combinations([ds.name for ds in dsets], 2)]
+    for pa in pairs:
+        (p1, p2) = (pa[0], pa[1])
+    title = 'PolyA-site read count variation'
+    p.scatterplot(count_dset[p1], count_dset[p2], p1, p2, title)
+
+def compare_cluster_classifications(dsets, clusters, super_clusters, dset_2super):
+    """
+    Find the co-occurence for all the evidence for polyA clusters you have (in
+    annotation, svm support, etc.
+
+    Especially, what support do the annotated have?
+    """
+    p = Plotter()
 
     for dset in dsets:
 
@@ -838,165 +1103,64 @@ def polyadenylation_comparison(settings, dsets, clusters, super_clusters, dset_2
 
         p.join_clusters(clusters, titles)
 
-        # Now you have which ones, in each dataset, which are found in the
-        # annotation.
-        # I would also like to have a counter of how many ones of size 1,2, etc,
-        # are found in either of the other two datasets with read count higher
-        # than 2/3/4/5 something.
-        #
-        # make a scatter plot of the coverage of site 1 to site 2
 
-    ###
-    ### What is the correlation of read count for the same location in different
-    ### compartments? NOTE must be extended to 3 datasets or more
-    ###
+def output_control(settings, dsets):
+    """
+    Control: what is the correlation between # supporting reads; change in
+    coverage; PAS-type; PAS-distance; and rpkm?
+    """
+    p = Plotter()
 
-    ## For all the clusters with more than one dataset supporting it, get a list
-    ## of how many poly(A) reads are at that support.
+    # TRIANGLE PLOT ##
 
-    #count_dset = dict((dset.name, []) for dset in dsets)
-    #for (chrpos, sup_cl) in super_clusters.iteritems():
+    for dset in dsets:
 
-        #if (len(set(sup_cl[0])) == 2) and (len(sup_cl[0]) == 2):
-            #for (name, covrg) in zip(*sup_cl):
-                #if len(zip(*sup_cl)) != 2:
-                    #debug()
-                #count_dset[name].append(covrg)
+        nr_supp_reads = []
+        covrg_down = []
+        covrg_up = []
+        rpkm = []
 
-        ##if len(sup_cl[0]) > 2:
-            ### TODO a bug. a polyA cluster has double representation in both
-            ### datasets. whence this error?
-            ##debug()
+        for (utr_id, utr) in dset.utrs.iteritems():
+
+            # For all polyA clusters get
+            # 1) NR of supporting reads
+            # 2) Coverage downstream
+            # 3) Coverage upstream
+            # 4) RPKM
+
+            for cls in utr.clusters:
+                nr_supp_reads.append(cls.nr_support_reads)
+                covrg_down.append(cls.dstream_covrg)
+                covrg_up.append(cls.ustream_covrg)
+                rpkm.append(utr.RPKM)
+
+        # Titles for the above variables
+        titles = ['Nr Supporting Reads', 'Downstream Coverage',
+                  'Upstream Coverage', 'RPKM']
+
+        array = [nr_supp_reads, covrg_down, covrg_up, rpkm]
+        p.triangleplot_scatter(array, titles)
+
+     #For the ones with 1, 2, 3, 4, ... polyA sites:
+        #1) box-plots of the ratio of downstream/upstream 
+        #2) box-plots of the # of covering reads
+
+     #Upstream/downstream ratios of polyA sites.
 
 
-    ## get all pairwise combinations of the dsets
-    #pairs = [pa for pa in itertools.combinations([ds.name for ds in dsets], 2)]
-    #for pa in pairs:
-        #(p1, p2) = (pa[0], pa[1])
-    #title = 'PolyA-site read count variation'
-    ##xlim = 
-    #p.scatterplot(count_dset[p1], count_dset[p2], p1, p2, title)
-    #debug()
+def polyadenylation_comparison(settings, dsets, clusters, super_clusters, dset_2super):
+    """
+    * compare 3UTR polyadenylation in general
+    * compare 3UTR polyadenylation UTR-to-UTR
+    """
 
-    ##
-    ## Comparing upstream/downstream coverage and read coverage for the 3-4 last
-    ## polyA clusters in a 3UTR
-    ##
+    compare_cluster_classifications(dsets, clusters, super_clusters, dset_2super)
 
-    #for dset in dsets:
-        ## Get the maximum nr of polyA sites in one utr for max nr of plots
-        ## Give a roof to the number of plots; 5?
-        #max_cluster = max (utr.cluster_nr for utr in dset.utrs.itervalues())
+    correlate_polyA_coverage_counts(dsets, super_clusters)
 
-        ## Git yourself some arrays 
-        ## first second thrid and fourth
-        ## nr of clusters
-        #clrs_nr = 3
-        #clus_list = [{'ud_ratio':[], 'support':[]} for val in range(clrs_nr)]
+    udstream_coverage_last_clusters(dsets)
 
-        #for (utr_id, utr) in dset.utrs.iteritems():
-
-            #if utr.cluster_nr < clrs_nr:
-                #continue
-
-            #if utr.strand == '+':
-                #clu = sorted(utr.clusters, key=attrgetter('polyA_coordinate'))
-                #clu = clu[-clrs_nr:] # get only the last clrs_nr
-                ## for + strand, reverse clu
-                #clu = clu[::-1]
-
-            #if utr.strand == '-':
-                #clu = sorted(utr.clusters, key=attrgetter('polyA_coordinate'))
-                #clu = clu[:clrs_nr] # get only the first clrs_nr
-
-            ## The order of clsters in clu is '1st, 2nd, 3rd...'
-
-            #eps_end = utr.beg + utr.eps_coord
-
-            ## only get UTRs that have the final polyA cluster close to the
-            ## coverage end!
-            #if not (eps_end - 50 < clu[0].polyA_coordinate < eps_end + 50):
-                #continue
-
-            ## Normalize the ratios by the largest absolute deviation from 1
-            #ud_ratios = []
-
-            #for cls in clu:
-                ## Make 0 into an almost-zero ...
-                #if cls.dstream_covrg == 0:
-                    #cls.dstream_covrg = 0.01
-
-                #if cls.ustream_covrg == 0:
-                    #cls.ustream_covrg = 0.01
-
-                ## do log2 ratios (if ==1, twice as big)
-                #udratio = math.log(cls.ustream_covrg/cls.dstream_covrg,2)
-
-                #ud_ratios.append(udratio)
-
-            ##maxratio = max(max(ud_ratios), abs(min(ud_ratios)))
-            ##norm_ud_ratios = [rat/maxratio for rat in ud_ratios]
-            #norm_ud_ratios = ud_ratios
-
-            ## Append the normailzed ratios to the arrays
-            #for (indx, norm_rat) in enumerate(norm_ud_ratios):
-                #clus_list[indx]['ud_ratio'].append(norm_rat)
-
-            ## Normalize the read support
-            #read_supp = [cl.nr_support_reads for cl in clu]
-            ##maxsupp = max(read_supp)
-            ##norm_read_supp = [supp/maxsupp for supp in read_supp]
-            #norm_read_supp = read_supp
-
-            ## Append normalized support ratios to arrays
-            #for (indx, norm_supp) in enumerate(norm_read_supp):
-                #clus_list[indx]['support'].append(norm_supp)
-
-        ## Do teh plots
-        #p.last_three_clustersites(clus_list)
-         ##RESULT you see the trend you imagined.
-
-    #debug()
-
-    # 1) Investiage the sensitivity to the number of mapping poly(A) reads
-    # Make plots like Pedro suggested AND check out how many of the 1-reads and
-    # 2-reads clusters are found in the other compartments. This gives a measure
-    # of how sensitive the poly(A) clusters are.
-    # For the ones that don't get a re-confirmation, and those that do, compare
-    # PAS presence and SVM presence?
-
-    # Get number of utrs that have X clusters with minimum poly(A) read coverage
-    # of Y
-    #for dset in dsets:
-
-        #min_covrg = [1, 2, 3, 4, 5, 6 ,7] # minimum coverage for each cluster
-        #max_cluster = max(utr.cluster_nr for utr in dset.utrs.itervalues())
-
-        ## number of clusters in each dset. matrix, use numpy.
-        #cl_counter = np.zeros([len(min_covrg), max_cluster+1], dtype=int)
-
-        #for (utr_id, utr) in dset.utrs.iteritems():
-            ## If no clusters, add 1 to all the zeros
-            #if utr.clusters == []:
-                #cl_counter[:,0] += 1
-                #continue
-
-            ## you are here, so there are some 
-            #for minc in min_covrg:
-                ## For each cluster that has more or equal support to the minc
-                ## value, give a +1 to the cluster count (x) at this mic level (y)
-                #cl_count = 0
-                #for cls in utr.clusters:
-                    #if cls.nr_support_reads >= minc:
-                        #cl_count += 1
-
-                #if cl_count > 0:
-                    ## minc must be adjusted with 1 to have 0-index of array
-                    #cl_counter[minc-1, cl_count] += 1
-                #else:
-                    #cl_counter[minc-1, 0] += 1
-
-        #p.cluster_count(cl_counter)
+    cluster_size_sensitivity()
 
     #####################################################################
     # It depends on PAS-type, PAS-distance, polyA-number (1, 2, .., last)
@@ -1200,17 +1364,18 @@ def main():
     #utr_length_comparison(settings, utrs)
 
     polyadenylation_comparison(settings, dsets, clusters, super_cluster, dset_2super)
+
     debug()
 
-    reads(settings)
+    #reads(settings)
 
-    data_annotation_correspondence(settings)
+    #data_annotation_correspondence(settings)
 
-    UTR_processing(settings)
+    #UTR_processing(settings)
 
-    other_methods_comparison(settings)
+    #other_methods_comparison(settings)
 
-    rouge_polyA_sites(settings)
+    #rouge_polyA_sites(settings)
 
 if __name__ == '__main__':
     main()
