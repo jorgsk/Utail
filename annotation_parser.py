@@ -653,6 +653,7 @@ def remove_intersects_and_extend(unfiltered_path, outfile_path, all_transcripts,
     remove_these_utrs = set()
 
     # 1) Run intersect bed on bedfile with CDS exons and with itself
+    # Ignore strandedness
     cmd1 = ['intersectBed', '-wb', '-a', temp_cds_path, '-b', unfiltered_path]
     cmd2 = ['intersectBed', '-wo', '-a', unfiltered_path, '-b', unfiltered_path]
 

@@ -152,6 +152,9 @@ class UTR(object):
         self.clusters = []
         self.cluster_nr = 0
 
+        # SVM info might be added
+        self.svm_coordinates = []
+
     def __repr__(self):
         return self.ID[-8:]
 
@@ -215,6 +218,8 @@ class Settings(object):
         self.outputdir = outputdir
         self.here = here
 
+        self.settings_file = settings_file
+
     # Return the paths of the length files
     def length_files(self):
         return dict((d, os.path.join(self.here, self.outputdir,'length_'+d))
@@ -229,6 +234,63 @@ class Settings(object):
     def epsilon_files(self):
         return dict((d, os.path.join(self.here, self.outputdir,'cumul_'+d+'.stat'))
                     for d in self.datasets)
+
+    # Return the path of the svm-file. This file should be a bed-file where name
+    # is the utr and the coordinate is the svm-coordinate. If the file does not
+    # exist, create it by bedIntersecting the 3UTR file from
+    # annotation_parser.py
+    def svm_file(self, chr1=False):
+
+        # Make the svm dir if it doesn't exist
+        svmdir = os.path.join(self.here, 'svm')
+        if not os.path.exists(svmdir):
+            os.makedirs(svmdir)
+        if chr1:
+            svm_f = os.path.join(svmdir, 'svm_utr_intesection_chr1.bed')
+        else:
+            svm_f = os.path.join(svmdir, 'svm_utr_intesection.bed')
+
+        # Get the settings file of the utr_analyzer; use this file to get the
+        # correct path of the 3utr-bedfile.
+        import utr_finder as finder
+
+        finder_settings = finder.Settings\
+                (*finder.read_settings(self.settings_file))
+
+        if chr1:
+            finder_settings.chr1 = True
+
+        # Check if 3UTRfile has been made or provided; if not, get it from annotation
+        beddir = os.path.join(self.here, 'source_bedfiles')
+        utr_bed = finder.get_utr_path(finder_settings, beddir)
+
+        # Check that it's accessible
+        verify_access(utr_bed)
+
+        # Run intersect bed on the utrfile with the svmfile
+        svm_bed = os.path.join(svmdir, 'svm_final.bed')
+
+        from subprocess import Popen, PIPE
+
+        # Consider the strand; you have discarded the polyA reads with the
+        # 'wrong' strand
+        cmd = ['intersectBed', '-wb', '-s', '-a', svm_bed, '-b', utr_bed]
+        f = Popen(cmd, stdout=PIPE)
+
+        svm_dict = {}
+        for line in f.stdout:
+            (chrm, beg, end, d,d, strand, d,d,d, utr_exon_id, d,d) = line.split()
+            # The bedfile has utr_exons in the index. You need the whole utr.
+            utr_id = utr_exon_id[:-2]
+            beg = int(beg)
+            end = int(end)
+
+            if utr_id in svm_dict:
+                svm_dict[utr_id].append((chrm, beg, end, '0', '0', strand))
+            else:
+                svm_dict[utr_id] = [(chrm, beg, end, '0', '0', strand)]
+
+        return svm_dict
 
 class Plotter(object):
     """
@@ -491,7 +553,7 @@ class Plotter(object):
         # annotated_clusters are main
         for (dset_ind, (pairw_matrix, pairw_mrows)) in enumerate(pairw_all_annot):
 
-            cols = ['#0000FF', '#3333FF', '#4C3380', '#8A5CE6', '#AD85FF']
+            cols = ['#0000FF','#3333FF','#4C3380','#8A5CE6','#AD85FF','#AD39FF']
 
             # 1) Plot the first bars: the all_clusters ones.
 
@@ -582,10 +644,6 @@ class Plotter(object):
             legend_titles = [pairw_mrows[0][0]] + [tup[1] for tup in pairw_mrows]
             legend_axes = (ax[0] for ax in ax_list)
             fig.legend(legend_axes, legend_titles, loc=10)
-
-            # OK this stuff is working. Now get the SVMz! Then start on
-            # characterizing the differential usage of polyA sites in the
-            # different compartments.
 
             plt.draw()
             debug()
@@ -794,10 +852,10 @@ def get_clusters(settings):
 
     return clusters
 
-def get_utrs(settings):
+def get_utrs(settings, svm=False):
     """
     Return a list of UTR instances. Each UTR instance is
-    instanciated with a list of UTR objects and the name of the datset.
+    instansiated with a list of UTR objects and the name of the datset.
 
     1) Read through the length file, create UTR objects for each line
     2) If present, read through the polyA file, updating the UTR object created
@@ -807,6 +865,10 @@ def get_utrs(settings):
     # Do everything for the length files
     length_files = settings.length_files()
     cluster_files = settings.polyA_files()
+
+    if svm:
+        # Get a dictionary indexed by utr_id with the svm locations
+        svm_dict = settings.svm_file()
 
     # Check if all length files exist or that you have access
     [verify_access(f) for f in length_files.values()]
@@ -829,9 +891,29 @@ def get_utrs(settings):
             utr_dict[line.split()[3]].clusters.append(Cluster(line,
                                                               full_info=False))
 
-        # Update the UTRs with some new info about their clusters
+        # Update the UTRs
         for (utr_id, utr_obj) in utr_dict.iteritems():
+            # Update with poly(A) cluster info
             utr_dict[utr_id].cluster_nr = len(utr_obj.clusters)
+
+            # If svm is not set, continue
+            if not svm:
+                continue
+
+            # Don't add svm info if there is no svm
+            if utr_id not in svm_dict:
+                continue
+
+            # Get SVM info
+            SVMs = svm_dict[utr_id]
+
+            for (chrm, svm_beg, svm_end, d, d, strand) in SVMs:
+                # Check that strand and chrm of SVM are the same as UTR object ...
+                assert (utr_dict[utr_id].chrm, utr_dict[utr_id].strand)\
+                        == (chrm, strand), 'Mismatch'
+
+                #Update UTR object with SVM info
+                utr_dict[utr_id].svm_coordinates.append(svm_beg)
 
         all_utrs.append(UTRDataset(utr_dict, dset_name))
 
@@ -1047,18 +1129,20 @@ def correlate_polyA_coverage_counts(dsets, super_clusters):
     title = 'PolyA-site read count variation'
     p.scatterplot(count_dset[p1], count_dset[p2], p1, p2, title)
 
-def compare_cluster_classifications(dsets, clusters, super_clusters, dset_2super):
+def compare_cluster_evidence(dsets, clusters, super_clusters, dset_2super):
     """
     Find the co-occurence for all the evidence for polyA clusters you have (in
-    annotation, svm support, etc.
+    annotation, svm support, etc).
 
-    Especially, what support do the annotated have?
+    Especially, what support do the annotated, alone, have?
     """
+
     p = Plotter()
 
     for dset in dsets:
 
         all_read_counter = {} # cluster_size : read_count for all clusters
+        svm_support = {} # for all clusters: do they have SVM support?
         annot_read_counter = {} # cluster_size : read_count for clusters w/annot
         other_dsets = {} # cluster_size : read_count for clusters in other dsets
 
@@ -1079,18 +1163,32 @@ def compare_cluster_classifications(dsets, clusters, super_clusters, dset_2super
                 else:
                     all_read_counter[cls.nr_support_reads] = [keyi]
 
+                # SVM support
+                if utr.svm_coordinates != []:
+                    # Look for svm support for this cluster
+                    found = False
+                    for crd in utr.svm_coordinates:
+                        if crd-30 < cls.polyA_coordinate < crd+30:
+                            found = True
+                            break
+
+                    # If you found it, add to the svm_support cluster
+                    if found:
+                        if cls.nr_support_reads in svm_support:
+                            svm_support[cls.nr_support_reads].append(keyi)
+                        else:
+                            svm_support[cls.nr_support_reads] = [keyi]
+
                 # Annotated clusters
-                if cls.nr_support_reads in annot_read_counter:
-                    if cls.annotated_polyA_distance != 'NA':
+                if cls.annotated_polyA_distance != 'NA':
+                    if cls.nr_support_reads in annot_read_counter:
                         annot_read_counter[cls.nr_support_reads].append(keyi)
-                else:
-                    if cls.annotated_polyA_distance != 'NA':
+                    else:
                         annot_read_counter[cls.nr_support_reads] = [keyi]
 
                 # Clusters in other datasets
-                all_key = dset_2super[keyi]
-
                 if cls.nr_support_reads in other_dsets:
+                    all_key = dset_2super[keyi] # the in-between key
                     for (dn, sup_reads) in zip(*super_clusters[all_key]):
                         if dn != dset.name: # don't count yourself!!
                             if sup_reads > 1: # maybe set treshold?
@@ -1098,8 +1196,9 @@ def compare_cluster_classifications(dsets, clusters, super_clusters, dset_2super
                 else:
                     other_dsets[cls.nr_support_reads] = [keyi]
 
-        clusters = (all_read_counter, annot_read_counter, other_dsets)
-        titles = ('All clusters', 'Annotated_clusters', 'Clusters_in_other_dsets')
+        clusters = (all_read_counter, svm_support, annot_read_counter, other_dsets)
+        titles = ('All clusters', 'SVM_support', 'Annotated_clusters',
+                  'Clusters_in_other_dsets')
 
         p.join_clusters(clusters, titles)
 
@@ -1154,7 +1253,7 @@ def polyadenylation_comparison(settings, dsets, clusters, super_clusters, dset_2
     * compare 3UTR polyadenylation UTR-to-UTR
     """
 
-    compare_cluster_classifications(dsets, clusters, super_clusters, dset_2super)
+    compare_cluster_evidence(dsets, clusters, super_clusters, dset_2super)
 
     correlate_polyA_coverage_counts(dsets, super_clusters)
 
@@ -1346,11 +1445,9 @@ def main():
     # Read UTR_SETTINGS
     settings = Settings(os.path.join(here, 'UTR_SETTINGS'), savedir, outputdir, here)
 
-    # Get the SVM coordinates
-    #svm = get_svm()
-
     # Get the dsets with utrs and their clusters from the length and polyA files
-    dsets = get_utrs(settings)
+    # Optionally get SVM information as well
+    dsets = get_utrs(settings, svm=True)
 
     # Get just the clusters from the polyA files
     clusters = get_clusters(settings)

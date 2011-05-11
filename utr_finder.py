@@ -108,12 +108,12 @@ class Settings(object):
         #self.chr1 = False
         #self.read_limit = False
         #self.read_limit = 10000000
-        self.read_limit = 100000
+        self.read_limit = 1000000
         self.max_cores = 3
-        #self.polyA = True
+        self.polyA = True
         #self.polyA = False
-        self.polyA = '/users/rg/jskancke/phdproject/3UTR/the_project/temp_files'\
-                '/polyA_reads_HeLa-S3_Whole_Cell_processed_mapped.bed'
+        #self.polyA = '/users/rg/jskancke/phdproject/3UTR/the_project/temp_files'\
+                #'/polyA_reads_HeLa-S3_Whole_Cell_processed_mapped.bed'
         #self.bed_reads = False
         #self.bed_reads = '/users/rg/jskancke/phdproject/3UTR/the_project/temp_files'\
                 #'/reads_K562_Whole_Cell.bed'
@@ -146,7 +146,8 @@ class Annotation(object):
         polyA_path = self.a_polyA_sites_path
         utr_path = self.utrfile_path
 
-        cmd = ['intersectBed', '-s', '-wb', '-a', polyA_path, '-b', utr_path]
+        # run -s or not? no! You don't know the strand of the polyAs :S
+        cmd = ['intersectBed', '-wb', '-a', polyA_path, '-b', utr_path]
 
         # Run the above command -- outside the shell -- and loop through output
         f = Popen(cmd, stdout=PIPE)
@@ -1743,6 +1744,7 @@ def get_polyA_utr(polyAbed, utrfile_path):
     # A dictionary to hold the utr_id -> poly(A)-reads relation
     utr_polyAs = {}
 
+    # Don't run with -s because we don't know the polyA strand
     cmd = ['intersectBed', '-wb', '-a', polyAbed, '-b', utrfile_path]
 
     # Run the above command -- outside the shell -- and loop through output
@@ -2387,8 +2389,8 @@ def main():
     # When a simulation is over, the paths to the output files are pickled. When
     # simulate is False, the program will not read rna-seq files but will
     # instead try to get the output files from the last simulation.
-    simulate = False
-    #simulate = True
+    #simulate = False
+    simulate = True
     #settings.bigwig = False
 
     # This option should be set only in case of debugging. It makes sure you
