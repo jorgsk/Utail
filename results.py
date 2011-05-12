@@ -184,6 +184,8 @@ class Cluster(object):
         self.cluster_nr = str_to_intfloat(polyA_number)
         self.polyA_coordinate = str_to_intfloat(polyA_coordinate)
         self.nr_support_reads = str_to_intfloat(number_supporting_reads)
+        if self.nr_support_reads == 0:
+            debug()
         self.dstream_covrg = str_to_intfloat(dstream_covrg)
         self.ustream_covrg = str_to_intfloat(ustream_covrg)
         self.annotated_polyA_distance = str_to_intfloat(annotated_polyA_distance)
@@ -269,6 +271,15 @@ class Settings(object):
 
         # Run intersect bed on the utrfile with the svmfile
         svm_bed = os.path.join(svmdir, 'svm_final.bed')
+        # If this file doesn't exist, you have to make it
+
+        # TODO you are issing a library to run the SVM yourself. In the
+        # meanwhile, use what you can get from the browser. This seq is based on
+        # the 1500 last sequences of ref-seq genes, so it has clearly got its
+        # limitations. Ideally you should run it against the whole human genome.
+
+        #if not os.path.isfile(svm_bed):
+            #svm_from_source(svm_bed, svmdir, utr_bed, finder_settings, chr1)
 
         from subprocess import Popen, PIPE
 
@@ -521,7 +532,7 @@ class Plotter(object):
 
         plt.show()
 
-    def join_clusters(self, cluster_dicts, titles):
+    def join_clusters(self, cluster_dicts, titles, in_terms_of):
         """
         Show side-by-side the number of clusters with a given read count from
         the dicts where the number of clusters have been obtained by different
@@ -545,9 +556,10 @@ class Plotter(object):
 
         dset_dict = dict(zip(titles, cluster_dicts))
 
-        # This is two tuples, each with two elements: a matrix and a
-        # row-identifer for the matrix
-        pairw_all_annot = pairwise_intersect(dset_dict, cutoff)
+        # pairw_all_annot contains is two tuples, each with two elements: a
+        # matrix and a row-identifer for the matrix
+        pairw_all_annot = pairwise_intersect(in_terms_of, dset_dict, cutoff)
+
 
         # Print two figures; one where all_clusters is main and one where
         # annotated_clusters are main
@@ -599,8 +611,8 @@ class Plotter(object):
                 ax_list.append(ll)
 
             # format the union percentages nicely
-            form_perc = [[format(el, '.2f') for el in pairw_matrix[ind,:,1]] for
-                         ind in range(bar_nr)]
+            form_perc = [[format(el*100, '.0f')+'%' for el in pairw_matrix[ind,:,1]]
+                         for ind in range(bar_nr)]
 
             # 4) put numbers on top of the bars (and skip the 'union' axis)
             myaxes = [ax_list[0]] + ax_list[2:]
@@ -646,7 +658,6 @@ class Plotter(object):
             fig.legend(legend_axes, legend_titles, loc=10)
 
             plt.draw()
-            debug()
 
     def all_clusters(self, cl_read_counter, my_title):
         """
@@ -685,19 +696,17 @@ class Plotter(object):
 
         plt.draw()
 
-def pairwise_intersect(dset_dict, cutoff):
+def pairwise_intersect(in_terms_of, dset_dict, cutoff):
     """
     For 'all clusters' and 'annotated clusters', get the intersection with all
     other datasets; and the intersection with the union of all other datasets.
     """
     # Get the pairs: all with the rest
     # Get the union: all except the rest
-
-    all_cl = 'All clusters'
-    annot = 'Annotated_clusters'
+    (all_cl, annot) = in_terms_of # all clusters and annotated TTS sites
 
     # Get the pairs of 'All_clusters' with the other datasets
-    all_pairs = [('All clusters', dset_name) for dset_name in
+    all_pairs = [(all_cl, dset_name) for dset_name in
                   dset_dict.keys() if dset_name != all_cl]
 
     # Get the names of all the datasets except 'All clusters'
@@ -705,7 +714,7 @@ def pairwise_intersect(dset_dict, cutoff):
                all_cl]
 
     # Get the pairs of 'Annotated clusters' with the other datasets, except all
-    annot_pairs = [('Annotated_clusters', dset_name) for dset_name in
+    annot_pairs = [(annot, dset_name) for dset_name in
                   dset_dict.keys() if (dset_name != annot) and (dset_name != all_cl)]
 
     # Get the names of all the datasets except 'Annotatedusters'
@@ -719,6 +728,8 @@ def pairwise_intersect(dset_dict, cutoff):
 
     for (pairs, unions) in [(all_pairs, not_all), (annot_pairs,  not_annot)]:
         isec_matrix = get_intersection_matrix(pairs, unions, cutoff, dset_dict)
+
+        # add "union"
         pairs = [(pairs[0][0], 'Union')] + pairs
         matr.append((isec_matrix, pairs))
 
@@ -755,13 +766,21 @@ def get_intersection_matrix(pair_names, unions_names, cutoff, dset_dict):
         for (dset, dset_l) in [(main_dset, main_cls), (sub_dset, sub_cls)]:
 
             for (read_nr, clusters) in dset.iteritems():
+                if read_nr <= 0:
+                    debug()
                 if read_nr > cutoff-1:
                     dset_l[cutoff-1].append(clusters) # add if > cutoff
                 else:
                     dset_l[read_nr-1] = clusters
 
-            # Flatten the last array
-            dset_l[-1] = sum(dset_l[-1], [])
+                if dset_l[-1] != []:
+                    # THE BUG a cluster [X, XX] are noted with 0 covering reads.
+                    # This is a mistake.
+                    debug()
+
+        # Flatten the last arrays
+        main_cls[-1] = sum(main_cls[-1], [])
+        sub_cls[-1] = sum(sub_cls[-1], [])
 
         # Get number of intersections 
         isect_nrs = [len(set.intersection(set(main_cls[count]), set(sub_cls[count])))
@@ -1139,7 +1158,8 @@ def compare_cluster_evidence(dsets, clusters, super_clusters, dset_2super):
 
     p = Plotter()
 
-    for dset in dsets:
+    #for dset in dsets:
+    for dset in dsets[1:]:
 
         all_read_counter = {} # cluster_size : read_count for all clusters
         svm_support = {} # for all clusters: do they have SVM support?
@@ -1196,11 +1216,16 @@ def compare_cluster_evidence(dsets, clusters, super_clusters, dset_2super):
                 else:
                     other_dsets[cls.nr_support_reads] = [keyi]
 
-        clusters = (all_read_counter, svm_support, annot_read_counter, other_dsets)
-        titles = ('All clusters', 'SVM_support', 'Annotated_clusters',
-                  'Clusters_in_other_dsets')
+        cluster_dicts = (all_read_counter, svm_support, annot_read_counter)
+        titles = ('All clusters', 'SVM_support', 'Annotated_TTS')
+        #clusters = (all_read_counter, svm_support, annot_read_counter, other_dsets)
+        #titles = ('All clusters', 'SVM_support', 'Annotated_TTS',
+                  #'In_other_compartments')
 
-        p.join_clusters(clusters, titles)
+        # make two figurses: one in terms of all clusters and on of annotated
+        # TTS sites
+        in_terms_of = (titles[0], titles[2])
+        p.join_clusters(cluster_dicts, titles, in_terms_of)
 
 
 def output_control(settings, dsets):
@@ -1254,6 +1279,8 @@ def polyadenylation_comparison(settings, dsets, clusters, super_clusters, dset_2
     """
 
     compare_cluster_evidence(dsets, clusters, super_clusters, dset_2super)
+
+    debug()
 
     correlate_polyA_coverage_counts(dsets, super_clusters)
 
@@ -1435,6 +1462,49 @@ def merge_clusters(clusters):
 
     return (all_clusters, each_cluster_2all)
 
+def svm_from_source(svm_path, svm_dir, utr_path, hgfasta_path, chr1):
+    print('SVM file not found. Generating from SVM program ...')
+    # The path to the directory the script is located in
+    here = os.path.dirname(os.path.realpath(__file__))
+
+    sys.path.append(os.path.join(here, 'modules'))
+    sys.path.append(os.path.join(here, 'modules/pyfasta'))
+
+    if chr1:
+        fasta_file = os.path.join(svm_dir, 'utr_exon_fastas_chr1.fa' )
+    else:
+        fasta_file = os.path.join(svm_dir, 'utr_exon_fastas.fa' )
+
+    fasta_handle = open(fasta_file, 'wb')
+
+    from fasta import Fasta
+
+    # 1) For all the utr-exons in utr_path, get the genomic sequence, and save
+    # in a fasta file
+
+    # The fasta object
+    f = Fasta(hgfasta_path)
+    for line in open(utr_path, 'rb'):
+
+        (chrm, beg, end, utr_exon_id, ex_nr, strand) = line.split()
+        beg = int(beg)
+        end = int(end)
+
+        if strand == '+':
+            seq = f.sequence({'chr':chrm,'start':beg+1, 'stop':end-1,
+                                          'strand':strand}).upper()
+        if strand == '-':
+            seq = f.sequence({'chr':chrm,'start':beg+2, 'stop':end,
+                                          'strand':strand}).upper()
+
+        fasta_handle.write('>{0}\n{1}\n'.format(utr_exon_id, seq))
+
+    fasta_handle.close()
+
+    # 2) Run the SVM machine on the fasta file
+
+    # 3) Parse the output into a nicely formatted bedfile in svm_patth
+
 def main():
     # The path to the directory the script is located in
     here = os.path.dirname(os.path.realpath(__file__))
@@ -1485,9 +1555,6 @@ if __name__ == '__main__':
 
 # Regardless, the datatype is poly(A)+, which should mean that we are only
 # dealing with polyadenylated RNA sequences.
-
-# XXX it seems clear that it's in your own interest to provide just one 3UTR
-# class. You keep coming back to comparing UTRs -- not comparing polyA sites.
 
 # How reproducable are the polyA reads?
 # If for the same gene, for a similar before/after coverage, what is the

@@ -104,19 +104,19 @@ class Settings(object):
         Modify settings for debugging ONLY!
         """
 
-        self.chr1 = True
-        #self.chr1 = False
+        #self.chr1 = True
+        self.chr1 = False
         #self.read_limit = False
         #self.read_limit = 10000000
-        self.read_limit = 1000000
+        self.read_limit = 10000
         self.max_cores = 3
         self.polyA = True
         #self.polyA = False
-        #self.polyA = '/users/rg/jskancke/phdproject/3UTR/the_project/temp_files'\
-                #'/polyA_reads_HeLa-S3_Whole_Cell_processed_mapped.bed'
+        self.polyA = '/users/rg/jskancke/phdproject/3UTR/the_project/temp_files'\
+                '/polyA_reads_HeLa-S3_Whole_Cell_processed_mapped.bed'
         #self.bed_reads = False
         #self.bed_reads = '/users/rg/jskancke/phdproject/3UTR/the_project/temp_files'\
-                #'/reads_K562_Whole_Cell.bed'
+                #'/reads_HeLa-S3_Whole_Cell.bed'
 
 class Annotation(object):
     """
@@ -612,6 +612,7 @@ class PolyAReads(object):
         self.us_covrg = 'NA'
         self.annotation_support = 'NA'
         self.all_PAS = 'NA'
+        self.number_supporting_reads = 'NA'
 
     def write_header(self, outfile):
         """
@@ -682,6 +683,7 @@ class PolyAReads(object):
             polAnr = indx + 1
             rel_polyA_site = self.rel_polyRead_sites[indx]
             nr_supp_pA = len(this_utr.polyA_reads[1][indx])
+
             ds_covrg = self.ds_covrg[indx]
             us_covrg = self.us_covrg[indx]
             annotpA_dist = self.annotation_support[indx]
@@ -713,8 +715,6 @@ class PolyAReads(object):
               40 nt.
             # The distance and type of PAS, if closer than 40 nt.
         """
-
-        # Don't do anything if coverage vector is empty
         if this_utr.is_empty():
             return
 
@@ -744,17 +744,6 @@ class PolyAReads(object):
         #1) Get coverage on both sides of polyA read
         # This variable should be printed relative to polyA_read count divided
         # by the rpkm
-
-        # The question: are the sits in rel_polyRead_sites relative to the
-        # extended or the non-extended utr?
-        #if this_utr.utr_ID.startswith('ENSG00000142632_1'):
-            #debug()
-        #ENSG00000142632_1
-        #and
-        #ENSG00000097021_1
-
-        # bug source: the 'relative' positions in rel_polyRead_sites can be
-        # negative... which messes up list indexing completely of course.
 
         # Determine coverage relative to the vector
         left_covrg = []
@@ -1768,6 +1757,11 @@ def cluster_loop(ends):
     nt, then this previous site is kept as a cluster, and the new site is the
     new cluster; and so on.
     """
+
+    # If you get an empty set in, return emtpy out
+    if ends == []:
+        return [[], []]
+
     clustsum = 0
     clustcount = 0
     this_cluster = []
@@ -1817,7 +1811,7 @@ def cluster_polyAs(utr_polyAs, utrs, polyA):
 
     # Ff there are no polyA reads or polyA is false: return empty lists 
     if utr_polyAs == {} or polyA == False:
-        polyA_reads = dict((utr_id,{'this_strand':[[],[]], 'other_strand':[[], []]})
+        polyA_reads = dict((utr_id, {'this_strand':[[],[]], 'other_strand':[[], []]})
                            for utr_id in utrs)
         return polyA_reads
 
@@ -1833,6 +1827,7 @@ def cluster_polyAs(utr_polyAs, utrs, polyA):
         if real_strand == '+':
             other_strand_ends = sorted([tup[2] for tup in polyAs if tup[5] == '-'])
             this_strand_ends = sorted([tup[1] for tup in polyAs if tup[5] == '+'])
+
         if real_strand == '-':
             other_strand_ends = sorted([tup[1] for tup in polyAs if tup[5] == '+'])
             this_strand_ends = sorted([tup[2] for tup in polyAs if tup[5] == '-'])
@@ -2395,10 +2390,13 @@ def main():
 
     # This option should be set only in case of debugging. It makes sure you
     # just run chromosome 1 and only extract a tiny fraction of the total reads.
-    DEBUGGING = True
-    #DEBUGGING = False
+    #DEBUGGING = True
+    DEBUGGING = False
     if DEBUGGING:
         settings.DEBUGGING()
+
+    # NOTE!! a UTR ended up in the output with a polyA count of 0. This means
+    # that the utr objects polyA_status was neither 'NA' nor []
 
     #settings.polyA = False
 
@@ -2452,14 +2450,13 @@ def main():
                          settings, annotation, DEBUGGING)
 
             ###### WORK IN PROGRESS
-            akk = pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs,
-                           settings, annotation, DEBUGGING)
+            #akk = pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs,
+                           #settings, annotation, DEBUGGING)
 
-            #result = my_pool.apply_async(pipeline, arguments)
-            #results.append(result)
+            result = my_pool.apply_async(pipeline, arguments)
+            results.append(result)
 
         # Wait for all procsses to finish
-        debug()
         my_pool.close()
         my_pool.join()
 
