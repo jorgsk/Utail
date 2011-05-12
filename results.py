@@ -184,8 +184,7 @@ class Cluster(object):
         self.cluster_nr = str_to_intfloat(polyA_number)
         self.polyA_coordinate = str_to_intfloat(polyA_coordinate)
         self.nr_support_reads = str_to_intfloat(number_supporting_reads)
-        if self.nr_support_reads == 0:
-            debug()
+
         self.dstream_covrg = str_to_intfloat(dstream_covrg)
         self.ustream_covrg = str_to_intfloat(ustream_covrg)
         self.annotated_polyA_distance = str_to_intfloat(annotated_polyA_distance)
@@ -222,14 +221,17 @@ class Settings(object):
 
         self.settings_file = settings_file
 
+        # A bit ad-hoc: dicrectory of polyA read files
+        self.polyAread_dir = os.path.join(here, 'polyA_files')
+
     # Return the paths of the length files
     def length_files(self):
-        return dict((d, os.path.join(self.here, self.outputdir,'length_'+d))
+        return dict((d, os.path.join(self.here, self.outputdir, 'length_'+d))
                     for d in self.datasets)
 
     # Return the paths of the polyA files
     def polyA_files(self):
-        return dict((d, os.path.join(self.here, self.outputdir,'polyA_' + d))
+        return dict((d, os.path.join(self.here, self.outputdir, 'polyA_' + d))
                     for d in self.datasets)
 
     # Return the paths of the epsilon files
@@ -273,11 +275,6 @@ class Settings(object):
         svm_bed = os.path.join(svmdir, 'svm_final.bed')
         # If this file doesn't exist, you have to make it
 
-        # TODO you are issing a library to run the SVM yourself. In the
-        # meanwhile, use what you can get from the browser. This seq is based on
-        # the 1500 last sequences of ref-seq genes, so it has clearly got its
-        # limitations. Ideally you should run it against the whole human genome.
-
         #if not os.path.isfile(svm_bed):
             #svm_from_source(svm_bed, svmdir, utr_bed, finder_settings, chr1)
 
@@ -292,7 +289,8 @@ class Settings(object):
         for line in f.stdout:
             (chrm, beg, end, d,d, strand, d,d,d, utr_exon_id, d,d) = line.split()
             # The bedfile has utr_exons in the index. You need the whole utr.
-            utr_id = utr_exon_id[:-2]
+            # OBS 
+            utr_id = '_'.join(utr_exon_id.split('_')[:-1])
             beg = int(beg)
             end = int(end)
 
@@ -892,7 +890,7 @@ def get_utrs(settings, svm=False):
     # Check if all length files exist or that you have access
     [verify_access(f) for f in length_files.values()]
 
-    all_utrs = []
+    all_utrs = {}
     for dset_name in settings.datasets:
 
         lengthfile = open(length_files[dset_name], 'rb')
@@ -934,7 +932,7 @@ def get_utrs(settings, svm=False):
                 #Update UTR object with SVM info
                 utr_dict[utr_id].svm_coordinates.append(svm_beg)
 
-        all_utrs.append(UTRDataset(utr_dict, dset_name))
+        all_utrs[dset_name] = UTRDataset(utr_dict, dset_name)
 
     return all_utrs
 
@@ -1049,7 +1047,7 @@ def udstream_coverage_last_clusters(dsets):
 
     p = Plotter()
 
-    for dset in dsets:
+    for dset in dsets.values():
 
         # first second thrid and fourth
         # nr of clusters
@@ -1127,7 +1125,7 @@ def correlate_polyA_coverage_counts(dsets, super_clusters):
 
     # For all the clusters with more than one dataset supporting it, get a list
     # of how many poly(A) reads are at that support.
-    count_dset = dict((dset.name, []) for dset in dsets)
+    count_dset = dict((dset_name, []) for dset_name in dsets)
     for (chrpos, sup_cl) in super_clusters.iteritems():
 
         if (len(set(sup_cl[0])) == 2) and (len(sup_cl[0]) == 2):
@@ -1142,7 +1140,7 @@ def correlate_polyA_coverage_counts(dsets, super_clusters):
             #debug()
 
     # get all pairwise combinations of the dsets
-    pairs = [pa for pa in itertools.combinations([ds.name for ds in dsets], 2)]
+    pairs = [pa for pa in itertools.combinations([ds_name for ds_name in dsets], 2)]
     for pa in pairs:
         (p1, p2) = (pa[0], pa[1])
     title = 'PolyA-site read count variation'
@@ -1159,7 +1157,7 @@ def compare_cluster_evidence(dsets, clusters, super_clusters, dset_2super):
     p = Plotter()
 
     #for dset in dsets:
-    for dset in dsets[1:]:
+    for dset in dsets.values()[1:]:
 
         all_read_counter = {} # cluster_size : read_count for all clusters
         svm_support = {} # for all clusters: do they have SVM support?
@@ -1237,7 +1235,7 @@ def output_control(settings, dsets):
 
     # TRIANGLE PLOT ##
 
-    for dset in dsets:
+    for dset in dsets.itervalues():
 
         nr_supp_reads = []
         covrg_down = []
@@ -1278,15 +1276,21 @@ def polyadenylation_comparison(settings, dsets, clusters, super_clusters, dset_2
     * compare 3UTR polyadenylation UTR-to-UTR
     """
 
+    # Compare the compartments
     compare_cluster_evidence(dsets, clusters, super_clusters, dset_2super)
 
     debug()
 
-    correlate_polyA_coverage_counts(dsets, super_clusters)
+    ## Correlate the coverage counts of common polyadenylation sites between
+    ## clusters
+    #correlate_polyA_coverage_counts(dsets, super_clusters)
 
-    udstream_coverage_last_clusters(dsets)
+    ## Get the change in coverage ratio of the 3 (or so) last polyadenylation
+    ## sites from the 3 UTR
+    #udstream_coverage_last_clusters(dsets)
 
-    cluster_size_sensitivity()
+    ## See the effects of excluding pA sites with 1, 2, 3, etc, coverage
+    #cluster_size_sensitivity()
 
     #####################################################################
     # It depends on PAS-type, PAS-distance, polyA-number (1, 2, .., last)
@@ -1352,7 +1356,43 @@ def rouge_polyA_sites(settings):
 
     pass
 
-def classic_polyA_stats(settings):
+def get_reads_from_file(ds, dset, finder, pAread_file, utr_bed, utr_exons):
+    """
+    Go through
+    """
+
+    # Prepare a list of 'this_strand' clusters. They will serve as controls.
+    this_strands = []
+
+    # Get a dictionary for each utr_id with its overlapping polyA reads
+    utr_polyAs = finder.get_polyA_utr(pAread_file, utr_bed)
+
+    # Cluster the poly(A) reads for each utr_id.
+    polyA_cls = finder.cluster_polyAs(utr_polyAs, utr_exons, polyA=True)
+
+    # Add the read_count information to the UTR objects
+    for (utr_exon_id, utr_exon_pAreads) in polyA_cls.iteritems():
+        utr_id = '_'.join(utr_exon_id.split('_')[:-1])
+
+        # Append the 'this_strand' clusters to the list
+        if utr_exon_pAreads['this_strand'][1] != []:
+            this_strands.append(utr_exon_pAreads['this_strand'][1])
+
+        # Append the 'other_strand' clusters to the polyA clusters of the
+        # UTR objects.
+        if utr_exon_pAreads['other_strand'][0] != []:
+            other_strand = utr_exon_pAreads['other_strand']
+            # Go though all the clusters of this utr
+            for cluster in dset.utrs[utr_id].clusters:
+                # Go though all the polyA reads 
+                for (cl_nr, cl_mean) in enumerate(other_strand[0]):
+                    # If the match, update the cluster with the coverage
+                    if cl_mean == cluster.polyA_coordinate:
+                        cluster.all_pA_reads = other_strand[1][cl_nr]
+
+    return this_strands
+
+def classic_polyA_stats(settings, dsets):
     """
     * distances from polyA cluster to PAS site
     * PAS variant distribution
@@ -1360,7 +1400,72 @@ def classic_polyA_stats(settings):
     * degree of usage of early and late polyA sites
     """
 
+    # 1) Try to call rna_analyser methods to re-intersecting and
+    # re-clustering the polyA reads
+
+    import utr_finder as finder
+
+    finder_settings = finder.Settings\
+            (*finder.read_settings(settings.settings_file))
+
+    chr1 = True
+    if chr1:
+        finder_settings.chr1 = True
+
+    # Get the bedfile with 3UTR exons
+    beddir = os.path.join(settings.here, 'source_bedfiles')
+    utr_bed = finder.get_utr_path(finder_settings, beddir)
+    polyA_dir = settings.polyAread_dir
+
+    # Get the annotation class from utr_finder.py
+    finder_annot = finder.Annotation(finder_settings.annotation_path)
+
+    # Set the utrfile_path on finder's annotation class
+    finder_annot.utrfile_path = utr_bed
+
+    # Getting a dictionary of the 3UTRs from finder_annotation
+    utr_exons = finder_annot.get_utrdict()
+
+    # Do the analysis for all the polyA reads in the directory
+    for (file_ds, pAread_file) in get_pA_files(polyA_dir):
+
+        # Get the 'this_strands' clusters; and also update the dset class UTRs
+        # with 'other_strand' info
+
+        # only proceed if the file_dataset has already been imported in dsets
+        if file_ds in dsets:
+            dset = dsets[file_ds] # get the dset class instance
+        else:
+            continue
+
+        this_strands = get_reads_from_file(file_ds, dset, finder, pAread_file,
+                                           utr_bed, utr_exons)
+
+        debug()
+        # Do the actual analysis on the 'other_strand'
+
+    # Basically: give me the UTR dict
+    # TODO:
+
+        # 2) Calculate the distribution of polyA variation about a site
+        # 3) Calculate the distance from polyA-site to 1) closest 2) best PAS
+        # 4) Intersect with the UTR objects to get the PAS type
+        #   -- Get the PAS distribution
+        # 4) Get the variation about a SINGLE polyA-site. It tells us something
+        # about the abundance of different types of transcript? Or just some
+        # artifact of the PCR process? It possibly points to the minimum number
+        # of unique transcripts in the sample. 
+
+        # 5) The same stuff but for 'other_strand'.
+
     pass
+
+def get_pA_files(polyA_dir):
+    """
+    Return a (datset, read_file) tuple for the files in polyA_dir
+    """
+    return [(f.lstrip('polyA_reads_').rstrip('.bed'), os.path.join(polyA_dir, f))
+                      for f in os.listdir(polyA_dir)]
 
 def epsilon_evaluation(settings):
     """
@@ -1520,17 +1625,20 @@ def main():
     dsets = get_utrs(settings, svm=True)
 
     # Get just the clusters from the polyA files
-    clusters = get_clusters(settings)
+    #clusters = get_clusters(settings)
 
     # Merge all clusters in datset. Return interlocutor-dict for going from each
     # poly(A) cluster in each dataset to the
-    (super_cluster, dset_2super) = merge_clusters(clusters)
+    #(super_cluster, dset_2super) = merge_clusters(clusters)
 
     #output_control(settings, dsets)
 
     #utr_length_comparison(settings, utrs)
 
-    polyadenylation_comparison(settings, dsets, clusters, super_cluster, dset_2super)
+    #polyadenylation_comparison(settings, dsets, clusters, super_cluster, dset_2super)
+
+    ## The classic polyA variation distributions
+    classic_polyA_stats(settings, dsets)
 
     debug()
 
@@ -1543,6 +1651,7 @@ def main():
     #other_methods_comparison(settings)
 
     #rouge_polyA_sites(settings)
+
 
 if __name__ == '__main__':
     main()

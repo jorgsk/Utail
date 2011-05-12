@@ -41,7 +41,6 @@ print('Loading modules ...\n')
 import os
 import sys
 import shutil
-import cPickle
 import ConfigParser
 from multiprocessing import Pool
 from multiprocessing import cpu_count
@@ -104,16 +103,16 @@ class Settings(object):
         Modify settings for debugging ONLY!
         """
 
-        #self.chr1 = True
+        self.chr1 = True
         self.chr1 = False
         #self.read_limit = False
         #self.read_limit = 10000000
-        self.read_limit = 10000
+        self.read_limit = 1000000
         self.max_cores = 3
         self.polyA = True
         #self.polyA = False
         self.polyA = '/users/rg/jskancke/phdproject/3UTR/the_project/temp_files'\
-                '/polyA_reads_HeLa-S3_Whole_Cell_processed_mapped.bed'
+                '/polyA_reads_HeLa-S3_Cytoplasm_processed_mapped.bed'
         #self.bed_reads = False
         #self.bed_reads = '/users/rg/jskancke/phdproject/3UTR/the_project/temp_files'\
                 #'/reads_HeLa-S3_Whole_Cell.bed'
@@ -294,17 +293,25 @@ class UTR(object):
 
         return True
 
-    def update_utr(self, new_exon):
+    def update_utr(self, new_exon, total_nr_reads):
         """
         For multi-exon 3UTRs. Updates the attributes of the UTR-object with the
         next exon with the next exon. The first exon's ID will be the one
         written to file.
+
+        You need N -- the total number of reads to update the RPKMs. Not so
+        trivial ;)
         """
 
-        # Update RPKM with weights on the lenghts of the two exons
-        self.rpkm = ((self.rpkm/self.length_nonext) +
-                     new_exon.rpkm/new_exon.length_nonext)/\
-                (self.length_nonext + new_exon.length_nonext)
+        # Update RPKM with weights on the lenghts of the two exons You need to
+        # recover the number of reads falling over the UTRS 
+        R_self = (self.rpkm)*(total_nr_reads)*(self.length_nonext)/(10**9)
+        R_new = (new_exon.rpkm)*(total_nr_reads)*(new_exon.length_nonext)/(10**9)
+
+        newlength = self.length_nonext + new_exon.length_nonext
+        # Update rpkm with these two values and the new length
+        self.rpkm = ((10**9)*(R_self + R_new))/(total_nr_reads*newlength)
+
         # Update length
         self.length_nonext += new_exon.length_nonext
 
@@ -974,7 +981,7 @@ def coverage_wrapper(dset_id, filtered_reads, utrfile_path, options):
 
     return out_path
 
-def join_multiexon_utr(multi_exon_utr):
+def join_multiexon_utr(multi_exon_utr, total_nr_reads):
     """
     For multi-exon UTRs. When all exons in an UTR has been accounted for, start
     with the first exon (determined by sorting), and call
@@ -986,12 +993,12 @@ def join_multiexon_utr(multi_exon_utr):
     # the other utrs to this utr.
     main_utr = multi_exon_utr[0]
     for new_exon in multi_exon_utr[1:]:
-        main_utr.update_utr(new_exon)
+        main_utr.update_utr(new_exon, total_nr_reads)
 
     return main_utr
 
 def output_writer(dset_id, coverage, annotation, utr_seqs, rpkm, extendby,
-                 polyA_reads, settings):
+                 polyA_reads, settings, total_nr_reads):
     """
     Putting together all the info on the 3UTRs and writing to files. Write
     one file mainly about the length of the 3UTR, and write another file about
@@ -1082,7 +1089,8 @@ def output_writer(dset_id, coverage, annotation, utr_seqs, rpkm, extendby,
 
                 if len(multi_exons[utr_name]) == this_utr.tot_exnr:
                     # If complete, join the utrs into a this_utr object
-                    this_utr = join_multiexon_utr(multi_exons[utr_name])
+                    this_utr = join_multiexon_utr(multi_exons[utr_name],
+                                                  total_nr_reads)
 
                     # Create instances for writing to file
                     length_output = FullLength(utr_ID)
@@ -1189,6 +1197,9 @@ def calc_write_tuning(tuning_handle, length_output, this_utr):
         # region
         # For now I simply assign them to the last value of the region.. but
         # it's not satisfactory!
+        # NOTE apparantly it leads to a bug as well ...
+        # TODO bug here. this_utr.norm_cuml[-1] apparently doesn't work some
+        # times.
 
         if (rel_pA_pos < 0) or (rel_pA_pos >= this_utr.length_nonext):
             if this_utr.strand == '+':
@@ -1197,8 +1208,6 @@ def calc_write_tuning(tuning_handle, length_output, this_utr):
                 cumul_pA = this_utr.norm_cuml[0]
         else:
             cumul_pA = this_utr.norm_cuml[rel_pA_pos]
-
-        # TODO VERIFY CORRECTNESS OF COVERAGES and positions
 
         d_stream_covr = str(d_stream_covr)
         u_stream_covr = str(u_stream_covr)
@@ -1917,7 +1926,9 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs, settings,
     # Iterate through the coverage files and write to output files
     print('Writing output files... {0} ...\n'.format(dset_id))
     output_files = output_writer(dset_id, coverage_path, annotation, utr_seqs,
-                                 rpkm, extendby, polyA_reads, settings)
+                                 rpkm, extendby, polyA_reads, settings,
+                                 total_nr_reads)
+
     print('Total time for {0}: {1}\n'.format(dset_id, time.time() - t0))
 
     # Get the paths to the two output files explicitly
@@ -2360,8 +2371,6 @@ def pas_dist_bed_length(in_PAS, out_PAS, header):
 
     outfile.close()
 
-    pass
-
 def main():
     """
     This method is called if script is run as __main__.
@@ -2381,24 +2390,18 @@ def main():
     # always acessable.
     settings = Settings(*read_settings(settings_file))
 
-    # When a simulation is over, the paths to the output files are pickled. When
-    # simulate is False, the program will not read rna-seq files but will
-    # instead try to get the output files from the last simulation.
+    # You can chose to not simulate. The only remaining function is making
+    # bigwig files.
     #simulate = False
     simulate = True
     #settings.bigwig = False
 
     # This option should be set only in case of debugging. It makes sure you
     # just run chromosome 1 and only extract a tiny fraction of the total reads.
-    #DEBUGGING = True
-    DEBUGGING = False
+    DEBUGGING = True
+    #DEBUGGING = False
     if DEBUGGING:
         settings.DEBUGGING()
-
-    # NOTE!! a UTR ended up in the output with a polyA count of 0. This means
-    # that the utr objects polyA_status was neither 'NA' nor []
-
-    #settings.polyA = False
 
     # The program reads a lot of information from the annotation. The annotation
     # object will hold this information (file-paths and datastructures).
@@ -2421,9 +2424,6 @@ def main():
     # the annotation. Put the intersected annotated polyA sites in a dictionary.
     print('Making data structures for annotation poly(A) sites ...\n')
     annotation.a_polyA_sites_dict = annotation.get_polyA_dict()
-
-    # Pickle the final results. Initiate the pickle object.
-    pickled_final = os.path.join(output_dir, 'pickled_result_paths')
 
     ##################################################################
     if simulate:
@@ -2450,13 +2450,19 @@ def main():
                          settings, annotation, DEBUGGING)
 
             ###### WORK IN PROGRESS
-            #akk = pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs,
-                           #settings, annotation, DEBUGGING)
+            # TODO you got, yet again..., an error on your output. You're
+            # running it on foc now. check it to find errors.
 
-            result = my_pool.apply_async(pipeline, arguments)
-            results.append(result)
+            # As well, are there some UTRs in the original exon file that don't
+            # make it through to the length_output file?
+            akk = pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs,
+                           settings, annotation, DEBUGGING)
+
+            #result = my_pool.apply_async(pipeline, arguments)
+            #results.append(result)
 
         # Wait for all procsses to finish
+        debug()
         my_pool.close()
         my_pool.join()
 
@@ -2475,28 +2481,11 @@ def main():
                 final_outp_polyA[key] = value['polyA']
                 final_outp_length[key] = value['length']
 
-        # Put these dicts in a dict again and pickle for future use
-        dumpme = {'coverage': coverage, 'final_output_polyA':
-                  final_outp_polyA, 'final_output_length': final_outp_length}
-
-        cPickle.dump(dumpme, open(pickled_final, 'wb'))
-
         # Copy output from temp-dir do output-dir
         save_output(final_outp_polyA, output_dir)
         save_output(final_outp_length, output_dir)
 
     ##################################################################
-    # NOTE TO SELF: everything starting from there should be in a separate
-    # script: utr_output_analysis.py or smth similar. It's only been put here
-    # for conveniece for checking the output during work.
-
-    #if not simulate:
-
-        #file_path_dict = cPickle.load(open(pickled_final, 'rb'))
-
-        #final_outp_polyA = file_path_dict['final_output_polyA']
-        #final_outp_length = file_path_dict['final_output_length']
-        #coverage = file_path_dict['coverage']
 
     # if set, make bigwig files
     if settings.bigwig:
