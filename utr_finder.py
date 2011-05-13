@@ -71,7 +71,7 @@ import annotation_parser as genome
 
 class Settings(object):
     """
-    Convenience class.One instance is created from this class: it holds all the
+    Convenience class. One instance is created from this class: it holds all the
     settings parameters obtained from the UTR_SETTINGS file.
     """
     def __init__(self, datasets, annotation_path, utrfile_provided, read_limit,
@@ -103,16 +103,15 @@ class Settings(object):
         Modify settings for debugging ONLY!
         """
 
-        self.chr1 = True
-        #self.chr1 = False
+        #self.chr1 = True
+        self.chr1 = False
         #self.read_limit = False
-        #self.read_limit = 10000000
-        self.read_limit = 1000000
+        self.read_limit = 10000000
         self.max_cores = 3
         self.polyA = True
-        #self.polyA = False
-        self.polyA = '/users/rg/jskancke/phdproject/3UTR/the_project/temp_files'\
-                '/polyA_reads_HeLa-S3_Nucleus_processed_mapped.bed'
+        self.polyA = False
+        #self.polyA = '/users/rg/jskancke/phdproject/3UTR/the_project/temp_files'\
+                #'/polyA_reads_HeLa-S3_Nucleus_processed_mapped.bed'
         #self.bed_reads = False
         #self.bed_reads = '/users/rg/jskancke/phdproject/3UTR/the_project/temp_files'\
                 #'/reads_HeLa-S3_Nucleus.bed'
@@ -314,8 +313,9 @@ class UTR(object):
         # Update rpkm with these two values and the new length
         self.rpkm = ((10**9)*(R_self + R_new))/(total_nr_reads*newlength)
 
-        # Update length
+        # Update lengths
         self.length_nonext += new_exon.length_nonext
+        self.length_ext += new_exon.length_ext
 
         # Update begends lists to know where all exons begin and end
         self.begends_ext.append((new_exon.beg_ext, new_exon.end_ext))
@@ -346,13 +346,16 @@ class UTR(object):
         if self.strand == '+':
             self.sequence = self.sequence + new_exon.sequence
             self.covr_vector = self.covr_vector + new_exon.covr_vector
-            self.cumul_covr = self.cumul_covr + new_exon.cumul_covr
 
         # If - strand, new.exon is upstream self.exon
         if self.strand == '-':
             self.sequence = new_exon.sequence + self.sequence
             self.covr_vector = new_exon.covr_vector + self.covr_vector
-            self.cumul_covr = new_exon.cumul_covr + self.cumul_covr
+
+        # If last exon, recalculate the cumulative coverage
+        if new_exon.this_exnr == self.tot_exnr:
+            self.cumul_covr = [sum(self.covr_vector[:x])
+                               for x in range(1, self.length_ext+1)]
 
 def frmt(element):
     """
@@ -1078,14 +1081,14 @@ def output_writer(dset_id, coverage, annotation, utr_seqs, rpkm, extendby,
             this_utr.covr_vector.append(int(covr))
             this_utr.cumul_covr.append(this_utr.cumul_covr[-1] + int(covr))
 
-        # if not, this is the first line of a new UTR
+        # if not, this is the first line of a new UTR-exon
         else:
 
             calculate_and_write = True
 
-            # check if the previous utr was a multi-exon utr
+            # check if the previous utr-exon was part of a multi-exon utr
             if this_utr.tot_exnr > 1:
-                # If so, check if it is complete
+                # If so, add to multi_exon archive
                 utr_name = this_utr.utr_ID[:-2]
 
                 if utr_name in multi_exons:
@@ -1093,6 +1096,7 @@ def output_writer(dset_id, coverage, annotation, utr_seqs, rpkm, extendby,
                 else:
                     multi_exons[utr_name] = [this_utr]
 
+                # check if multi-exon is complete
                 if len(multi_exons[utr_name]) == this_utr.tot_exnr:
                     # If complete, join the utrs into a this_utr object
                     this_utr = join_multiexon_utr(multi_exons[utr_name],
@@ -1109,6 +1113,8 @@ def output_writer(dset_id, coverage, annotation, utr_seqs, rpkm, extendby,
             if calculate_and_write:
 
                 # Calculate output values like 99.5% length, cumulative coverage, etc
+                # BUG: adding coverage vectors is OK. Adding cumul vectors NOT
+                # SO IF THEY HAVE BEEN CUMUL'ed INDIVIDUALLY BEFORE. HAVE THEY?
                 length_output.calculate_output(pas_patterns, this_utr)
                 pAread_output.calculate_output(pas_patterns, this_utr)
 
@@ -1198,7 +1204,7 @@ def calc_write_tuning(tuning_handle, length_output, this_utr):
         # Get the cumulative coverage of the polyA site
         # However, watch out for reads that land outside the non-extended
         # region
-        # For now I simply assign them to the last value of the region.. but
+        # For now I simply assign them to the last value of the region.. 
         # it's not satisfactory!
 
         if (rel_pA_pos < 0) or (rel_pA_pos >= this_utr.length_nonext):
@@ -2396,8 +2402,8 @@ def main():
 
     # This option should be set only in case of debugging. It makes sure you
     # just run chromosome 1 and only extract a tiny fraction of the total reads.
-    #DEBUGGING = True
-    DEBUGGING = False
+    DEBUGGING = True
+    #DEBUGGING = False
     if DEBUGGING:
         settings.DEBUGGING()
 

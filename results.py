@@ -196,6 +196,10 @@ class Cluster(object):
         PAS_distance = PAS_distance.split(' ')
         self.PAS_distance = [str_to_intfloat(dist) for dist in PAS_distance]
 
+        # Later, you might add a list of genomic coordinates of the polyA-reads
+        # for this cluster
+        self.all_pA_coords = 'NA'
+
     def __repr__(self):
         return str(self.polyA_coordinate)
 
@@ -1356,7 +1360,7 @@ def rouge_polyA_sites(settings):
 
     pass
 
-def get_reads_from_file(ds, dset, finder, pAread_file, utr_bed, utr_exons):
+def get_reads_from_file(ds, dsets, finder, pAread_file, utr_bed, utr_exons):
     """
     Go through
     """
@@ -1376,6 +1380,7 @@ def get_reads_from_file(ds, dset, finder, pAread_file, utr_bed, utr_exons):
 
         # Append the 'this_strand' clusters to the list
         if utr_exon_pAreads['this_strand'][1] != []:
+            #### TEMPORARY CODE WHILE WORKING WITH OLD FILES
             this_strands.append(utr_exon_pAreads['this_strand'][1])
 
         # Append the 'other_strand' clusters to the polyA clusters of the
@@ -1383,12 +1388,20 @@ def get_reads_from_file(ds, dset, finder, pAread_file, utr_bed, utr_exons):
         if utr_exon_pAreads['other_strand'][0] != []:
             other_strand = utr_exon_pAreads['other_strand']
             # Go though all the clusters of this utr
-            for cluster in dset.utrs[utr_id].clusters:
-                # Go though all the polyA reads 
-                for (cl_nr, cl_mean) in enumerate(other_strand[0]):
-                    # If the match, update the cluster with the coverage
-                    if cl_mean == cluster.polyA_coordinate:
-                        cluster.all_pA_reads = other_strand[1][cl_nr]
+
+            ####
+            # TEMPORARY FIX UNTIL YOU RUN YOUR DATASETS AGAIN
+            if utr_id in dsets[ds].utrs:
+            # REMOVE THIS WHEN FINISHED XXX
+            ####
+
+                for cluster in dsets[ds].utrs[utr_id].clusters:
+                    # Go though all the polyA reads 
+                    for (cl_nr, cl_mean) in enumerate(other_strand[0]):
+                        # If they match, update the cluster with all the genomic
+                        # positions of the reads at this cluster
+                        if cl_mean == cluster.polyA_coordinate:
+                            cluster.all_pA_coords = other_strand[1][cl_nr]
 
     return this_strands
 
@@ -1434,18 +1447,25 @@ def classic_polyA_stats(settings, dsets):
 
         # only proceed if the file_dataset has already been imported in dsets
         if file_ds in dsets:
-            dset = dsets[file_ds] # get the dset class instance
+            pass
         else:
             continue
 
-        this_strands = get_reads_from_file(file_ds, dset, finder, pAread_file,
+        # Update the datasets in dsets with 'other_strand' polyA information
+        # As well, get a list 'this_strands' which contains the polyA clusters
+        # in the other strands.
+        this_strands = get_reads_from_file(file_ds, dsets, finder, pAread_file,
                                            utr_bed, utr_exons)
 
-        debug()
-        # Do the actual analysis on the 'other_strand'
+        # Do the 'this_strands' analysis. Return distribution of distances from
+        # mean and sizes of clusters (sizes are up to a cutoff value)
+        # TODO get distribution of how many are close to annotated sites
+        this_strand_sizes_dists = siz_dis_this_strands(this_strands)
 
-    # Basically: give me the UTR dict
-    # TODO:
+        # Get distribution of cluster sizes and distances from cluster means, as
+        # well as the number of clusters close to annotated ones, and, further,
+        # the size and distance distribution from these annotated ones.
+        other_strand_sizes_dists = siz_dis_other_strands(file_ds, dsets)
 
         # 2) Calculate the distribution of polyA variation about a site
         # 3) Calculate the distance from polyA-site to 1) closest 2) best PAS
@@ -1458,7 +1478,105 @@ def classic_polyA_stats(settings, dsets):
 
         # 5) The same stuff but for 'other_strand'.
 
+def siz_dis_other_strands(file_ds, dsets):
+    """
+    Return distributions of the the sizes of clusters and the distances from the
+    cluster mean. Also return the same distributions but only for the clusters
+    that are near annotated TTS.
+
+    """
+
+    dist_from_mean = {}
+    sizes_count = {}
+
+    utrs = dsets[file_ds].utrs
+
+    for (utr_id, utr) in utrs:
+        for cl in utr.clusters:
+            cluster = cl.all_pA_coords
+
+            cl_len = len(cluster)
+            cl_mean = np.mean(cluster)
+            # Unique list of distances from the mean
+            cl_dists_from_mean = list(set([cl_mean - pos for pos in cluster]))
+
+            # Save the cluster distancs
+            if cl_len not in dist_from_mean:
+                dist_from_mean[cl_len] = cl_dists_from_mean
+            else:
+                for dist in cl_dists_from_mean:
+                    dist_from_mean[cl_len].append(dist)
+
+            # Save the cluster count
+            if cl_len not in sizes_count:
+                sizes_count[cl_len] = 1
+            else:
+                sizes_count[cl_len] += 1
+
     pass
+
+def siz_dis_this_strands(this_strands):
+    """
+    Input is a list of lists of poly(A) events coming from what I expect is the
+    other strand. Oh damn. An obvious check: which of the other strand UTRs are
+    close to annotated ones???? :S:S Shit. Maybe I can do an ad-hoc test in this
+    script? I can print out bed_clusters of the regions +/- 40 nt around these
+    clusters, and I can run them against the annotated poly(A) sites-bedfile I
+    have lying around somewhere.
+
+    1) Get the distribution about mean and the distribution of sizes (how many
+    with 1, how many with 2, etc) -- this is for comparing with the
+    'other_strands' distributions
+
+    2) Get how many of these are close to annotated TTS sites. This is important
+    for the control.
+    """
+
+    # 1) Go through all clusters and return a list with distances from the mean
+    # of each cluster
+    dist_from_mean = {}
+    sizes_count = {}
+
+    for clusters in this_strands:
+        for cluster in clusters:
+            cl_len = len(cluster)
+            cl_mean = np.mean(cluster)
+            # Unique list of distances from the mean
+            cl_dists_from_mean = list(set([cl_mean - pos for pos in cluster]))
+
+            # Save the cluster distancs
+            if cl_len not in dist_from_mean:
+                dist_from_mean[cl_len] = cl_dists_from_mean
+            else:
+                for dist in cl_dists_from_mean:
+                    dist_from_mean[cl_len].append(dist)
+
+            # Save the cluster count
+            if cl_len not in sizes_count:
+                sizes_count[cl_len] = 1
+            else:
+                sizes_count[cl_len] += 1
+
+    # Get all the sizes in an array for easy plotting
+    size_cutoff = 30
+    # Create a zero-array for the max sizes
+    all_sizes  = np.zeros(size_cutoff)
+    for (size, size_count) in sizes_count.iteritems():
+        if size < size_cutoff:
+            all_sizes[size-1] = size_count
+        if size >= size_cutoff:
+            all_sizes[-1] += size_count
+
+    # Plot the distribution of the sizes
+    #x_coords = range(1, size_cutoff+1)
+    #plt.bar(x_coords, all_sizes)
+
+    # Get all dists, irrespective of cluster size
+    all_dists = sum(dist_from_mean.itervalues(), [])
+    #plt.hist(all_dists, bins=100)
+
+    return ((all_sizes, size_cutoff), all_dists)
+
 
 def get_pA_files(polyA_dir):
     """
