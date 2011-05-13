@@ -104,7 +104,7 @@ class Settings(object):
         """
 
         self.chr1 = True
-        self.chr1 = False
+        #self.chr1 = False
         #self.read_limit = False
         #self.read_limit = 10000000
         self.read_limit = 1000000
@@ -112,10 +112,10 @@ class Settings(object):
         self.polyA = True
         #self.polyA = False
         self.polyA = '/users/rg/jskancke/phdproject/3UTR/the_project/temp_files'\
-                '/polyA_reads_HeLa-S3_Cytoplasm_processed_mapped.bed'
+                '/polyA_reads_HeLa-S3_Nucleus_processed_mapped.bed'
         #self.bed_reads = False
         #self.bed_reads = '/users/rg/jskancke/phdproject/3UTR/the_project/temp_files'\
-                #'/reads_HeLa-S3_Whole_Cell.bed'
+                #'/reads_HeLa-S3_Nucleus.bed'
 
 class Annotation(object):
     """
@@ -301,6 +301,8 @@ class UTR(object):
 
         You need N -- the total number of reads to update the RPKMs. Not so
         trivial ;)
+
+        Update the coverage vector and the normalized coverage vector too!
         """
 
         # Update RPKM with weights on the lenghts of the two exons You need to
@@ -339,14 +341,18 @@ class UTR(object):
         for site in new_exon.a_polyA_sites:
             self.a_polyA_sites.append(site)
 
-        # Update the sequence, depending on strand
-        # If + strand, new.exon is downstream self.exon
+        # Update sequence and coverage vectors
+        # This works, because the utrs have been sorted
         if self.strand == '+':
             self.sequence = self.sequence + new_exon.sequence
+            self.covr_vector = self.covr_vector + new_exon.covr_vector
+            self.cumul_covr = self.cumul_covr + new_exon.cumul_covr
 
         # If - strand, new.exon is upstream self.exon
         if self.strand == '-':
             self.sequence = new_exon.sequence + self.sequence
+            self.covr_vector = new_exon.covr_vector + self.covr_vector
+            self.cumul_covr = new_exon.cumul_covr + self.cumul_covr
 
 def frmt(element):
     """
@@ -1174,9 +1180,6 @@ def calc_write_tuning(tuning_handle, length_output, this_utr):
         # Get the relative-to-non-extended position of the polyA site 
         rel_pA_pos = pAsite - this_utr.beg_nonext
 
-        # Test this by visualizing in the browser.
-        # Upload the polyA reads and scrutinize the coverage vector
-
         covr_vec = this_utr.covr_vector
 
         # Get the coverage 50 nt on both sides of the polyA site
@@ -1197,9 +1200,6 @@ def calc_write_tuning(tuning_handle, length_output, this_utr):
         # region
         # For now I simply assign them to the last value of the region.. but
         # it's not satisfactory!
-        # NOTE apparantly it leads to a bug as well ...
-        # TODO bug here. this_utr.norm_cuml[-1] apparently doesn't work some
-        # times.
 
         if (rel_pA_pos < 0) or (rel_pA_pos >= this_utr.length_nonext):
             if this_utr.strand == '+':
@@ -1217,13 +1217,11 @@ def calc_write_tuning(tuning_handle, length_output, this_utr):
         length = str(this_utr.length_nonext)
         default_pos = str(this_utr.rel_pos)
         strand = str(this_utr.strand)
+        # Write To file
         tuning_handle.write('\t'.join([this_utr.utr_ID[:-2], default_pos,
                                        pA_dist, cumul_pA, d_stream_covr,
                                        u_stream_covr, rpkm, length, strand]) +
                             '\n')
-
-    # Write utr_id, distances, cumulative coverage, rpkm, and length of utr
-
 
 def verify_access(f):
     """
@@ -2398,8 +2396,8 @@ def main():
 
     # This option should be set only in case of debugging. It makes sure you
     # just run chromosome 1 and only extract a tiny fraction of the total reads.
-    DEBUGGING = True
-    #DEBUGGING = False
+    #DEBUGGING = True
+    DEBUGGING = False
     if DEBUGGING:
         settings.DEBUGGING()
 
@@ -2450,8 +2448,6 @@ def main():
                          settings, annotation, DEBUGGING)
 
             ###### WORK IN PROGRESS
-            # TODO you got, yet again..., an error on your output. You're
-            # running it on foc now. check it to find errors.
 
             # As well, are there some UTRs in the original exon file that don't
             # make it through to the length_output file?
