@@ -103,12 +103,12 @@ class Settings(object):
         Modify settings for debugging ONLY!
         """
 
-        #self.chr1 = True
-        self.chr1 = False
+        self.chr1 = True
+        #self.chr1 = False
         #self.read_limit = False
-        self.read_limit = 10000000
+        self.read_limit = 1000000
         self.max_cores = 3
-        self.polyA = True
+        #self.polyA = True
         self.polyA = False
         #self.polyA = '/users/rg/jskancke/phdproject/3UTR/the_project/temp_files'\
                 #'/polyA_reads_HeLa-S3_Nucleus_processed_mapped.bed'
@@ -198,6 +198,7 @@ class UTR(object):
         self.polyA_reads = polyA_reads # the polyA reads
         self.a_polyA_sites = [int(site[1]) for site in a_polyA_sites] # annotated sites
         self.rel_pos = 'NA' # it might not be updated
+        self.epsilon_coord = 'NA'
 
         # The length of the extended UTR
         self.length_ext = self.end_ext - self.beg_ext
@@ -228,8 +229,6 @@ class UTR(object):
         self.beg_nonext = self.beg_ext
         self.length_nonext = self.length_ext
 
-        # TODO you are in the process of making sure that the non_extended is
-        # only performed on exons that have in fact been extended.
         # If extended, update these values
         if extendby > 0:
 
@@ -388,6 +387,7 @@ class FullLength(object):
         self.annot_dstream_coverage = 'NA'
         self.annot_ustream_coverage = 'NA'
         self.cuml_rel_size = 'NA'
+        self.annotTTS_dist = 'NA'
 
         self.epsilon = 0.999
 
@@ -404,10 +404,11 @@ class FullLength(object):
                     ('utr_ID', frmt(this_utr.utr_ID[:-2])),
                     ('strand', this_utr.strand),
                     ('3utr_extended_by', frmt(this_utr.extendby)),
-                    ('epsilon_coord', frmt(this_utr.rel_pos)),
+                    ('epsilon_coord', frmt(this_utr.epsilon_coord)),
                     ('epsilon_rel_size', frmt(self.cuml_rel_size)),
                     ('epsilon_downstream_covrg', frmt(self.eps_dstream_coverage)),
                     ('epsilon_upstream_covrg', frmt(self.eps_ustream_coverage)),
+                    ('annotation_distance', frmt(self.annotTTS_dist)),
                     ('annotation_downstream_covrg',
                      frmt(self.annot_dstream_coverage)),
                     ('annotation_upstream_covrg',
@@ -432,6 +433,7 @@ class FullLength(object):
         epsilon_rel_size
         epsilon_downstream_covrg
         epsilon_upstream_covrg
+        annotation_distance
         annotation_downstream_covrg
         annotation_upstream_covrg
         epsilon_PAS_type
@@ -467,6 +469,21 @@ class FullLength(object):
 
         # calculate the PAS and pas distance for 'length'
         self.get_pas(pas_patterns, this_utr)
+
+        # See if there is an annotated TTS end close to the length-defined end
+        self.annotTTS_dist = self.annot_TTS_dist(this_utr)
+
+    def annot_TTS_dist(self, this_utr):
+        """
+        Check if the 3UTR length end has an annotated TTS nearby
+        """
+        eps_end = this_utr.epsilon_coord
+        for apoint in this_utr.a_polyA_sites:
+            if eps_end-40 < apoint < eps_end+40:
+                return eps_end - apoint
+
+        # If you make it here, a close-by aTTS site has not been found
+        return 'NA'
 
 
     def cumul_minus(self, this_utr):
@@ -506,9 +523,13 @@ class FullLength(object):
                 self.cuml_rel_size = (length_nonext-rel_pos)/length_nonext
                 break
 
+
         # Save relative cumulative position with the this utr for later usage
         this_utr.rel_pos = rel_pos
         #Note that rel_pos is relative to the un-extended 3UTR.
+
+        # Update the epsilon coordinate relative to the genome
+        this_utr.epsilon_coord = this_utr.beg_nonext + this_utr.rel_pos
 
         # rel_pos according to extended 3utr
         er_pos = rel_pos + extendby
@@ -549,6 +570,9 @@ class FullLength(object):
 
         # Save relative position (relative to extended 3utr) with the object
         this_utr.rel_pos = rel_pos
+
+        # Update the epsilon coordinate relative to the genome
+        this_utr.epsilon_coord = this_utr.beg_nonext + this_utr.rel_pos
 
         # Calculate the mean coverage on both sides of this.
         # Note for ext_mean_99: ext_rel_pos + extendby = rel_pos
@@ -1030,13 +1054,13 @@ def output_writer(dset_id, coverage, annotation, utr_seqs, rpkm, extendby,
                  'AATACA', 'CATAAA', 'GATAAA', 'AATGAA', 'TTTAAA', 'ACTAAA',
                  'AATAGA']
 
-    # compiled regular expressions
+    # compile regular expressions of PAS patterns
     pas_patterns = [re.compile(pas) for pas in PAS_sites]
 
-    # Create the multi-exon dictionary where unfinshed multi-exon utrs will be
-    # stored. When all exons of a multi exons have been added, they will be
-    # combined and written to file.
+    # Multi-exon dictionary to store unfinshed multi-exon utrs 
     multi_exons = {}
+    # When all exons of a multi exon utr have been added, they will be
+    # joined, performed calcluations on, and written to file like the 1exons.
 
     # First get line 1 as something to start from
     read_from = open(coverage, 'rb')
@@ -2202,8 +2226,6 @@ def make_bigwigs(settings, annotation, here):
         print cluster_path
         print('')
 
-        # FOR DEBUGGING #
-
         # Get the upstream, downstraem coverage 
         cluster_ud = 'udstream_' + shortname
         cluster_ud_path = os.path.join(savedir, cluster_ud+'.bedGraph')
@@ -2219,8 +2241,6 @@ def make_bigwigs(settings, annotation, here):
 
         pas_dist_bed_clusters(dset, cluster_PAS_path, header)
 
-    # While debugging: print out tracks for the coverage upstream and downstream
-    # of the length and polyA output respectively.
 
 def length_udstream_covr(in_length, out_length, out_header):
     infile = open(in_length, 'rb')
@@ -2455,10 +2475,7 @@ def main():
 
             ###### WORK IN PROGRESS
 
-            # As well, are there some UTRs in the original exon file that don't
-            # make it through to the length_output file?
-            akk = pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs,
-                           settings, annotation, DEBUGGING)
+            akk = pipeline(*arguments)
 
             #result = my_pool.apply_async(pipeline, arguments)
             #results.append(result)

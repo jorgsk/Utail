@@ -16,6 +16,7 @@ from operator import itemgetter
 import math
 
 import numpy as np
+from scipy import stats
 
 ########################################
 # only get the debug function if run from Ipython #
@@ -652,12 +653,17 @@ class Plotter(object):
             ax.set_xlabel('Number of reads covering poly(A) cluster')
             ax.set_ylabel('Number of poly(A) clusters')
 
-            ax.set_title('Clusters with high coverage are often found in'
-                         'supporting data ', size=20)
+            ax.set_title('Clusters with high coverage are often found in'\
+                         ' supporting data ', size=20)
 
             legend_titles = [pairw_mrows[0][0]] + [tup[1] for tup in pairw_mrows]
             legend_axes = (ax[0] for ax in ax_list)
             fig.legend(legend_axes, legend_titles, loc=10)
+
+            #TODO ugm.. what now? more plots? Run all datasets again now that
+            #you have screened out many of the remaining bugs. Get how many of
+            #the opposite strand-clusters have support in the annotation. Few, I
+            #hope! This will be the final decimation of that uncertainty.
 
             plt.draw()
 
@@ -697,6 +703,80 @@ class Plotter(object):
         ax.set_xticklabels([str(tick) for tick in ind])
 
         plt.draw()
+
+    def distance_histogram(self, distance_dict):
+        """
+        Plot the normalized histogram of the three types of distances
+        superimposed and look for distances
+        """
+
+        cols = ['#0000FF', '#3333FF', '#4C3380']
+        col_dict = dict(zip(distance_dict.keys(), cols))
+
+        for (title, distances) in distance_dict.items():
+            (fig, ax) = plt.subplots()
+            # TODO I think the normalization is a bit off. The 0-bar stretches
+            # all the way to 1.
+            ax.hist(distances, bins=200, normed=True, label = title, color =
+                    col_dict[title])
+
+            # Put a fitted normal distribution on top
+            mean = np.mean(distances)
+            std = np.std(distances)
+
+            ax.set_ylim((0,1))
+            ax.set_xlim((-30, 30))
+            ax.legend()
+
+        plt.draw()
+
+        # NOTE the plots work well. You need to find a way to combine them into
+        # one plot (which is first etc?)
+
+    def cluster_size_distribution(self, cluster_sizes, cutoff):
+        """
+        Make bar plots of the (normalized) distribution of cluster sizes.
+        """
+        cols = ['#4C3380', '#0000FF', '#3333FF']
+        col_dict = dict(zip(cluster_sizes.keys(), cols))
+
+        (fig, axes) = plt.subplots(len(cluster_sizes), sharex=True, sharey=True)
+
+        x_coords = range(1, cutoff+1)
+
+        for indx, (name, size_dist) in enumerate(cluster_sizes.items()):
+            # Normalize size dist
+            size_sum = size_dist.sum()
+            ax = axes[indx]
+            size_dist = [val/size_sum for val in size_dist]
+            ax.bar(x_coords, size_dist, color = col_dict[name],
+                           align='center', label = name)
+
+            ax.set_ylim((0, 1.1))
+            ax.legend()
+            ax.set_xlabel('PolyA cluster sizes', size=20)
+            ax.set_ylabel('Frequency of occurrence', size=20)
+
+            ax.text(5, 0.8, 'Total clusters: {0}'.format(size_sum))
+
+        # Hide xticks for all but the last plot
+        plt.setp([a.get_xticklabels() for a in fig.axes[:-1]], visible=False)
+        axes[-1].set_xticks(x_coords)
+        x_coords[-1] = ' > {0}'.format(cutoff)
+        axes[-1].set_xticklabels([str(tick) for tick in x_coords])
+        axes[0].set_title('PolyA clusters in opposite strand are fewer, have'\
+                          ' mostly 1-size clusters, and have few large clusters',
+                         size=23)
+        # Make subplots close
+        fig.subplots_adjust(hspace=0)
+
+        plt.draw()
+
+        # OK but I think it's best to print them on top of each other to really
+        # show how many more there are of the cis-strand one.
+
+        debug()
+
 
 def pairwise_intersect(in_terms_of, dset_dict, cutoff):
     """
@@ -775,10 +855,8 @@ def get_intersection_matrix(pair_names, unions_names, cutoff, dset_dict):
                 else:
                     dset_l[read_nr-1] = clusters
 
-                if dset_l[-1] != []:
-                    # THE BUG a cluster [X, XX] are noted with 0 covering reads.
-                    # This is a mistake.
-                    debug()
+                #if dset_l[-1] != []:
+                    #debug()
 
         # Flatten the last arrays
         main_cls[-1] = sum(main_cls[-1], [])
@@ -1161,7 +1239,7 @@ def compare_cluster_evidence(dsets, clusters, super_clusters, dset_2super):
     p = Plotter()
 
     #for dset in dsets:
-    for dset in dsets.values()[1:]:
+    for dset in dsets.values():
 
         all_read_counter = {} # cluster_size : read_count for all clusters
         svm_support = {} # for all clusters: do they have SVM support?
@@ -1220,14 +1298,17 @@ def compare_cluster_evidence(dsets, clusters, super_clusters, dset_2super):
 
         cluster_dicts = (all_read_counter, svm_support, annot_read_counter)
         titles = ('All clusters', 'SVM_support', 'Annotated_TTS')
+
         #clusters = (all_read_counter, svm_support, annot_read_counter, other_dsets)
         #titles = ('All clusters', 'SVM_support', 'Annotated_TTS',
                   #'In_other_compartments')
 
         # make two figurses: one in terms of all clusters and on of annotated
         # TTS sites
+
         in_terms_of = (titles[0], titles[2])
         p.join_clusters(cluster_dicts, titles, in_terms_of)
+        plt.show()
 
 
 def output_control(settings, dsets):
@@ -1273,6 +1354,24 @@ def output_control(settings, dsets):
 
      #Upstream/downstream ratios of polyA sites.
 
+def false_negatives(dsets):
+
+    # Will for each dset hold a list. Each element represents a 3UTR end
+    # (determined by read coverage) that is  close to an annotated end. The
+    # element will be 1 if a polyA cluster is associated with this end, and 0 if
+    # not. An average of the list will give an estimate of the false negative
+    # rate (presumably, 100% should have polyA clusters).
+
+    # SHIT. Seems you don't save annot-distance in your damn output file.
+    # TODO 3) Do this false negative estimation
+
+    false_neg = {}
+    for (dset_name, dset) in dsets.items():
+        false_neg[dset_name] = []
+        for (utr_name, utr) in dset.utrs.iteritems():
+            # 
+            debug()
+
 
 def polyadenylation_comparison(settings, dsets, clusters, super_clusters, dset_2super):
     """
@@ -1280,9 +1379,17 @@ def polyadenylation_comparison(settings, dsets, clusters, super_clusters, dset_2
     * compare 3UTR polyadenylation UTR-to-UTR
     """
 
-    # Compare the compartments
-    compare_cluster_evidence(dsets, clusters, super_clusters, dset_2super)
+    # Compare the compartments; how many annotated do we find? etc.
+    #compare_cluster_evidence(dsets, clusters, super_clusters, dset_2super)
 
+
+    # Get a false negative estimate
+    # TODO a simple statistic: of the 3UTRs that have their length-ends ending
+    # close to an annotated poly(A) site, how many have poly(A) reads? gives a
+    # measure of how reliably we detect poly(A) clusters when they are first
+    # there.
+
+    false_negatives(dsets)
     debug()
 
     ## Correlate the coverage counts of common polyadenylation sites between
@@ -1421,7 +1528,8 @@ def classic_polyA_stats(settings, dsets):
     finder_settings = finder.Settings\
             (*finder.read_settings(settings.settings_file))
 
-    chr1 = True
+    chr1 = False
+    #chr1 = True
     if chr1:
         finder_settings.chr1 = True
 
@@ -1457,15 +1565,21 @@ def classic_polyA_stats(settings, dsets):
         this_strands = get_reads_from_file(file_ds, dsets, finder, pAread_file,
                                            utr_bed, utr_exons)
 
+        size_cutoff = 30
         # Do the 'this_strands' analysis. Return distribution of distances from
         # mean and sizes of clusters (sizes are up to a cutoff value)
         # TODO get distribution of how many are close to annotated sites
-        this_strand_sizes_dists = siz_dis_this_strands(this_strands)
+        t_strnd_dists = siz_dis_this_strands(this_strands)
 
         # Get distribution of cluster sizes and distances from cluster means, as
         # well as the number of clusters close to annotated ones, and, further,
         # the size and distance distribution from these annotated ones.
-        other_strand_sizes_dists = siz_dis_other_strands(file_ds, dsets)
+        (o_strnd_dists, o_strnd_dists_anot) = siz_dis_other_strands(file_ds,
+                                                                    dsets)
+
+        # Compare the distributions to each other
+        compare_this_other(t_strnd_dists, o_strnd_dists, o_strnd_dists_anot,
+                           size_cutoff)
 
         # 2) Calculate the distribution of polyA variation about a site
         # 3) Calculate the distance from polyA-site to 1) closest 2) best PAS
@@ -1478,42 +1592,112 @@ def classic_polyA_stats(settings, dsets):
 
         # 5) The same stuff but for 'other_strand'.
 
+def compare_this_other(this_strnd, oth_strnd, oth_strnd_anot, cutoff):
+    """
+    Plot the distributions of distances of poly_A reads as well and the
+    distribution of the sizes of the polyA_clusters. Compare this_strand to
+    other_strand and for other_strand, compare those that are annotated.
+    """
+
+    p = Plotter()
+
+    (this_sizes, this_dists) = this_strnd
+    (other_sizes, other_dists) = oth_strnd
+    (annot_other_sizes, annot_other_dists) = oth_strnd_anot
+
+    # These are all dictionaries. Compare the (normalized) distribution of
+    # lenghts from all of them
+    #sizes = {'this': this_sizes, 'other': other_sizes,
+             #'annot_other':annot_other_sizes}
+    sizes = {'Opposite strand': this_sizes, 'Annotated strand': other_sizes}
+
+    distances = {'this': this_dists, 'other': other_dists,
+                 'annot_other':annot_other_dists}
+
+    ## Get all dists, irrespective of cluster size
+    merged_dists = {}
+    for (dist_name, dist_dict) in distances.items():
+        merged_dists[dist_name] = sum(dist_dict.itervalues(), [])
+
+    #p.distance_histogram(merged_dists)
+
+    ## Create a zero-array for the max sizes
+    all_sizes = {}
+    for (size_name, size_dict) in sizes.items():
+        this_size = np.zeros(cutoff)
+        for (size, size_count) in size_dict.iteritems():
+            if size < cutoff:
+                this_size[size-1] = size_count
+            if size >= cutoff:
+                this_size[-1] += size_count
+
+        all_sizes[size_name] = this_size
+
+    p.cluster_size_distribution(all_sizes, cutoff)
+
+    debug()
+
 def siz_dis_other_strands(file_ds, dsets):
     """
     Return distributions of the the sizes of clusters and the distances from the
     cluster mean. Also return the same distributions but only for the clusters
     that are near annotated TTS.
-
     """
 
     dist_from_mean = {}
     sizes_count = {}
 
+    dist_from_mean_annot = {}
+    sizes_count_annot = {}
+
     utrs = dsets[file_ds].utrs
 
-    for (utr_id, utr) in utrs:
-        for cl in utr.clusters:
-            cluster = cl.all_pA_coords
+    for (utr_id, utr) in utrs.iteritems():
+        for cls in utr.clusters:
+            cluster = cls.all_pA_coords
+
+            # Skip NA clusters that are here from some reason
+            if cluster == 'NA':
+                continue
 
             cl_len = len(cluster)
             cl_mean = np.mean(cluster)
+
             # Unique list of distances from the mean
             cl_dists_from_mean = list(set([cl_mean - pos for pos in cluster]))
 
-            # Save the cluster distancs
+            # Save the cluster distancs from mean
             if cl_len not in dist_from_mean:
                 dist_from_mean[cl_len] = cl_dists_from_mean
             else:
                 for dist in cl_dists_from_mean:
                     dist_from_mean[cl_len].append(dist)
 
-            # Save the cluster count
+            # Save the cluster read-count
             if cl_len not in sizes_count:
                 sizes_count[cl_len] = 1
             else:
                 sizes_count[cl_len] += 1
 
-    pass
+
+            # Do the same if this is an annotated cluster
+            if cls.annotated_polyA_distance != 'NA':
+
+                # Cluster distancs from mean
+                if cl_len not in dist_from_mean_annot:
+                    dist_from_mean_annot[cl_len] = cl_dists_from_mean
+                else:
+                    for dist in cl_dists_from_mean:
+                        dist_from_mean_annot[cl_len].append(dist)
+
+                # Cluster read-count
+                if cl_len not in sizes_count_annot:
+                    sizes_count_annot[cl_len] = 1
+                else:
+                    sizes_count_annot[cl_len] += 1
+
+    return ((sizes_count, dist_from_mean), (sizes_count_annot,
+                                            dist_from_mean_annot))
 
 def siz_dis_this_strands(this_strands):
     """
@@ -1557,25 +1741,8 @@ def siz_dis_this_strands(this_strands):
             else:
                 sizes_count[cl_len] += 1
 
-    # Get all the sizes in an array for easy plotting
-    size_cutoff = 30
-    # Create a zero-array for the max sizes
-    all_sizes  = np.zeros(size_cutoff)
-    for (size, size_count) in sizes_count.iteritems():
-        if size < size_cutoff:
-            all_sizes[size-1] = size_count
-        if size >= size_cutoff:
-            all_sizes[-1] += size_count
 
-    # Plot the distribution of the sizes
-    #x_coords = range(1, size_cutoff+1)
-    #plt.bar(x_coords, all_sizes)
-
-    # Get all dists, irrespective of cluster size
-    all_dists = sum(dist_from_mean.itervalues(), [])
-    #plt.hist(all_dists, bins=100)
-
-    return ((all_sizes, size_cutoff), all_dists)
+    return (sizes_count, dist_from_mean)
 
 
 def get_pA_files(polyA_dir):
@@ -1728,6 +1895,38 @@ def svm_from_source(svm_path, svm_dir, utr_path, hgfasta_path, chr1):
 
     # 3) Parse the output into a nicely formatted bedfile in svm_patth
 
+def write_verified_TTS(clusters):
+    """
+    Output in bed-format the 3UTR clusters that are verified by both annotation
+    and polyA reads.
+    """
+
+    # Doing it for He-La
+    sure_clusters = {}
+    for dset in clusters:
+        for k in dset.pAclusters:
+            if k.annotated_polyA_distance != 'NA':
+
+                k_beg = k.polyA_coordinate
+                bed_entry = (k.chrm, k_beg , k_beg+1, k.ID, '0', k.strand)
+
+                if k.ID in sure_clusters:
+                    # If another cluster is nearby, don't add it.
+                    for entry in sure_clusters[k.ID]:
+                        if entry[1]-30 < k_beg < entry[1] + 30:
+                            break
+                        else:
+                            sure_clusters[k.ID].append(bed_entry)
+                else:
+                    sure_clusters[k.ID] = [bed_entry]
+
+    # Write to file
+    with open('polyA-verified_TTS_sites_HeLa.bed', 'wb') as f:
+        for (cls, ent) in sure_clusters.iteritems():
+            for entry in ent:
+                str_entry = [str(en) for en in entry]
+                f.write('\t'.join(str_entry) + '\n')
+
 def main():
     # The path to the directory the script is located in
     here = os.path.dirname(os.path.realpath(__file__))
@@ -1743,20 +1942,27 @@ def main():
     dsets = get_utrs(settings, svm=True)
 
     # Get just the clusters from the polyA files
-    #clusters = get_clusters(settings)
+    clusters = get_clusters(settings)
+
+    ## Write a bedfile with all the polyA sites confirmed by both annotation and
+    ## 3UT poly(A) reads (For Sarah)
+    #write_verified_TTS(clusters)
 
     # Merge all clusters in datset. Return interlocutor-dict for going from each
     # poly(A) cluster in each dataset to the
-    #(super_cluster, dset_2super) = merge_clusters(clusters)
+    (super_cluster, dset_2super) = merge_clusters(clusters)
 
     #output_control(settings, dsets)
 
     #utr_length_comparison(settings, utrs)
 
-    #polyadenylation_comparison(settings, dsets, clusters, super_cluster, dset_2super)
+    polyadenylation_comparison(settings, dsets, clusters, super_cluster, dset_2super)
+
+    # Then do the 3utr length-plots again. How many cases of absolute certain
+    # difference in 3UTR length?
 
     ## The classic polyA variation distributions
-    classic_polyA_stats(settings, dsets)
+    #classic_polyA_stats(settings, dsets)
 
     debug()
 
