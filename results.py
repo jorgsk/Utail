@@ -71,7 +71,8 @@ class PolyaCluster(object):
 
 class UTRDataset(object):
     """
-    Class that contains helper functions to work on datasets.
+    Class that contains helper functions to work on datasets. A dataset is
+    typically an individual cell compartment.
     """
 
     def __init__(self, dset_dict, dset_name):
@@ -122,9 +123,9 @@ class UTR(object):
 
         # Read all the parameters from line
         (chrm, beg, end, utr_extended_by, strand, ID, epsilon_coord,
-        epsilon_rel_size, epsilon_downstream_covrg, epsilon_upstream_covrg,
-        annot_downstream_covrg, annot_upstream_covrg, epsilon_PAS_type,
-        epsilon_PAS_distance, utr_RPKM) = input_line.split('\t')
+         epsilon_rel_size, epsilon_downstream_covrg, epsilon_upstream_covrg,
+         annotTTS_dist, annot_downstream_covrg, annot_upstream_covrg,
+         epsilon_PAS_type, epsilon_PAS_distance, utr_RPKM) = input_line.split('\t')
 
         self.chrm = chrm
         self.beg = str_to_intfloat(beg)
@@ -138,6 +139,7 @@ class UTR(object):
         self.eps_upstream_covrg = str_to_intfloat(epsilon_upstream_covrg)
         self.annot_downstream_covrg = str_to_intfloat(annot_downstream_covrg)
         self.annot_upstream_covrg = str_to_intfloat(annot_upstream_covrg)
+        self.annotTTS_dist = annotTTS_dist
 
         # PAS type and PAS distance are space-delimited
         PAS_type = epsilon_PAS_type.split(' ')
@@ -777,6 +779,84 @@ class Plotter(object):
 
         debug()
 
+    def rec_sensitivity(self, sensitivities, intervals, attributes):
+        """
+        Plot how the false negative poly(A) cluster discovery rate varies with
+        the minimum value of the different attributes of the 3UTR.
+        """
+        # One plot for each attribute; but in that plot all datasets should be
+        # present. Potentially make different ranges for the different
+        # attributes.
+
+        colors = ['c', 'r', 'b', 'g']
+        for atr in attributes:
+            int_ranges = intervals[atr]
+
+            (fig, ax) = plt.subplots()
+
+            utr_count = []
+
+            col_dict = dict(zip(sensitivities.keys(), colors))
+
+
+            for (dset, atr_dict) in sensitivities.items():
+
+                # unzip the false positive rate and nr of utrs
+                (fals_pos, utr_nrs) = zip(*atr_dict[atr])
+
+                # save utr_nrs for making a bar plot later
+                utr_count.append(utr_nrs)
+
+                # Get the x_coordinates
+                x_coords = range(1,len(fals_pos)+1)
+
+                # Make a line-plot of the fals_pos
+                ax.plot(x_coords, fals_pos, label=dset, c=col_dict[dset], lw=2)
+
+            # Set y-ticks
+            ax.set_ylim((0,1))
+            yticks = np.arange(0,1.1,0.1)
+            ax.set_yticks(yticks)
+            ax.set_yticklabels([format(val*100,'.0f')+'%' for val in yticks])
+            ax.yaxis.grid(True)
+
+            # Make a bar plot of utr_nrs on yaxis nr 2
+            # Get the counts of 3UTRs
+            mean_counts = np.mean(utr_count, axis=0)
+            std_counts = np.std(utr_count, axis=0)
+
+            # Create a 'x-twinned' y axis.
+            ax2 = ax.twinx()
+            x_coords = range(1,len(mean_counts)+1)
+            ax2.bar(x_coords, mean_counts, color='#4C3380', yerr=std_counts,
+                   width=0.6, align='center', label='# of 3UTRs')
+            ax2.set_ylabel('Number of 3UTRs', size=15)
+
+            # Set the colors and fontsizes of the ticks
+            for tl in ax2.get_yticklabels():
+                tl.set_color('#4C3380')
+                tl.set_fontsize(12)
+                tl.set_fontweight('bold')
+
+            # Some hack to get the line-plot in front
+            ax.set_zorder(ax2.get_zorder()+1) # put ax in front of ax2
+            ax.patch.set_visible(False) # hide the 'canvas'
+
+            # Set x-ticks
+            ax.set_xticks(x_coords)
+            xlabels = ['('+str(v[0])+', '+str(v[1])+']' for v in int_ranges]
+            ax.set_xticklabels(xlabels)
+            ax.legend(loc='center right')
+            ax.set_ylabel('Sensitivity of poly(A) recovery', size=20)
+            ax.set_xlabel('Minimum {0} value for UTR'.format(atr), size=20)
+
+            # Set xlim so that 
+            ax.set_xlim((0.5, max(x_coords)+0.5))
+
+            title = 'We detect most poly(A) clusters for high-RPKM 3UTRs'
+            ax.set_title(title, size=20)
+
+            debug()
 
 def pairwise_intersect(in_terms_of, dset_dict, cutoff):
     """
@@ -1048,7 +1128,7 @@ def str_to_intfloat(element):
 
     return element
 
-def utr_length_comparison(settings, utrs):
+def utr_length_comparison(settings, dsets):
     """
     * compare 3UTR length in general (with boxplot)
     * compare 3UTR length UTR-to-UTR (with boxplot)
@@ -1058,22 +1138,23 @@ def utr_length_comparison(settings, utrs):
 
     # 1) Box plot of 3UTR lengths in all utrs
     # get dset names and an array of arrays [[], [],...,[]], of lengths
-    names = [dset.name for dset in lengths]
-    eps_lengths = [dset.get_eps_length(minRPKM=2) for dset in lengths]
+    names = [dset.name for dset in dsets]
+    eps_lengths = [dset.get_eps_length(minRPKM=2) for dset in dsets]
 
     ylim = (0, 1.2)
     #p.boxplot(eps_lengths, names, ylim)
 
     # 2) Box plot of 3UTR lengths for utrs expressed in all datasets.
     # Get the IDs of utrs that are expressed in each datset
-    utrID_sets = [set(dset.expressed_IDs()) for dset in lengths] # list of sets
+    utrID_sets = [set(dset.expressed_IDs()) for dset in dsets] # list of sets
 
     # Do the intersection of these sets to get only the ones that are expressed
     # in all datsets
     common = set.intersection(*utrID_sets)
 
     # Get the lengths of only the commonly expressed utrs:
-    eps_lengths_c = [dset.get_eps_length(minRPKM=2, IDs=common) for dset in lengths]
+    eps_lengths_c = [dset.get_eps_length(minRPKM=2,IDs=common) for dset in dsets]
+
     p.boxplot(eps_lengths_c, names, ylim)
 
 
@@ -1354,23 +1435,94 @@ def output_control(settings, dsets):
 
      #Upstream/downstream ratios of polyA sites.
 
-def false_negatives(dsets):
+def recovery_sensitivity(dsets):
+    """
+    Gauge the false negative rate of discovery of poly(A) clusters. The false
+    negative ratio is the fraction of aTTS that have an epsilon-coord close but
+    do not have a polyA cluster close.
 
-    # Will for each dset hold a list. Each element represents a 3UTR end
-    # (determined by read coverage) that is  close to an annotated end. The
-    # element will be 1 if a polyA cluster is associated with this end, and 0 if
-    # not. An average of the list will give an estimate of the false negative
-    # rate (presumably, 100% should have polyA clusters).
+    Show this function for different cell lines for different compartments.
 
-    # SHIT. Seems you don't save annot-distance in your damn output file.
-    # TODO 3) Do this false negative estimation
+    A false positive version should also be done: do this on regions of the
+    genome that are unlikely to contain 3UTR sequences, such as 5'UTR sequences
+    that do not overlap any other genomic region.
+    """
 
-    false_neg = {}
+    p = Plotter()
+
+    def rec_sens(dset, utr_attribute, intvals):
+        """
+        input:
+         1) The attribute (rpkm, u/dstream coverage)
+         2) the attribute ranges (min, max) in [min, max) notation
+         3) the dataset
+        output:
+         1) The false-negative rate for each of the minimum values
+        """
+        get_attr = attrgetter(utr_attribute)
+        output = []
+
+        # min_val is on the fo [(0,1), (1,5), (5,10), (10,20), (20,40) ... 
+        # A neat approach is to iterate through this list and check if the
+        # attribute value is SMALLER than the max! this works ONLY because the
+        # list has contiguous values; otherwise something would be lost.
+        for (interval_min, interval_max) in intvals:
+            has_polya = []
+
+            # If we are on the last interval, set interval_max to be 1 billion
+            # For RPKM and rna-seq based values, this is as good as max
+            if interval_max == 'inf':
+                interval_max = 10**9
+
+            for (utr_name, utr) in dset.utrs.iteritems():
+                # Skip those that don't have nearby annotated TTS
+                if utr.annotTTS_dist == 'NA':
+                    continue
+
+                # Skip those that fall outside this interval
+                if get_attr(utr) > interval_max:
+                    continue
+
+                if get_attr(utr) < interval_min:
+                    continue
+
+                # If the utr has no clusters, add a 1 and skip the rest
+                if utr.clusters == []:
+                    has_polya.append(0)
+                    continue
+
+                found = False
+                # Check if any of the polyA clusters are around the epsilon_end site
+                for cls in utr.clusters:
+                    if utr.eps_coord-100 < cls.polyA_coordinate < utr.eps_coord+100:
+                        found = True
+
+                if found:
+                    has_polya.append(1)
+                else:
+                    has_polya.append(0)
+
+            # Add the ratio of present clusters to nonpresent clusters
+            output.append((np.mean(has_polya), len(has_polya)))
+
+        return output
+
+    sensitivity = {}
+    attributes = ['RPKM']
+    # The utrs that fall in these bins will be reported
+    intervals = {'RPKM': [(0,1), (1,3), (3,6), (6,10), (10,20), (20,40), (40,80),
+                               (80,120), (120,'inf')]}
+
+    # Go through all dsets and give 
     for (dset_name, dset) in dsets.items():
-        false_neg[dset_name] = []
-        for (utr_name, utr) in dset.utrs.iteritems():
-            # 
-            debug()
+        sensitivity[dset_name] = {}
+
+        for atr in attributes:
+            intrv = intervals[atr]
+            sensitivity[dset_name][atr] = rec_sens(dset, atr, intrv)
+
+    # Plot the false negative ratio as a function of the attributes
+    p.rec_sensitivity(sensitivity, intervals, attributes)
 
 
 def polyadenylation_comparison(settings, dsets, clusters, super_clusters, dset_2super):
@@ -1382,15 +1534,8 @@ def polyadenylation_comparison(settings, dsets, clusters, super_clusters, dset_2
     # Compare the compartments; how many annotated do we find? etc.
     #compare_cluster_evidence(dsets, clusters, super_clusters, dset_2super)
 
-
-    # Get a false negative estimate
-    # TODO a simple statistic: of the 3UTRs that have their length-ends ending
-    # close to an annotated poly(A) site, how many have poly(A) reads? gives a
-    # measure of how reliably we detect poly(A) clusters when they are first
-    # there.
-
-    false_negatives(dsets)
-    debug()
+    # Get the sensitivity rates for of recovery of poly(A) clusters
+    #recovery_sensitivity(dsets)
 
     ## Correlate the coverage counts of common polyadenylation sites between
     ## clusters
@@ -1954,9 +2099,9 @@ def main():
 
     #output_control(settings, dsets)
 
-    #utr_length_comparison(settings, utrs)
+    utr_length_comparison(settings, dsets)
 
-    polyadenylation_comparison(settings, dsets, clusters, super_cluster, dset_2super)
+    #polyadenylation_comparison(settings, dsets, clusters, super_cluster, dset_2super)
 
     # Then do the 3utr length-plots again. How many cases of absolute certain
     # difference in 3UTR length?
@@ -2000,3 +2145,6 @@ if __name__ == '__main__':
 # expressed in all datsets?
 
 # Q: what should we call a reliable cluster?
+
+# Q: poly(A) cluster coverage in each 3UTR -- does it show that 1 3UTR isomer is
+# preferentially used?

@@ -420,7 +420,7 @@ class FullLength(object):
 
     def header_order(self):
         """
-        The order in which colums appear in the 'length' output file.
+        The order in which columns appear in the 'length' output file.
         """
         return """
         chrm
@@ -2422,8 +2422,8 @@ def main():
 
     # This option should be set only in case of debugging. It makes sure you
     # just run chromosome 1 and only extract a tiny fraction of the total reads.
-    DEBUGGING = True
-    #DEBUGGING = False
+    #DEBUGGING = True
+    DEBUGGING = False
     if DEBUGGING:
         settings.DEBUGGING()
 
@@ -2473,15 +2473,15 @@ def main():
             arguments = (dset_id, dset_reads, tempdir, output_dir, utr_seqs,
                          settings, annotation, DEBUGGING)
 
-            ###### WORK IN PROGRESS
+            ###### FOR DEBUGGING #######
+            #akk = pipeline(*arguments)
+            ###########################
 
-            akk = pipeline(*arguments)
-
-            #result = my_pool.apply_async(pipeline, arguments)
-            #results.append(result)
+            result = my_pool.apply_async(pipeline, arguments)
+            results.append(result)
 
         # Wait for all procsses to finish
-        debug()
+        #debug()
         my_pool.close()
         my_pool.join()
 
