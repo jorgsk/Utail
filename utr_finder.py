@@ -95,7 +95,7 @@ class Settings(object):
         self.bigwig_savedir = bigwig_savedir
         self.bigwig_url = bigwig_url
 
-        # for debugging only
+        # for debugging only. don't get bed_reads anew but use supplied file.
         self.bed_reads = False
 
     def DEBUGGING(self):
@@ -112,9 +112,9 @@ class Settings(object):
         self.polyA = False
         #self.polyA = '/users/rg/jskancke/phdproject/3UTR/the_project/temp_files'\
                 #'/polyA_reads_HeLa-S3_Nucleus_processed_mapped.bed'
-        #self.bed_reads = False
         #self.bed_reads = '/users/rg/jskancke/phdproject/3UTR/the_project/temp_files'\
                 #'/reads_HeLa-S3_Nucleus.bed'
+        self.bigwig = False
 
 class Annotation(object):
     """
@@ -1965,12 +1965,22 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs, settings,
     return {dset_id: {'coverage': coverage_path, 'length': length_output,
                       'polyA':polyA_output}}
 
-def make_directories(here, dirnames):
+def make_directories(here, dirnames, DEBUGGING):
     """
     For each name in dirnames, return a list of paths to newly created
     directories in folder 'here'. Don't overwrite folders if they exist.
     """
     outdirs = []
+
+    if DEBUGGING:
+        # if DEBUGGING, make a DEBUGGING output directory
+        debug_dir = os.path.join(here, 'DEBUGGING')
+        if not os.path.exists(debug_dir):
+            os.makedirs(debug_dir)
+
+        # modify 'here' to poin to the debugging dir
+        here = debug_dir
+
 
     for dirname in dirnames:
 
@@ -2401,18 +2411,21 @@ def main():
     # Set debugging mode. This affects the setting that are in the debugging
     # function (called below). It also affects the 'temp' and 'output'
     # directories, respectively.
-    #DEBUGGING = True
-    DEBUGGING = False
+    DEBUGGING = True
+    #DEBUGGING = False
 
     # The path to the directory the script is located in
     here = os.path.dirname(os.path.realpath(__file__))
 
     # Make directories needed by downstream code
+    # If debugging, make debugging output
     dirnames = ['temp_files', 'source_bedfiles', 'output']
-    (tempdir, beddir, output_dir) = make_directories(here, dirnames)
+    (tempdir, beddir, output_dir) = make_directories(here, dirnames, DEBUGGING)
 
     # Location of settings file
     settings_file = os.path.join(here, 'UTR_SETTINGS')
+    ##### TESTING Pedro's old annotation settings
+    settings_file = os.path.join(here, 'OLD_ENCODE_SETTINGS')
     # Get the necessary variables from the settings file and create the settings
     # object. This object will be sent around the program, so that settings are
     # always acessable.
