@@ -1031,7 +1031,7 @@ def join_multiexon_utr(multi_exon_utr, total_nr_reads):
     return main_utr
 
 def output_writer(dset_id, coverage, annotation, utr_seqs, rpkm, extendby,
-                 polyA_reads, settings, total_nr_reads):
+                 polyA_reads, settings, total_nr_reads, output_dir):
     """
     Putting together all the info on the 3UTRs and writing to files. Write
     one file mainly about the length of the 3UTR, and write another file about
@@ -1083,9 +1083,8 @@ def output_writer(dset_id, coverage, annotation, utr_seqs, rpkm, extendby,
 
     # If tuning the cumulative length, open a file for this
     if settings.cumul_tuning:
-        basedir = os.path.split(dirpath)[0]
         outfile = 'cumul_' + dset_id + '.stat'
-        tuning_handle = open(os.path.join(basedir, 'output', outfile), 'wb')
+        tuning_handle = open(os.path.join(output_dir, outfile), 'wb')
         #write header for the polyA-cumulative stats
         tuning_handle.write('\t'.join(['utr_id', 'epsilon_relative',
                                        'pA_to_cumul_dist', 'pA_cumul',
@@ -1955,7 +1954,7 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs, settings,
     print('Writing output files... {0} ...\n'.format(dset_id))
     output_files = output_writer(dset_id, coverage_path, annotation, utr_seqs,
                                  rpkm, extendby, polyA_reads, settings,
-                                 total_nr_reads)
+                                 total_nr_reads, output_dir)
 
     print('Total time for {0}: {1}\n'.format(dset_id, time.time() - t0))
 
@@ -2036,7 +2035,7 @@ def parse_clusters(in_clusters, out_clusters, out_header):
     outfile.close()
 
 
-def make_bigwigs(settings, annotation, here):
+def make_bigwigs(settings, annotation, tempdir, output_dir, here):
     """
     Make bigwig files of the polyA reads and the normal reads of the datasets
     specified under [BIGWIG] in the UTR_SETTINGS file.
@@ -2079,10 +2078,10 @@ def make_bigwigs(settings, annotation, here):
         lengthfile = 'length_' + dset
         clusterfile = 'polyA_' + dset
 
-        polyA_read_path = os.path.join(here, 'temp_files', polyAfile)
-        readpath = os.path.join(here, 'temp_files', readfile)
-        lengthpath = os.path.join(here, 'output', lengthfile)
-        cluster_polyA_path = os.path.join(here, 'output', clusterfile)
+        polyA_read_path = os.path.join(tempdir, polyAfile)
+        readpath = os.path.join(tempdir, readfile)
+        lengthpath = os.path.join(output_dir, lengthfile)
+        cluster_polyA_path = os.path.join(output_dir, clusterfile)
 
         # Check if the files are there; if so add them to list
         for bedfile in [polyA_read_path, readpath]:
@@ -2399,6 +2398,11 @@ def main():
     """
     This method is called if script is run as __main__.
     """
+    # Set debugging mode. This affects the setting that are in the debugging
+    # function (called below). It also affects the 'temp' and 'output'
+    # directories, respectively.
+    #DEBUGGING = True
+    DEBUGGING = False
 
     # The path to the directory the script is located in
     here = os.path.dirname(os.path.realpath(__file__))
@@ -2422,8 +2426,6 @@ def main():
 
     # This option should be set only in case of debugging. It makes sure you
     # just run chromosome 1 and only extract a tiny fraction of the total reads.
-    #DEBUGGING = True
-    DEBUGGING = False
     if DEBUGGING:
         settings.DEBUGGING()
 
@@ -2508,7 +2510,7 @@ def main():
 
     # if set, make bigwig files
     if settings.bigwig:
-        make_bigwigs(settings, annotation, here)
+        make_bigwigs(settings, annotation, tempdir, output_dir, here)
 
 if __name__ == '__main__':
     main()
