@@ -105,8 +105,8 @@ class Settings(object):
 
         self.chr1 = True
         #self.chr1 = False
-        #self.read_limit = False
-        self.read_limit = 1000000
+        self.read_limit = False
+        #self.read_limit = 1000000
         self.max_cores = 3
         #self.polyA = True
         self.polyA = False
@@ -319,6 +319,8 @@ class UTR(object):
         # Update begends lists to know where all exons begin and end
         self.begends_ext.append((new_exon.beg_ext, new_exon.end_ext))
         self.begends_nonext.append((new_exon.beg_nonext, new_exon.end_nonext))
+        if self.utr_ID.startswith('ENSG00000132693'):
+            debug()
 
         # Update polyA_reads if any
         if new_exon.polyA_reads[0] != []:
@@ -355,6 +357,9 @@ class UTR(object):
         if new_exon.this_exnr == self.tot_exnr:
             self.cumul_covr = [sum(self.covr_vector[:x])
                                for x in range(1, self.length_ext+1)]
+
+        if self.utr_ID.startswith('ENSG00000132693'):
+            debug()
 
 def frmt(element):
     """
@@ -523,7 +528,6 @@ class FullLength(object):
                 self.cuml_rel_size = (length_nonext-rel_pos)/length_nonext
                 break
 
-
         # Save relative cumulative position with the this utr for later usage
         this_utr.rel_pos = rel_pos
         #Note that rel_pos is relative to the un-extended 3UTR.
@@ -539,7 +543,7 @@ class FullLength(object):
         self.eps_ustream_coverage = sum(covr_vector[er_pos:er_pos+50])/float(50)
 
         # Get the mean values 'extendby' around the annotated end too
-        self.annot_ustream_coverage = sum(covr_vector[extendby: 2*extendby])/extendby
+        self.annot_ustream_coverage = sum(covr_vector[extendby:2*extendby])/extendby
         self.annot_dstream_coverage = sum(covr_vector[:extendby])/extendby
 
 
@@ -1290,8 +1294,14 @@ def read_settings(settings_file):
     # datasets and annotation
     datasets = dict((dset, files.split(':')) for dset, files in conf.items('DATASETS'))
     annotation = conf.get('ANNOTATION', 'annotation')
+
+    # Remove the 'carrie' link (you should remove all references to shortcut
+    # folders
+    # HINT if entry[0].islower(), entry remove. Say that all dsets must start
+    # with uppercase name.
+    if 'carrie' in datasets:
+        datasets.pop('carrie')
     # check if the files are actually there...
-    datasets.pop('carrie')
     for dset, files in datasets.items():
         [verify_access(f) for f in files]
 
@@ -1430,7 +1440,6 @@ def get_utr_path(settings, beddir):
     utr_filename = '3utrs' + chrm + ext + user_provided + '.bed'
     utr_bed_path = os.path.join(beddir, utr_filename)
 
-    # If the file already exists, don't make it again
     if os.path.isfile(utr_bed_path):
         return utr_bed_path
 
@@ -1732,7 +1741,7 @@ def get_bed_reads(dset_reads, dset_id, read_limit, tempdir, polyA):
 
     else:
         print('Non-valid suffix: {0}. Allowed suffixes are .gem.map.gz,\
-              .gem.map, and .gem.map.gz'.format(suffix))
+              .gem.map, .gem.map.gz, .bed.gz, and .bed'.format(suffix))
         sys.exit()
 
     return (out_path, polyA_path, total_reads)
@@ -1747,9 +1756,21 @@ def concat_bedfiles(dset_reads, out_path, polyA, polyA_path):
     out_file = open(out_path, 'wb')
     polyA_file = open(polyA_path, 'wb')
 
+
     cmd = ['zcat', '-f'] + dset_reads
     f = Popen(cmd, stdout=out_file)
     f.wait()
+
+    # Determine the bed format (3, 4, 5 or 6). If less than 6, convert to 6.
+    field_nr = len(open(out_path, 'rb').next().split())
+    if field_nr < 6:
+        print('\nIncoming bedfile has {0} fields. Converting to 6 fields ...\n'\
+              .format(field_nr))
+        bed_field_converter(out_path, field_nr)
+
+    if field_nr > 6:
+        print('\nConvert your bedfile to contain only the 6 first fields.')
+        sys.exit()
 
     # If polyA is a path to a bedfile (or bedfiles) concatenate these too
     if type(polyA) == str:
@@ -1758,7 +1779,25 @@ def concat_bedfiles(dset_reads, out_path, polyA, polyA_path):
         f.wait()
 
     # Return the number of line numbers (= number of reads)
-    return sum(1 for line in open(out_file, 'rb'))
+    return sum(1 for line in open(out_path, 'rb'))
+
+def bed_field_converter(out_path, field_nr):
+    # Get how many fields to add
+    addme = '\t'.join(['0', '0', '+'][5-field_nr:]) + '\n'
+    # Formats are chrom, beg, end, name, score, and strand
+    # if 3, add 0, 0, +
+    # if 4, add 0, +
+    # if 5, add +
+    # if more than 6 type warning: only bedfiles with 6 or fewer fields accepted.
+
+    # Write to a temp file
+    temp_path = out_path+'TEMP'
+    with open(temp_path, 'wb') as temp_file:
+        for line in open(out_path, 'rb'):
+            temp_file.write(line.rstrip('\n') + addme)
+
+    # Move the temp file to the original file
+    os.rename(temp_path, out_path)
 
 def get_polyA_utr(polyAbed, utrfile_path):
     """
@@ -2411,6 +2450,7 @@ def main():
     # Set debugging mode. This affects the setting that are in the debugging
     # function (called below). It also affects the 'temp' and 'output'
     # directories, respectively.
+
     DEBUGGING = True
     #DEBUGGING = False
 
@@ -2423,7 +2463,7 @@ def main():
     (tempdir, beddir, output_dir) = make_directories(here, dirnames, DEBUGGING)
 
     # Location of settings file
-    settings_file = os.path.join(here, 'UTR_SETTINGS')
+    #settings_file = os.path.join(here, 'UTR_SETTINGS')
     ##### TESTING Pedro's old annotation settings
     settings_file = os.path.join(here, 'OLD_ENCODE_SETTINGS')
     # Get the necessary variables from the settings file and create the settings
@@ -2489,14 +2529,14 @@ def main():
                          settings, annotation, DEBUGGING)
 
             ###### FOR DEBUGGING #######
-            #akk = pipeline(*arguments)
+            akk = pipeline(*arguments)
             ###########################
 
-            result = my_pool.apply_async(pipeline, arguments)
-            results.append(result)
+            #result = my_pool.apply_async(pipeline, arguments)
+            #results.append(result)
 
         # Wait for all procsses to finish
-        #debug()
+        debug()
         my_pool.close()
         my_pool.join()
 

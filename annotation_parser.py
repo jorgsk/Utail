@@ -120,6 +120,7 @@ class Transcript(object):
         cds_beg = self.cds.exons[0][1]
         utr_beg = utr[1]
 
+
         if self.strand == '+':
             if utr_beg <= cds_beg:
                 self.five_utr.exons.append(utr)
@@ -135,9 +136,6 @@ class Transcript(object):
                 self.five_utr.exons.append(utr)
 
     def get_utr_introns(self, side=3):
-
-        # You've a problem. Once or twice you might have an intron of length 1,
-        # and this would give you a bed-entry of length -1, causing a crash.
 
         if side == 5:
             # 5 utr
@@ -219,21 +217,28 @@ def make_transcripts(annotation):
             else:
                 exons[t_id] = [(chrm, beg, end, strand)]
 
-    # Add cdses to their transcripts and order them
+    # Add cdses to their transcripts
     # NEEDS TO BE FIRST! :S
     for (t_id, cdses) in cds.iteritems():
         for cds in cdses:
             transcripts[t_id].add_cds(cds)
 
-    # Add utrs to their transcripts, determine 3' or 5', and order them
+    # Add utrs to their transcripts, determine 3' or 5'
     for (t_id, utrs) in utr.iteritems():
         for utr in utrs:
             transcripts[t_id].add_utr(utr)
 
-    # Add exons to their transcripts, determine 3' or 5', and order them
+    # Add exons to their transcripts, determine 3' or 5'
     for (t_id, exons) in exons.iteritems():
         for exon in exons:
             transcripts[t_id].add_exon(exon)
+
+    # Go through all the damn transcripts and their damn exons, utrs, and cds,
+    # and sort them.
+    for (ts_id, ts_obj) in transcripts.iteritems():
+        ts_obj.five_utr.exons.sort()
+        ts_obj.cds.exons.sort()
+        ts_obj.three_utr.exons.sort()
 
     return (transcripts, genes)
 
@@ -627,6 +632,8 @@ def get_3utr_bed_all_exons(settings, outfile_path):
                                  genes, extendby, raw_handle)
 
     raw_handle.close()
+    # There is a problem where the wrong utr is being extended; and we have a
+    # rare 'utr within a utr' problem, but this sholdn't be a big deal.
 
     # Remove utrs that have CDS exons in them and write to outfile_path
     remove_intersects_and_extend(raw_path, outfile_path, all_transcripts,
@@ -817,6 +824,7 @@ def cluster_by_utrbeg_multi_exon(multi_exon_transcripts, all_transcripts,
     for ts_id, ts_obj in multi_exon_transcripts.iteritems():
         # The the chrm, beg, end, and strand of the first and last exon
         # if only one exon, they will be the same
+        # BUG this is not true: I got me a 3UTR whose exons aren't sorted!
         (chrm, first_beg, first_end, strand) = ts_obj.three_utr.exons[0]
         (chrm, last_beg, last_end, strand) = ts_obj.three_utr.exons[-1]
 
