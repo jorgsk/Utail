@@ -105,8 +105,8 @@ class Settings(object):
 
         self.chr1 = True
         #self.chr1 = False
-        self.read_limit = False
-        #self.read_limit = 1000000
+        #self.read_limit = False
+        self.read_limit = 10000
         self.max_cores = 3
         #self.polyA = True
         self.polyA = False
@@ -199,6 +199,7 @@ class UTR(object):
         self.a_polyA_sites = [int(site[1]) for site in a_polyA_sites] # annotated sites
         self.rel_pos = 'NA' # it might not be updated
         self.epsilon_coord = 'NA'
+        self.avrg_coverage = 'NA' # the average coverage -- competing with RPKM!
 
         # The length of the extended UTR
         self.length_ext = self.end_ext - self.beg_ext
@@ -319,8 +320,6 @@ class UTR(object):
         # Update begends lists to know where all exons begin and end
         self.begends_ext.append((new_exon.beg_ext, new_exon.end_ext))
         self.begends_nonext.append((new_exon.beg_nonext, new_exon.end_nonext))
-        if self.utr_ID.startswith('ENSG00000132693'):
-            debug()
 
         # Update polyA_reads if any
         if new_exon.polyA_reads[0] != []:
@@ -357,9 +356,6 @@ class UTR(object):
         if new_exon.this_exnr == self.tot_exnr:
             self.cumul_covr = [sum(self.covr_vector[:x])
                                for x in range(1, self.length_ext+1)]
-
-        if self.utr_ID.startswith('ENSG00000132693'):
-            debug()
 
 def frmt(element):
     """
@@ -420,7 +416,8 @@ class FullLength(object):
                      frmt(self.annot_ustream_coverage)),
                     ('epsilon_PAS_type', self.has_PAS),
                     ('epsilon_PAS_distance', frmt(self.PAS_dist)),
-                    ('3utr_RPKM', frmt(this_utr.rpkm))
+                    ('3utr_RPKM', frmt(this_utr.rpkm)),
+                    ('3utr_average_coverage', frmt(this_utr.avrg_coverage))
                      ))
 
     def header_order(self):
@@ -444,6 +441,7 @@ class FullLength(object):
         epsilon_PAS_type
         epsilon_PAS_distance
         3utr_RPKM
+        3utr_average_coverage
         """.split()
 
     def write_header(self, outfile):
@@ -467,10 +465,18 @@ class FullLength(object):
         if this_utr.strand == '-':
             # calculate the cumulative values
             self.cumul_minus(this_utr)
+            # Get the average coverage of the utr
+            ext = this_utr.extendby
+            non_ext_covr = this_utr.covr_vector[ext:]
+            this_utr.avrg_coverage = sum(non_ext_covr)/len(non_ext_covr)
 
         if this_utr.strand == '+':
             # calculate the cumulative values
             self.cumul_plus(this_utr)
+            # Get the average coverage of the utr
+            ext = this_utr.extendby
+            non_ext_covr = this_utr.covr_vector[:-ext]
+            this_utr.avrg_coverage = sum(non_ext_covr)/len(non_ext_covr)
 
         # calculate the PAS and pas distance for 'length'
         self.get_pas(pas_patterns, this_utr)
@@ -2463,9 +2469,12 @@ def main():
     (tempdir, beddir, output_dir) = make_directories(here, dirnames, DEBUGGING)
 
     # Location of settings file
-    #settings_file = os.path.join(here, 'UTR_SETTINGS')
-    ##### TESTING Pedro's old annotation settings
-    settings_file = os.path.join(here, 'OLD_ENCODE_SETTINGS')
+    settings_file = os.path.join(here, 'UTR_SETTINGS')
+
+    ###### TESTING Pedro's old annotation settings
+    #settings_file = os.path.join(here, 'OLD_ENCODE_SETTINGS')
+    ######
+
     # Get the necessary variables from the settings file and create the settings
     # object. This object will be sent around the program, so that settings are
     # always acessable.
@@ -2501,7 +2510,7 @@ def main():
 
     # You intersect the annotated polyA files with the 3UTR bedfile you got from
     # the annotation. Put the intersected annotated polyA sites in a dictionary.
-    print('Making data structures for annotation poly(A) sites ...\n')
+    print('Making data structures for annotated poly(A) sites ...\n')
     annotation.a_polyA_sites_dict = annotation.get_polyA_dict()
 
     ##################################################################
@@ -2528,9 +2537,9 @@ def main():
             arguments = (dset_id, dset_reads, tempdir, output_dir, utr_seqs,
                          settings, annotation, DEBUGGING)
 
-            ###### FOR DEBUGGING #######
+            ##### FOR DEBUGGING #######
             akk = pipeline(*arguments)
-            ###########################
+            ##########################
 
             #result = my_pool.apply_async(pipeline, arguments)
             #results.append(result)

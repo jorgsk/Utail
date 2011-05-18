@@ -1138,22 +1138,23 @@ def utr_length_comparison(settings, dsets):
 
     # 1) Box plot of 3UTR lengths in all utrs
     # get dset names and an array of arrays [[], [],...,[]], of lengths
-    names = [dset.name for dset in dsets]
-    eps_lengths = [dset.get_eps_length(minRPKM=2) for dset in dsets]
+    names = dsets.keys()
+    eps_lengths = [dset.get_eps_length(minRPKM=2) for dset in dsets.values()]
 
     ylim = (0, 1.2)
     #p.boxplot(eps_lengths, names, ylim)
 
     # 2) Box plot of 3UTR lengths for utrs expressed in all datasets.
     # Get the IDs of utrs that are expressed in each datset
-    utrID_sets = [set(dset.expressed_IDs()) for dset in dsets] # list of sets
+    utrID_sets = [set(dset.expressed_IDs()) for dset in dsets.values()] # list of sets
 
     # Do the intersection of these sets to get only the ones that are expressed
     # in all datsets
     common = set.intersection(*utrID_sets)
 
-    # Get the lengths of only the commonly expressed utrs:
-    eps_lengths_c = [dset.get_eps_length(minRPKM=2,IDs=common) for dset in dsets]
+    # Get the lengths of only the commonly expressed utrs
+    eps_lengths_c = [dset.get_eps_length(minRPKM=2,IDs=common)
+                     for dset in dsets.values()]
 
     p.boxplot(eps_lengths_c, names, ylim)
 
