@@ -93,14 +93,14 @@ class UTRDataset(object):
 
         # If a list of utrIDs have been supplied, include only those in that list
         if IDs:
-            for utr in self.utrs:
+            for (utr_id, utr) in self.utrs.iteritems():
                 if (utr.eps_rel_size != 'NA') and (utr.RPKM > minRPKM):
                     if utr.ID in IDs:
                         eps_lengths.append(utr.eps_rel_size)
 
         # Include all utr objects
         else:
-            for utr in self.utrs:
+            for (utr_id, utr) in self.utrs.iteritems():
                 if utr.eps_rel_size != 'NA' and utr.RPKM > minRPKM:
                     eps_lengths.append(utr.eps_rel_size)
 
@@ -111,7 +111,8 @@ class UTRDataset(object):
         Return list (or set) of IDs of utrs that are expressed in this dataset. The
         criterion for 'expressed' is that eps_rel_size is not 'NA'.
         """
-        return [utr.ID for utr in self.utrs if utr.eps_rel_size != 'NA']
+        return [utr.ID for (utr_id, utr) in self.utrs.iteritems()
+                if utr.eps_rel_size != 'NA']
 
 
 class UTR(object):
@@ -125,16 +126,27 @@ class UTR(object):
         (chrm, beg, end, utr_extended_by, strand, ID, epsilon_coord,
          epsilon_rel_size, epsilon_downstream_covrg, epsilon_upstream_covrg,
          annotTTS_dist, annot_downstream_covrg, annot_upstream_covrg,
-         epsilon_PAS_type, epsilon_PAS_distance, utr_RPKM) = input_line.split('\t')
+         epsilon_PAS_type, epsilon_PAS_distance, RPKM,
+         avrg_covrg ) = input_line.split('\t')
 
         self.chrm = chrm
         self.beg = str_to_intfloat(beg)
         self.end = str_to_intfloat(end)
+        self.length = self.end-self.beg
         self.extended_by = str_to_intfloat(utr_extended_by)
         self.strand = strand
         self.ID = ID
         self.eps_coord = str_to_intfloat(epsilon_coord)
         self.eps_rel_size = str_to_intfloat(epsilon_rel_size)
+        # Get the _absoulte_ epsilong length and the distance from annotanted
+        # end
+        if self.eps_rel_size != 'NA':
+            self.eps_abs_size = math.ceil(self.eps_rel_size*self.length)
+            self.eps_remainder = self.length - self.eps_abs_size
+        else:
+            self.eps_abs_size = 'NA'
+            self.eps_remainder = 'NA'
+        #
         self.eps_downstream_covrg = str_to_intfloat(epsilon_downstream_covrg)
         self.eps_upstream_covrg = str_to_intfloat(epsilon_upstream_covrg)
         self.annot_downstream_covrg = str_to_intfloat(annot_downstream_covrg)
@@ -148,7 +160,8 @@ class UTR(object):
         PAS_distance = epsilon_PAS_distance.split(' ')
         self.eps_PAS_distance = [str_to_intfloat(dist) for dist in PAS_distance]
 
-        self.RPKM = str_to_intfloat(utr_RPKM.strip())
+        self.RPKM = str_to_intfloat(RPKM)
+        self.avrg_covrg = str_to_intfloat(avrg_covrg.rstrip())
 
         # The UTR potentially has polyA read clusters. They will be added to
         # this list. The number of clusters will also be added.
@@ -325,7 +338,7 @@ class Plotter(object):
         #ax.set_ylabel('Some label', size=20)
         #ax.set_title('Some title')
         ax.set_ylim(*ylim)
-        fig.show()
+        fig.draw()
 
     def scatterplot(self, dset1, dset2, label1, label2, title):#, xlim, ylim):
         """
@@ -339,7 +352,7 @@ class Plotter(object):
         ax.set_title(title)
         #ax.set_xlim = xlim
         #ax.set_ylim = ylim
-        fig.show()
+        fig.draw()
 
     def triangleplot_scatter(self, datas, titles):
         """
@@ -384,7 +397,7 @@ class Plotter(object):
                 if axis_nr not in ylables:
                     ax.set_yticks([])
 
-        fig.show()
+        fig.draw()
 
     def last_three_clustersites(self, clus_list):
         """
@@ -463,7 +476,7 @@ class Plotter(object):
             if plotnr == 2:
                 ax.set_ylabel('Poly(A)-read count', size=15)
 
-        plt.show()
+        plt.draw()
 
     def cluster_count(self, cl_count):
         """
@@ -535,7 +548,7 @@ class Plotter(object):
             else:
                 ax.set_xticks([])
 
-        plt.show()
+        plt.draw()
 
     def join_clusters(self, cluster_dicts, titles, in_terms_of):
         """
@@ -661,13 +674,6 @@ class Plotter(object):
             legend_titles = [pairw_mrows[0][0]] + [tup[1] for tup in pairw_mrows]
             legend_axes = (ax[0] for ax in ax_list)
             fig.legend(legend_axes, legend_titles, loc=10)
-
-            #TODO ugm.. what now? more plots? Run all datasets again now that
-            #you have screened out many of the remaining bugs. Get how many of
-            #the opposite strand-clusters have support in the annotation. Few, I
-            #hope! This will be the final decimation of that uncertainty.
-
-            plt.draw()
 
     def all_clusters(self, cl_read_counter, my_title):
         """
@@ -848,7 +854,7 @@ class Plotter(object):
             ax.set_xticklabels(xlabels)
             ax.legend(loc='center right')
             ax.set_ylabel('Sensitivity of poly(A) recovery', size=20)
-            ax.set_xlabel('Minimum {0} value for UTR'.format(atr), size=20)
+            ax.set_xlabel('RPKM ranges for 3UTRs', size=20)
 
             # Set xlim so that 
             ax.set_xlim((0.5, max(x_coords)+0.5))
@@ -856,7 +862,45 @@ class Plotter(object):
             title = 'We detect most poly(A) clusters for high-RPKM 3UTRs'
             ax.set_title(title, size=20)
 
-            debug()
+
+    def rpkm_dependent_epsilon(self, distances, rpkm_intervals, titles, order):
+        """
+        The distances dict is like this
+        distances[dset][outp_var] = [[interv1], [intrv2], ...,[intrvN]]
+        where each of the intrv are the values of those output variables for all
+        UTRs in the intervals given in the input rpkm_intervals.
+
+        2 results:
+            1) UTR-length is independent of RPKM (short and long UTRs are not
+            differently expressed)
+            2) The epsilon-length parameter should only be trusted for UTRs with
+            RPKM more than 1.
+        """
+        for (dset_name, outp_dict) in distances.items():
+
+            nr_outp_var = len(order)
+            (fig, axes) = plt.subplots(nr_outp_var, sharex=True)
+            for (indx, outp_variable) in enumerate(order):
+                ax = axes[indx]
+                ax.boxplot(outp_dict[outp_variable])
+                ax.set_title(titles[outp_variable])
+
+            # Reduce the space between subplots
+            fig.subplots_adjust(hspace=0.1)
+            # Hide ticks for all but lowest axis
+            plt.setp([a.get_xticklabels() for a in fig.axes[:-1]], visible=False)
+
+            # Set x-tick labels
+            x_range = range(1, nr_outp_var+1)
+            xlabels = ['('+str(v[0])+', '+str(v[1])+']' for v in rpkm_intervals]
+            ax.set_xticklabels(xlabels)
+            ax.set_xlabel('RPKM ranges for 3UTRs', size=20)
+
+            # Set 'super title'
+            fig.suptitle('3UTR length is independent of RPKM, but relative '\
+                         'length is highly variable for low RPKM for {0}'\
+                         .format(dset_name), size=23)
+
 
 def pairwise_intersect(in_terms_of, dset_dict, cutoff):
     """
@@ -1062,7 +1106,7 @@ def get_utrs(settings, svm=False):
         l_header = lengthfile.next()
         c_header = clusterfile.next()
 
-        # Create the utr objects
+        # Create the utr objects from the length file
         utr_dict = dict((line.split()[5], UTR(line)) for line in lengthfile)
 
         # Add cluster objects to the utr objects (line[3] is UTR_ID
@@ -1133,9 +1177,141 @@ def utr_length_comparison(settings, dsets):
     * compare 3UTR length in general (with boxplot)
     * compare 3UTR length UTR-to-UTR (with boxplot)
     """
-    # Get the plotter object
+    # What we expect with length:
+    # 1) WholeCell is an average of cytoplasm and nucleus:
+        # i) Difference between cytoplasm and nucleus is expected
+        # ii) Difference between WC and each of C and N is not expected
+        # iii) Should see more difference between N and N and C and C within
+        # compartmens but between cell lines, than when comparing WC with WC,
+        # because WC can even out some of those differences.
+    # 2) Differences are only significant for high-RPKM and 'long' 3UTRS:
+        # i) Short 3UTRs are more susceptible to coverage variation
+
+    # From the datasets you need to differentiate between the different cell
+    # lines, the compartments, and 'whole cell'.
+
+    # NOTE from the presentattion Sarah sent you, it looks as if RPKM values for
+    # 'all biotypes' is more or less similar between nucl and cytol.
+
+    # TODO IDEA TO PROVE THE VERACITY OF THE EPSILON PARAMETER:
+        # show the distribution FOR THOSE that fall within 100 nt of annotated
+        # end: observe as this distribution narrows as you approach the optimal
+        # value. This is nothing else than optimization. However, you will not
+        # implement anything to make it rigorous.
+        # The proper way to do it would be on 2 cell lines, all compartments,
+        # and epsilon values of 0.99, 0.995, 0.998, 0.999, 0.9995,
+        # 0.99999 (you need one that is too high!)
+        # count the number of UTRs that fall in that rage and also show the
+        # distribution about the annotated end value.
+        # This is not a repeatable experiment so make sure you do it right. You
+        # should run all of them at each epsilon at the same time. Then copy the
+        # output dir and label the dir with that epsilon value.
+        # ALSO!!!!! print the distance from the poly(A) ends, if found!!! :)
+        # THEN!!! The method is backed up as soundly as possible.
+        # however: increasing epsilon DEcreases the before/after coverage ratio.
+        # There is a trade-off: become more epsilon-accurate, or have better
+        # before/after ratios that make you comfortable that a change has really
+        # happened.
+        # IDEA XXX TODO XXX what happens if you take random before/after ratios
+        # in the coverage vector? And what happens if you increase the
+        # average-area to 100?
+        # What to do first? Pedro wants to see this for the kidney datasets.
+    # IDEA: juxtapositioned columns in plot: one with different utrs, another
+    # with different utrs, supported by poly(A) reads!!!11
+
+    # Make a simple boxplot of all the relative lengths above a certain rpkm
+    #simple_length_boxplot(dsets, minRPKM=2)
+
+    # PLOT 1 Box plot of distances from annotated end as function of RPKM
+    rpkm_dependent_distance_from_end(dsets)
+
+    # PLOT 2 similar thing but for changes in upstream/downsteam coverage
+
+    debug()
+
+def rpkm_dependent_distance_from_end(dsets):
+    """
+    Make a series of box plots showing the distribution of distances from the
+    annoated end in clusters of RPKM, just as for the poly(A)s. Here, I expect
+    to see little difference.
+
+    Show the distributions both of absolute distance from end, and relative
+    distance from end. Low RPKM 3UTRs might be longer/shorter. Also show the
+    distribution of lenghts? (3 plots- length, abs, and norm dist from end)
+    """
     p = Plotter()
 
+    def dist_fromend(dset, rpkm, intvals, outp_variables):
+        """
+        input:
+         1) The string "RPKM" or another delimiting variable
+         2) the attribute ranges (min, max) in [min, max) notation
+         3) the dataset
+         4) the output variables of the datset
+        output:
+         1) The variables for that datset in that RPKM range
+        """
+        rpkm_attr = attrgetter(rpkm)
+        outp_dict = dict((outp_var, []) for outp_var in outp_variables)
+        attribute = dict((o_var, attrgetter(o_var)) for o_var in outp_variables)
+
+        # min_val is on the form [(0,1), (1,5), (5,10), (10,20), (20,40) ... 
+        for (intrvl_min, intrvl_max) in intvals:
+            intrv_dict = dict((outp_var, []) for outp_var in outp_variables)
+
+            # If we are on the last interval, set interval_max to be 1 billion
+            # For RPKM and rna-seq based values, this is as good as max
+            if intrvl_max == 'inf':
+                intrvl_max = 10**9
+
+            for (utr_name, utr) in dset.utrs.iteritems():
+                # Skip those with no epsilon length
+                if utr.eps_coord == 'NA':
+                    continue
+
+                # Skip those that fall outside this interval
+                if (rpkm_attr(utr) < intrvl_min) or (rpkm_attr(utr) > intrvl_max):
+                    continue
+
+                # For each of the outp_variables, add to outp_dict
+                for o_var in outp_variables:
+                    intrv_dict[o_var].append(attribute[o_var](utr))
+
+            for (op_var, intrv_list) in intrv_dict.items():
+                outp_dict[op_var].append(intrv_list)
+
+        return outp_dict
+
+    distances = {}
+    # The utrs that fall in these bins will be reported
+    #rpkm_intervals = [(0,1), (1,3), (3,6), (6,10), (10,20), (20,40), (40,80),
+                               #(80,120), (120,'inf')]
+    rpkm_intervals = [(0,1), (1,'inf')]
+    # The output variables
+    outp_vars = set(['eps_rel_size', 'eps_abs_size', 'length', 'eps_remainder'])
+    titles = {'eps_rel_size': 'Relative epsilon length', 'eps_abs_size':
+              'Absolute epsilon length', 'length': 'Length of 3UTR',
+              'eps_remainder': 'Distance from epsilon_end to annotated end'}
+    # set the order in which you want the plots
+    #order = ['length', 'eps_abs_size', 'eps_remainder', 'eps_rel_size']
+    order = ['length',  'eps_rel_size']
+    # The output variables
+
+    # Go through all dsets and get the respective output variables for the
+    # different RPKM clusters 
+    for (dset_name, dset) in dsets.items():
+        distances[dset_name] = dist_fromend(dset, 'RPKM', rpkm_intervals,
+                                            outp_vars)
+
+
+    p.rpkm_dependent_epsilon(distances, rpkm_intervals, titles, order)
+
+def simple_length_boxplot(dsets, minRPKM):
+    """
+    Simply box plots of length-epsilon values.
+    """
+    # Get the plotter object
+    p = Plotter()
     # 1) Box plot of 3UTR lengths in all utrs
     # get dset names and an array of arrays [[], [],...,[]], of lengths
     names = dsets.keys()
@@ -1153,15 +1329,13 @@ def utr_length_comparison(settings, dsets):
     common = set.intersection(*utrID_sets)
 
     # Get the lengths of only the commonly expressed utrs
-    eps_lengths_c = [dset.get_eps_length(minRPKM=2,IDs=common)
+    eps_lengths_c = [dset.get_eps_length(minRPKM=50, IDs=common)
                      for dset in dsets.values()]
 
     p.boxplot(eps_lengths_c, names, ylim)
 
 
-### PLOTTING METHODS ###
-
-def cluster_size_sensitivity():
+def cluster_size_sensitivity(dsets):
     """
     1) Investiage the sensitivity to the number of mapping poly(A) reads
     Make plots like Pedro suggested AND check out how many of the 1-reads and
@@ -1171,36 +1345,36 @@ def cluster_size_sensitivity():
 
     # Get number of utrs that have X clusters with minimum poly(A) read coverage
     # of Y
-    #for dset in dsets:
+    for dset in dsets:
 
-        #min_covrg = [1, 2, 3, 4, 5, 6 ,7] # minimum coverage for each cluster
-        #max_cluster = max(utr.cluster_nr for utr in dset.utrs.itervalues())
+        min_covrg = [1, 2, 3, 4, 5, 6 ,7] # minimum coverage for each cluster
+        max_cluster = max(utr.cluster_nr for utr in dset.utrs.itervalues())
 
-        ## number of clusters in each dset. matrix, use numpy.
-        #cl_counter = np.zeros([len(min_covrg), max_cluster+1], dtype=int)
+        # number of clusters in each dset. matrix, use numpy.
+        cl_counter = np.zeros([len(min_covrg), max_cluster+1], dtype=int)
 
-        #for (utr_id, utr) in dset.utrs.iteritems():
-            ## If no clusters, add 1 to all the zeros
-            #if utr.clusters == []:
-                #cl_counter[:,0] += 1
-                #continue
+        for (utr_id, utr) in dset.utrs.iteritems():
+            # If no clusters, add 1 to all the zeros
+            if utr.clusters == []:
+                cl_counter[:,0] += 1
+                continue
 
-            ## you are here, so there are some 
-            #for minc in min_covrg:
-                ## For each cluster that has more or equal support to the minc
-                ## value, give a +1 to the cluster count (x) at this mic level (y)
-                #cl_count = 0
-                #for cls in utr.clusters:
-                    #if cls.nr_support_reads >= minc:
-                        #cl_count += 1
+            # you are here, so there are some 
+            for minc in min_covrg:
+                # For each cluster that has more or equal support to the minc
+                # value, give a +1 to the cluster count (x) at this mic level (y)
+                cl_count = 0
+                for cls in utr.clusters:
+                    if cls.nr_support_reads >= minc:
+                        cl_count += 1
 
-                #if cl_count > 0:
-                    ## minc must be adjusted with 1 to have 0-index of array
-                    #cl_counter[minc-1, cl_count] += 1
-                #else:
-                    #cl_counter[minc-1, 0] += 1
+                if cl_count > 0:
+                    # minc must be adjusted with 1 to have 0-index of array
+                    cl_counter[minc-1, cl_count] += 1
+                else:
+                    cl_counter[minc-1, 0] += 1
 
-        #p.cluster_count(cl_counter)
+        p.cluster_count(cl_counter)
 
 
 def udstream_coverage_last_clusters(dsets):
@@ -1390,7 +1564,8 @@ def compare_cluster_evidence(dsets, clusters, super_clusters, dset_2super):
 
         in_terms_of = (titles[0], titles[2])
         p.join_clusters(cluster_dicts, titles, in_terms_of)
-        plt.show()
+
+    plt.draw()
 
 
 def output_control(settings, dsets):
@@ -1547,7 +1722,7 @@ def polyadenylation_comparison(settings, dsets, clusters, super_clusters, dset_2
     #udstream_coverage_last_clusters(dsets)
 
     ## See the effects of excluding pA sites with 1, 2, 3, etc, coverage
-    #cluster_size_sensitivity()
+    #cluster_size_sensitivity(dsets)
 
     #####################################################################
     # It depends on PAS-type, PAS-distance, polyA-number (1, 2, .., last)
@@ -2073,6 +2248,86 @@ def write_verified_TTS(clusters):
                 str_entry = [str(en) for en in entry]
                 f.write('\t'.join(str_entry) + '\n')
 
+def before_after_ratio(dsets):
+    """
+    Give emipirical credence to the before/after ratios
+    """
+
+    for (dset_name, dset) in dsets.items():
+        #for rpkm_lim in [0, 1, 5, 10]:
+        for rpkm_lim in [0, 1]:
+            ratios = []
+            for (utr_name, utr) in dset.utrs.iteritems():
+                #save before/after ratio if epsilon end is close to annotated end
+                if utr.RPKM < rpkm_lim:
+                    continue
+                if utr.annotTTS_dist != 'NA':
+                    us_covrg = utr.eps_upstream_covrg
+                    if us_covrg == 0:
+                        us_covrg = 0.04
+                    ds_covrg = utr.eps_downstream_covrg
+                    if ds_covrg == 0:
+                        ds_covrg = 0.04
+                    ratios.append(math.log(us_covrg/ds_covrg, 2))
+                    #rat = (1+us_covrg)/(1+ds_covrg)
+                    #if rat > 50:
+                        #rat = 50
+                    #ratios.append(rat)
+
+            #plt.ioff()
+            fig, ax = plt.subplots()
+            #(N, bins, patches) = ax.hist(ratios, bins=200) # for log
+            (N, bins, patches) = ax.hist(ratios, bins=50) # for +1
+            ax.set_xlabel('Log2 ratios of upstream/downstream coverage, RPKM > {0}'\
+                          .format(rpkm_lim), size=20)
+            ax.set_title('$Log2(upstream/downstream)$ {0}'.format(dset_name),
+                         size=20)
+
+            # Set some vertical lines
+            vert_lines = [-1, 0, 1] # for log ratios
+            #vert_lines = [0, 1, 2]  # for (1+x)/(1+y)
+            line_nr = len(vert_lines)
+            for x_pos in vert_lines:
+                ax.axvline(x=x_pos, c='r')
+
+            # Calculate percentaes the before 0, between 0 and 2, and after 2
+            partition = [0 for v in range(line_nr+1)]
+            tot_ratios = len(ratios)
+            for val in ratios:
+                found = False
+                for (indx, x_pos) in enumerate(vert_lines):
+                    if val < x_pos:
+                        partition[indx] += 1
+                        found = True
+                        break
+                if not found:
+                    partition[-1] +=1
+
+            percentages = [part/tot_ratios for part in partition]
+
+            # Place text with percentages
+            max_yval = ax.get_ylim()[1]
+            y_coord = max_yval - math.floor(max_yval*0.05)
+
+            # Get x-coordinates depending on the vertical lines
+            (xmin, xmax) = ax.get_xlim()
+            x_coords = []
+            for (indx, x_pos) in enumerate(vert_lines):
+                if indx == 0:
+                    x_coords.append((xmin-x_pos)/2)
+                else:
+                    x_coords.append((vert_lines[indx-1]+x_pos)/2 -0.3)
+            # Ad hoc at the end add the last x_coord
+            x_coords.append((xmax-x_pos)/2)
+
+            for (indx, x_coord) in enumerate(x_coords):
+                percent = format(percentages[indx]*100, '.0f')+'%'
+                ax.text(x_coord, y_coord, percent, size=15)
+                #ax.text(x_coord, y_coord, percent, size=10)
+
+    debug()
+
+
 def main():
     # The path to the directory the script is located in
     here = os.path.dirname(os.path.realpath(__file__))
@@ -2094,13 +2349,20 @@ def main():
     ## 3UT poly(A) reads (For Sarah)
     #write_verified_TTS(clusters)
 
+    # get the before/after coverage ratios for trusted epsilon ends
+    before_after_ratio(dsets)
+    # RESULT the before/after ratio is not as informative as we had hoped.
+    # I should print out a good few of them that have ratios in the gray zone
+    # and check them in the browser.
+    # Additionally, if 
+
     # Merge all clusters in datset. Return interlocutor-dict for going from each
     # poly(A) cluster in each dataset to the
-    (super_cluster, dset_2super) = merge_clusters(clusters)
+    #(super_cluster, dset_2super) = merge_clusters(clusters)
 
     #output_control(settings, dsets)
 
-    utr_length_comparison(settings, dsets)
+    #utr_length_comparison(settings, dsets)
 
     #polyadenylation_comparison(settings, dsets, clusters, super_cluster, dset_2super)
 
@@ -2121,6 +2383,8 @@ def main():
     #other_methods_comparison(settings)
 
     #rouge_polyA_sites(settings)
+
+    plt.show()
 
 
 if __name__ == '__main__':
@@ -2149,3 +2413,6 @@ if __name__ == '__main__':
 
 # Q: poly(A) cluster coverage in each 3UTR -- does it show that 1 3UTR isomer is
 # preferentially used?
+
+# Q: In the Whole Cell -- what percentage of sample is cytoplasm and what
+# percentage is nucleus? I suspect that there is more cytoplasm than whole cell.

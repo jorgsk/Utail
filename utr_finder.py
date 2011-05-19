@@ -490,7 +490,7 @@ class FullLength(object):
         """
         eps_end = this_utr.epsilon_coord
         for apoint in this_utr.a_polyA_sites:
-            if eps_end-40 < apoint < eps_end+40:
+            if eps_end-50 < apoint < eps_end+50:
                 return eps_end - apoint
 
         # If you make it here, a close-by aTTS site has not been found
@@ -2428,7 +2428,7 @@ def pas_dist_bed_length(in_PAS, out_PAS, header):
 
     for line in infile:
         (chrm, beg, end, d, strand, d, eps_coord) = line.split('\t')[:7]
-        (eps_PAS, eps_PAS_dist, rpkm) = line.split('\t')[-3:]
+        (eps_PAS, eps_PAS_dist, rpkm, avrg_covrg) = line.split('\t')[-4:]
         eps_PAS = eps_PAS.split(' ')
         eps_PAS_dist = eps_PAS_dist.split(' ')
 
@@ -2457,8 +2457,8 @@ def main():
     # function (called below). It also affects the 'temp' and 'output'
     # directories, respectively.
 
-    DEBUGGING = True
-    #DEBUGGING = False
+    #DEBUGGING = True
+    DEBUGGING = False
 
     # The path to the directory the script is located in
     here = os.path.dirname(os.path.realpath(__file__))
@@ -2469,10 +2469,10 @@ def main():
     (tempdir, beddir, output_dir) = make_directories(here, dirnames, DEBUGGING)
 
     # Location of settings file
-    settings_file = os.path.join(here, 'UTR_SETTINGS')
+    #settings_file = os.path.join(here, 'UTR_SETTINGS')
 
     ###### TESTING Pedro's old annotation settings
-    #settings_file = os.path.join(here, 'OLD_ENCODE_SETTINGS')
+    settings_file = os.path.join(here, 'OLD_ENCODE_SETTINGS')
     ######
 
     # Get the necessary variables from the settings file and create the settings
@@ -2538,14 +2538,14 @@ def main():
                          settings, annotation, DEBUGGING)
 
             ##### FOR DEBUGGING #######
-            akk = pipeline(*arguments)
+            #akk = pipeline(*arguments)
             ##########################
 
-            #result = my_pool.apply_async(pipeline, arguments)
-            #results.append(result)
+            result = my_pool.apply_async(pipeline, arguments)
+            results.append(result)
 
         # Wait for all procsses to finish
-        debug()
+        #debug()
         my_pool.close()
         my_pool.join()
 
@@ -2588,10 +2588,7 @@ if __name__ == '__main__':
 # loading the index into memory much faster.
 # TODO: go through the entire program and improve documentation.
 # TODO: write external documentation file for the program
-# TODO: generate the figures. one button!
 # TODO: the two below should be part of the final analysis script; one button!
-# TODO: verify the polyA reads clusters with polyAdb + other results
-# TODO: verify the 3UTR length with annotation + smth else
 # TODO: make a function that returns all regions (5UTR, intron, CDS)
 # unoverlapping other regions.
 
@@ -2625,4 +2622,7 @@ if __name__ == '__main__':
     # 6) Give the absolute number of poly(A) reads in the different
     # compartments. Seems like there are a lot more poly(A) reads in the
     # cytoplasm than in the nucleus
+    # 7) Does the 3UTR resolution benefit from the compartment data? Are there
+    # some things in whole cell that even out the a difference in cytosol and
+    # nucleus?
 
