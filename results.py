@@ -16,7 +16,6 @@ from operator import itemgetter
 import math
 
 import numpy as np
-from scipy import stats
 
 ########################################
 # only get the debug function if run from Ipython #
@@ -1193,29 +1192,7 @@ def utr_length_comparison(settings, dsets):
     # NOTE from the presentattion Sarah sent you, it looks as if RPKM values for
     # 'all biotypes' is more or less similar between nucl and cytol.
 
-    # TODO IDEA TO PROVE THE VERACITY OF THE EPSILON PARAMETER:
-        # show the distribution FOR THOSE that fall within 100 nt of annotated
-        # end: observe as this distribution narrows as you approach the optimal
-        # value. This is nothing else than optimization. However, you will not
-        # implement anything to make it rigorous.
-        # The proper way to do it would be on 2 cell lines, all compartments,
-        # and epsilon values of 0.99, 0.995, 0.998, 0.999, 0.9995,
-        # 0.99999 (you need one that is too high!)
-        # count the number of UTRs that fall in that rage and also show the
-        # distribution about the annotated end value.
-        # This is not a repeatable experiment so make sure you do it right. You
-        # should run all of them at each epsilon at the same time. Then copy the
-        # output dir and label the dir with that epsilon value.
-        # ALSO!!!!! print the distance from the poly(A) ends, if found!!! :)
-        # THEN!!! The method is backed up as soundly as possible.
-        # however: increasing epsilon DEcreases the before/after coverage ratio.
-        # There is a trade-off: become more epsilon-accurate, or have better
-        # before/after ratios that make you comfortable that a change has really
-        # happened.
-        # IDEA XXX TODO XXX what happens if you take random before/after ratios
-        # in the coverage vector? And what happens if you increase the
-        # average-area to 100?
-        # What to do first? Pedro wants to see this for the kidney datasets.
+    # Pedro wants to see this for the kidney datasets. Running now.
     # IDEA: juxtapositioned columns in plot: one with different utrs, another
     # with different utrs, supported by poly(A) reads!!!11
 
@@ -2255,11 +2232,14 @@ def before_after_ratio(dsets):
 
     for (dset_name, dset) in dsets.items():
         #for rpkm_lim in [0, 1, 5, 10]:
-        for rpkm_lim in [0, 1]:
+        for rpkm_lim in [0]:
             ratios = []
             for (utr_name, utr) in dset.utrs.iteritems():
                 #save before/after ratio if epsilon end is close to annotated end
                 if utr.RPKM < rpkm_lim:
+                    continue
+                # screen out those that extend well beyond the annotated end
+                if utr.epsilon_beyond > 50:
                     continue
                 if utr.annotTTS_dist != 'NA':
                     us_covrg = utr.eps_upstream_covrg
@@ -2269,10 +2249,6 @@ def before_after_ratio(dsets):
                     if ds_covrg == 0:
                         ds_covrg = 0.04
                     ratios.append(math.log(us_covrg/ds_covrg, 2))
-                    #rat = (1+us_covrg)/(1+ds_covrg)
-                    #if rat > 50:
-                        #rat = 50
-                    #ratios.append(rat)
 
             #plt.ioff()
             fig, ax = plt.subplots()
@@ -2285,7 +2261,6 @@ def before_after_ratio(dsets):
 
             # Set some vertical lines
             vert_lines = [-1, 0, 1] # for log ratios
-            #vert_lines = [0, 1, 2]  # for (1+x)/(1+y)
             line_nr = len(vert_lines)
             for x_pos in vert_lines:
                 ax.axvline(x=x_pos, c='r')
@@ -2323,9 +2298,41 @@ def before_after_ratio(dsets):
             for (indx, x_coord) in enumerate(x_coords):
                 percent = format(percentages[indx]*100, '.0f')+'%'
                 ax.text(x_coord, y_coord, percent, size=15)
-                #ax.text(x_coord, y_coord, percent, size=10)
 
-    debug()
+
+def rpkm_dist(dsets):
+    """
+    Simply plot the rpkms of the differnt datasets
+    """
+    thresh = 50
+    for (dset_name, dset) in dsets.items():
+        rpkms_norm = []
+        rpkms_log = []
+        for (utr_name, utr) in dset.utrs.iteritems():
+            if utr.eps_coord != 'NA':
+                # SKip those with rpkm = 0
+                if utr.RPKM == 0:
+                    continue
+                if utr.RPKM > thresh:
+                    rpkms_norm.append(thresh)
+                else:
+                    rpkms_norm.append(utr.RPKM)
+                rpkms_log.append(math.log(utr.RPKM, 2))
+
+        fig, ax = plt.subplots()
+        (N, bins, blah) = ax.hist(rpkms_log, bins=200)
+        ax.set_xlabel('RPKM, log2 transformed', size=20)
+        ax.set_ylabel('3UTR count', size=20)
+        ax.set_title('Distribution of RPKM values for 3UTR objects')
+        #Set x axis
+        (xmin, xmax) = ax.get_xlim()
+        ax.set_xticks(np.arange(xmin, xmax, 2))
+        ax.grid()
+
+        # Percentages above/below 0
+        less_zero = len([1 for v in rpkms_norm if v>1])/float(len(rpkms_norm))
+        print('\n{0}: Percentage of UTRs with RPKM larger than 1: {1}%'\
+              .format(dset_name, format(less_zero*100, '.0f')))
 
 
 def main():
@@ -2335,29 +2342,45 @@ def main():
     # Directory paths for figures and where the output lies
     (savedir, outputdir) = [os.path.join(here, d) for d in ('figures', 'output')]
 
-    # Read UTR_SETTINGS
+    # Read UTR_SETTINGS (there are two -- for two different annotations!)
     settings = Settings(os.path.join(here, 'UTR_SETTINGS'), savedir, outputdir, here)
+    #settings = Settings(os.path.join(here, 'OLD_ENCODE_SETTINGS'),
+                        #savedir, outputdir, here)
 
     # Get the dsets with utrs and their clusters from the length and polyA files
     # Optionally get SVM information as well
-    dsets = get_utrs(settings, svm=True)
+    dsets = get_utrs(settings, svm=False)
 
     # Get just the clusters from the polyA files
     clusters = get_clusters(settings)
 
-    ## Write a bedfile with all the polyA sites confirmed by both annotation and
-    ## 3UT poly(A) reads (For Sarah)
+    #### RPKM distribution
+    #### What is the distribution of 3UTR RPKMS? run this function and find out!
+    rpkm_dist(dsets)
+
+    #### Extend beyond distribution and number
+    #### How many 3UTRs extend significantly? beyond the aTTS
+    #### NOTE that, with current code, they must be checked by hand, as the
+    #### extended area can overlap a genomic feature
+    #beyond_aTTS(dsets) TODO
+
+    ##### Write a bedfile with all the polyA sites confirmed by both annotation and
+    ##### 3UT poly(A) reads (For Sarah)
     #write_verified_TTS(clusters)
 
-    # get the before/after coverage ratios for trusted epsilon ends
+    ##### get the before/after coverage ratios for trusted epsilon ends
     before_after_ratio(dsets)
+
     # RESULT the before/after ratio is not as informative as we had hoped.
     # I should print out a good few of them that have ratios in the gray zone
-    # and check them in the browser.
-    # Additionally, if 
+    # and check them in the browser. However, this could just mean that the
+    # ratio is not important for classifying ends.
 
-    # Merge all clusters in datset. Return interlocutor-dict for going from each
-    # poly(A) cluster in each dataset to the
+    # TODO check it in the browser to see if our intutition is correct ... !:)
+    # For the non-beyond_aTTS ones.
+
+    ##### Merge all clusters in datset. Return interlocutor-dict for going from each
+    ##### poly(A) cluster in each dataset to the
     #(super_cluster, dset_2super) = merge_clusters(clusters)
 
     #output_control(settings, dsets)
@@ -2416,3 +2439,26 @@ if __name__ == '__main__':
 
 # Q: In the Whole Cell -- what percentage of sample is cytoplasm and what
 # percentage is nucleus? I suspect that there is more cytoplasm than whole cell.
+
+# TODO IDEA TO PROVE THE VERACITY OF THE EPSILON PARAMETER:
+    # show the distribution FOR THOSE that fall within 100 nt of annotated
+    # end: observe as this distribution narrows as you approach the optimal
+    # value. This is nothing else than optimization. However, you will not
+    # implement anything to make it rigorous.
+    # The proper way to do it would be on 2 cell lines, all compartments,
+    # and epsilon values of 0.99, 0.995, 0.998, 0.999, 0.9995,
+    # 0.99999 (you need one that is too high!)
+    # count the number of UTRs that fall in that rage and also show the
+    # distribution about the annotated end value.
+    # This is not a repeatable experiment so make sure you do it right. You
+    # should run all of them at each epsilon at the same time. Then copy the
+    # output dir and label the dir with that epsilon value.
+    # ALSO!!!!! print the distance from the poly(A) ends, if found!!! :)
+    # THEN!!! The method is backed up as soundly as possible.
+    # however: increasing epsilon DEcreases the before/after coverage ratio.
+    # There is a trade-off: become more epsilon-accurate, or have better
+    # before/after ratios that make you comfortable that a change has really
+    # happened.
+    # IDEA XXX TODO XXX what happens if you take random before/after ratios
+    # in the coverage vector? And what happens if you increase the
+    # average-area to 100?

@@ -1,32 +1,32 @@
+
 [DATASETS]
 # The read files must be either gem-files, zipped gem-files, bed-files, or
 # zipped bedfiles. The extensions must thus be either of: .map.gz, .gem.map.gz,
 # Avoid spaces and punctuation marks (.) in the filenames to aviod problems...
 # .bed, or .bed.gz.
-
 carrie = /users/rg/projects/NGS/Projects/ENCODE/hg19main/GingerasCarrie
 
 #### POLYA MINUS CONTROLS
-# K562_Cytoplasm_Minus = %(carrie)s/001CMinus/genome/LID18545_FC62JRWAAXX_6_1.gem.map.gz:%(carrie)s/001CMinus/genome/LID18545_FC62JRWAAXX_6_2.gem.map.gz:%(carrie)s/001CMinus/genome/LID18545_FC62JRWAAXX_7_1.gem.map.gz:%(carrie)s/001CMinus/genome/LID18545_FC62JRWAAXX_7_2.gem.map.gz:%(carrie)s/001CMinus/genome/LID18545_FC62JRWAAXX_8_1.gem.map.gz:%(carrie)s/001CMinus/genome/LID18545_FC62JRWAAXX_8_2.gem.map.gz
+K562_Cytoplasm_Minus = %(carrie)s/001CMinus/genome/LID18545_FC62JRWAAXX_6_1.gem.map.gz:%(carrie)s/001CMinus/genome/LID18545_FC62JRWAAXX_6_2.gem.map.gz:%(carrie)s/001CMinus/genome/LID18545_FC62JRWAAXX_7_1.gem.map.gz:%(carrie)s/001CMinus/genome/LID18545_FC62JRWAAXX_7_2.gem.map.gz:%(carrie)s/001CMinus/genome/LID18545_FC62JRWAAXX_8_1.gem.map.gz:%(carrie)s/001CMinus/genome/LID18545_FC62JRWAAXX_8_2.gem.map.gz
 
-# K562_Nucleus_Minus = %(carrie)s/001NMinus/genome/LID9195_FC625PLAAXX_6_1.gem.map.gz:%(carrie)s/001NMinus/genome/LID9195_FC625PLAAXX_6_2.gem.map.gz:%(carrie)s/001NMinus/genome/LID9195_FC625PLAAXX_7_1.gem.map.gz:%(carrie)s/001NMinus/genome/LID9195_FC625PLAAXX_7_2.gem.map.gz:%(carrie)s/001NMinus/genome/LID9195_FC625PLAAXX_8_1.gem.map.gz:%(carrie)s/001NMinus/genome/LID9195_FC625PLAAXX_8_2.gem.map.gz
+K562_Nucleus_Minus = %(carrie)s/001NMinus/genome/LID9195_FC625PLAAXX_6_1.gem.map.gz:%(carrie)s/001NMinus/genome/LID9195_FC625PLAAXX_6_2.gem.map.gz:%(carrie)s/001NMinus/genome/LID9195_FC625PLAAXX_7_1.gem.map.gz:%(carrie)s/001NMinus/genome/LID9195_FC625PLAAXX_7_2.gem.map.gz:%(carrie)s/001NMinus/genome/LID9195_FC625PLAAXX_8_1.gem.map.gz:%(carrie)s/001NMinus/genome/LID9195_FC625PLAAXX_8_2.gem.map.gz
 
-# K562_Whole_Cell_Minus = %(carrie)s/001WCMinus/genome/LID8659_FC61FGUAAXX_1_1.gem.map.gz:%(carrie)s/001WCMinus/genome/LID8659_FC61FGUAAXX_1_2.gem.map.gz:%(carrie)s/001WCMinus/genome/LID8659_FC61FKBAAXX_1_1.gem.map.gz:%(carrie)s/001WCMinus/genome/LID8659_FC61FKBAAXX_1_2.gem.map.gz:%(carrie)s/001WCMinus/genome/LID8659_FC61FM9AAXX_1_1.gem.map.gz:%(carrie)s/001WCMinus/genome/LID8659_FC61FM9AAXX_1_2.gem.map.gz
-# ####
+K562_Whole_Cell_Minus = %(carrie)s/001WCMinus/genome/LID8659_FC61FGUAAXX_1_1.gem.map.gz:%(carrie)s/001WCMinus/genome/LID8659_FC61FGUAAXX_1_2.gem.map.gz:%(carrie)s/001WCMinus/genome/LID8659_FC61FKBAAXX_1_1.gem.map.gz:%(carrie)s/001WCMinus/genome/LID8659_FC61FKBAAXX_1_2.gem.map.gz:%(carrie)s/001WCMinus/genome/LID8659_FC61FM9AAXX_1_1.gem.map.gz:%(carrie)s/001WCMinus/genome/LID8659_FC61FM9AAXX_1_2.gem.map.gz
+####
 
-# K562_Cytoplasm = %(carrie)s/001C/genome/LID8465_FC61LTAAAXX_5_1.gem.map.gz:%(carrie)s/001C/genome/LID8465_FC61LTAAAXX_5_2.gem.map.gz:%(carrie)s/001C/genome/LID8465_FC61LTAAAXX_6_1.gem.map.gz:%(carrie)s/001C/genome/LID8465_FC61LTAAAXX_6_2.gem.map.gz:%(carrie)s/001C/genome/LID8465_FC61LTAAAXX_7_1.gem.map.gz:%(carrie)s/001C/genome/LID8465_FC61LTAAAXX_7_2.gem.map.gz
+K562_Cytoplasm = %(carrie)s/001C/genome/LID8465_FC61LTAAAXX_5_1.gem.map.gz:%(carrie)s/001C/genome/LID8465_FC61LTAAAXX_5_2.gem.map.gz:%(carrie)s/001C/genome/LID8465_FC61LTAAAXX_6_1.gem.map.gz:%(carrie)s/001C/genome/LID8465_FC61LTAAAXX_6_2.gem.map.gz:%(carrie)s/001C/genome/LID8465_FC61LTAAAXX_7_1.gem.map.gz:%(carrie)s/001C/genome/LID8465_FC61LTAAAXX_7_2.gem.map.gz
 
-# K562_Nucleus = %(carrie)s/001N/genome/LID8556_FC62067AAXX_1_2.gem.map.gz:%(carrie)s/001N/genome/LID8556_FC62067AAXX_3_2.gem.map.gz:%(carrie)s/001N/genome/LID8556_FC62067AAXX_2_1.gem.map.gz:%(carrie)s/001N/genome/LID8556_FC62067AAXX_1_1.gem.map.gz:%(carrie)s/001N/genome/LID8556_FC62067AAXX_2_2.gem.map.gz:%(carrie)s/001N/genome/LID8556_FC62067AAXX_3_1.gem.map.gz
+K562_Nucleus = %(carrie)s/001N/genome/LID8556_FC62067AAXX_1_2.gem.map.gz:%(carrie)s/001N/genome/LID8556_FC62067AAXX_3_2.gem.map.gz:%(carrie)s/001N/genome/LID8556_FC62067AAXX_2_1.gem.map.gz:%(carrie)s/001N/genome/LID8556_FC62067AAXX_1_1.gem.map.gz:%(carrie)s/001N/genome/LID8556_FC62067AAXX_2_2.gem.map.gz:%(carrie)s/001N/genome/LID8556_FC62067AAXX_3_1.gem.map.gz
 
-# K562_Whole_Cell = %(carrie)s/001WC/genome/LID16627_FC61U30AAXX_2_2.gem.map.gz:%(carrie)s/001WC/genome/LID16627_FC61U30AAXX_1_2.gem.map.gz:%(carrie)s/001WC/genome/LID16627_FC61U30AAXX_3_1.gem.map.gz:%(carrie)s/001WC/genome/LID16627_FC61U30AAXX_3_2.gem.map.gz:%(carrie)s/001WC/genome/LID16627_FC61U30AAXX_2_1.gem.map.gz:%(carrie)s/001WC/genome/LID16627_FC61U30AAXX_1_1.gem.map.gz
+K562_Whole_Cell = %(carrie)s/001WC/genome/LID16627_FC61U30AAXX_2_2.gem.map.gz:%(carrie)s/001WC/genome/LID16627_FC61U30AAXX_1_2.gem.map.gz:%(carrie)s/001WC/genome/LID16627_FC61U30AAXX_3_1.gem.map.gz:%(carrie)s/001WC/genome/LID16627_FC61U30AAXX_3_2.gem.map.gz:%(carrie)s/001WC/genome/LID16627_FC61U30AAXX_2_1.gem.map.gz:%(carrie)s/001WC/genome/LID16627_FC61U30AAXX_1_1.gem.map.gz
 
-# K562_Chromatin = %(carrie)s/025CH/genome/LID9185_FC61RV8AAXX_1_1.gem.map.gz:%(carrie)s/025CH/genome/LID9185_FC61RV8AAXX_1_2.gem.map.gz:%(carrie)s/025CH/genome/LID9185_FC61RV8AAXX_2_1.gem.map.gz:%(carrie)s/025CH/genome/LID9185_FC61RV8AAXX_2_2.gem.map.gz:%(carrie)s/025CH/genome/LID9185_FC61RV8AAXX_3_1.gem.map.gz:%(carrie)s/025CH/genome/LID9185_FC61RV8AAXX_3_2.gem.map.gz
+K562_Chromatin = %(carrie)s/025CH/genome/LID9185_FC61RV8AAXX_1_1.gem.map.gz:%(carrie)s/025CH/genome/LID9185_FC61RV8AAXX_1_2.gem.map.gz:%(carrie)s/025CH/genome/LID9185_FC61RV8AAXX_2_1.gem.map.gz:%(carrie)s/025CH/genome/LID9185_FC61RV8AAXX_2_2.gem.map.gz:%(carrie)s/025CH/genome/LID9185_FC61RV8AAXX_3_1.gem.map.gz:%(carrie)s/025CH/genome/LID9185_FC61RV8AAXX_3_2.gem.map.gz
 
 HeLa-S3_Cytoplasm = %(carrie)s/011C/genome/LID8469_FC61AHAAAXX_1_2.gem.map.gz:%(carrie)s/011C/genome/LID8469_FC61AHAAAXX_3_2.gem.map.gz:%(carrie)s/011C/genome/LID8469_FC61AHAAAXX_3_1.gem.map.gz:%(carrie)s/011C/genome/LID8469_FC61AHAAAXX_2_2.gem.map.gz:%(carrie)s/011C/genome/LID8469_FC61AHAAAXX_2_1.gem.map.gz:%(carrie)s/011C/genome/LID8469_FC61AHAAAXX_1_1.gem.map.gz
 
-# HeLa-S3_Nucleus = %(carrie)s/011N/genome/LID8559_FC6207CAAXX_3_1.gem.map.gz:%(carrie)s/011N/genome/LID8559_FC6207CAAXX_3_2.gem.map.gz:%(carrie)s/011N/genome/LID8559_FC6207CAAXX_4_1.gem.map.gz:%(carrie)s/011N/genome/LID8559_FC6207CAAXX_4_2.gem.map.gz:%(carrie)s/011N/genome/LID8559_FC6207CAAXX_2_1.gem.map.gz:%(carrie)s/011N/genome/LID8559_FC6207CAAXX_2_2.gem.map.gz
+HeLa-S3_Nucleus = %(carrie)s/011N/genome/LID8559_FC6207CAAXX_3_1.gem.map.gz:%(carrie)s/011N/genome/LID8559_FC6207CAAXX_3_2.gem.map.gz:%(carrie)s/011N/genome/LID8559_FC6207CAAXX_4_1.gem.map.gz:%(carrie)s/011N/genome/LID8559_FC6207CAAXX_4_2.gem.map.gz:%(carrie)s/011N/genome/LID8559_FC6207CAAXX_2_1.gem.map.gz:%(carrie)s/011N/genome/LID8559_FC6207CAAXX_2_2.gem.map.gz
 
-# HeLa-S3_Whole_Cell = %(carrie)s/011WC/genome/LID16633_FC61U2UAAXX_4_1.gem.map.gz:%(carrie)s/011WC/genome/LID16633_FC61U2UAAXX_4_2.gem.map.gz:%(carrie)s/011WC/genome/LID16633_FC61U2UAAXX_5_1.gem.map.gz:%(carrie)s/011WC/genome/LID16633_FC61U2UAAXX_5_2.gem.map.gz:%(carrie)s/011WC/genome/LID16633_FC61U2UAAXX_6_1.gem.map.gz:%(carrie)s/011WC/genome/LID16633_FC61U2UAAXX_6_2.gem.map.gz
+HeLa-S3_Whole_Cell = %(carrie)s/011WC/genome/LID16633_FC61U2UAAXX_4_1.gem.map.gz:%(carrie)s/011WC/genome/LID16633_FC61U2UAAXX_4_2.gem.map.gz:%(carrie)s/011WC/genome/LID16633_FC61U2UAAXX_5_1.gem.map.gz:%(carrie)s/011WC/genome/LID16633_FC61U2UAAXX_5_2.gem.map.gz:%(carrie)s/011WC/genome/LID16633_FC61U2UAAXX_6_1.gem.map.gz:%(carrie)s/011WC/genome/LID16633_FC61U2UAAXX_6_2.gem.map.gz
 
 # GM12878_Cytoplasm = %(carrie)s/003C/genome/LID8467_FC61DG2AAXX_4_1.gem.map.gz:%(carrie)s/003C/genome/LID8467_FC61DG2AAXX_5_1.gem.map.gz:%(carrie)s/003C/genome/LID8467_FC61DG2AAXX_3_1.gem.map.gz:%(carrie)s/003C/genome/LID8467_FC61DG2AAXX_3_2.gem.map.gz:%(carrie)s/003C/genome/LID8467_FC61DG2AAXX_4_2.gem.map.gz:%(carrie)s/003C/genome/LID8467_FC61DG2AAXX_5_2.gem.map.gz
 
@@ -138,7 +138,7 @@ tuning = true
 # files you want to re-make.
 bigwig = true
 # datasets = HeLa-S3_Whole_Cell:HeLa-S3_Cytoplasm:HeLa-S3_Nucleus
-datasets = K562_Cytoplasm_Minus:K562_Nucleus_Minus:K562_Whole_Cell_Minus
+datasets = K562_Cytoplasm:K562_Nucleus:K562_Whole_Cell
 save_dir = /users/rg/jskancke/public_html/bigWigs
 url = http://genome.crg.es/~jskancke/bigWigs
 
@@ -149,5 +149,4 @@ url = http://genome.crg.es/~jskancke/bigWigs
 # These datasets must at a previous point have been analyzed.
 # datasets = HeLa-S3_Cytoplasm:HeLa-S3_Whole_Cell:HeLa-S3_Nucleus
 # datasets = K562_Cytoplasm:K562_Whole_Cell:K562_Nucleus
-# datasets = K562_Whole_Cell
-datasets = Dermit1:Dermit2
+datasets = K562_Whole_Cell

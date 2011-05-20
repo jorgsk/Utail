@@ -106,7 +106,7 @@ class Settings(object):
         self.chr1 = True
         #self.chr1 = False
         #self.read_limit = False
-        self.read_limit = 10000
+        self.read_limit = 1000000
         self.max_cores = 3
         #self.polyA = True
         self.polyA = False
@@ -392,6 +392,9 @@ class FullLength(object):
 
         self.epsilon = 0.999
 
+        # How many nucleotides does this UTR possibly extend beyond the aTTS?
+        self.epsilon_beyond = 0
+
     def header_dict(self, this_utr):
         """
         Return a dictionary that maps header-entries to the UTR or FullLength
@@ -416,6 +419,7 @@ class FullLength(object):
                      frmt(self.annot_ustream_coverage)),
                     ('epsilon_PAS_type', self.has_PAS),
                     ('epsilon_PAS_distance', frmt(self.PAS_dist)),
+                    ('epsilon_covrg_beyond_aTTS', frmt(self.epsilon_beyond)),
                     ('3utr_RPKM', frmt(this_utr.rpkm)),
                     ('3utr_average_coverage', frmt(this_utr.avrg_coverage))
                      ))
@@ -440,6 +444,7 @@ class FullLength(object):
         annotation_upstream_covrg
         epsilon_PAS_type
         epsilon_PAS_distance
+        epsilon_covrg_beyond_aTTS
         3utr_RPKM
         3utr_average_coverage
         """.split()
@@ -483,6 +488,32 @@ class FullLength(object):
 
         # See if there is an annotated TTS end close to the length-defined end
         self.annotTTS_dist = self.annot_TTS_dist(this_utr)
+
+        # If the epsilon_rel_size is bigger or equal to epsilon, see how many
+        # nucleotides the 'true' rel_epsilon of the the coverage vector extends
+        # beyond the aTTS
+        if self.cuml_rel_size >= self.epsilon:
+            self.epsilon_beyond = self.beyond_aTTS(this_utr)
+
+    def beyond_aTTS(self, this_utr):
+        """
+        Re-calculate the coverage, but now in terms of the extended one.
+        """
+        # If -, reverse coverage vector for the cumulative normalization
+        if this_utr.strand == '-':
+            cov = this_utr.covr_vector[::-1]
+        else:
+            cov = this_utr.covr_vector
+
+        tot_cov = sum(cov) #sum of coverage for normalization
+        # get cumulative and normalize it at the same time
+        norm_cum_cov = [sum(cov[:i+1])/tot_cov for i in range(len(cov))]
+
+        # Go through it again, and get the index from the end where eps is.
+        # Return how much this extends from the aTTS end.
+        for indx, val in enumerate(norm_cum_cov[::-1]):
+            if val < self.epsilon:
+                return this_utr.extendby - indx
 
     def annot_TTS_dist(self, this_utr):
         """
@@ -1280,7 +1311,7 @@ def read_settings(settings_file):
     to create a 'Settings' object.
     """
 
-    conf = ConfigParser.ConfigParser()
+    conf = ConfigParser.SafeConfigParser()
     conf.optionxform = str
     conf.read(settings_file)
 
@@ -2469,10 +2500,10 @@ def main():
     (tempdir, beddir, output_dir) = make_directories(here, dirnames, DEBUGGING)
 
     # Location of settings file
-    #settings_file = os.path.join(here, 'UTR_SETTINGS')
+    settings_file = os.path.join(here, 'UTR_SETTINGS')
 
     ###### TESTING Pedro's old annotation settings
-    settings_file = os.path.join(here, 'OLD_ENCODE_SETTINGS')
+    #settings_file = os.path.join(here, 'OLD_ENCODE_SETTINGS')
     ######
 
     # Get the necessary variables from the settings file and create the settings
