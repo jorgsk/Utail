@@ -39,7 +39,8 @@ import sys
 from subprocess import Popen, PIPE, call
 sys.path.append(os.path.join(here,'modules'))
 sys.path.append(os.path.join(here,'modules/pyfasta'))
-from fasta import Fasta
+from pyfasta import FastaRecord
+from pyfasta import Fasta
 import math
 
 
@@ -1011,7 +1012,8 @@ def get_a_polyA_sites_bed(settings, outfile_path):
 def get_seqs(utr_dict, hgfasta):
     """Use the pyfasta module to get sequences quickly from an indexed version
     of the human genome fasta file"""
-    f = Fasta(hgfasta)
+    f = Fasta(hgfasta, record_class=FastaRecord)
+    #f = Fasta(hgfasta)
     seq_dict = {}
     for ts_id, ts_param in utr_dict.iteritems():
         (chrm, beg, end, strand) = ts_param

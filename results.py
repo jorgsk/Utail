@@ -6,7 +6,7 @@ from __future__ import division
 import os
 import ConfigParser
 import sys
-import itertools
+from itertools import combinations as combins
 
 import matplotlib.pyplot as plt
 plt.ion() # turn on the interactive mode so you can play with plots
@@ -125,7 +125,7 @@ class UTR(object):
         (chrm, beg, end, utr_extended_by, strand, ID, epsilon_coord,
          epsilon_rel_size, epsilon_downstream_covrg, epsilon_upstream_covrg,
          annotTTS_dist, annot_downstream_covrg, annot_upstream_covrg,
-         epsilon_PAS_type, epsilon_PAS_distance, RPKM,
+         epsilon_PAS_type, epsilon_PAS_distance, epsilon_beyond, RPKM,
          avrg_covrg ) = input_line.split('\t')
 
         self.chrm = chrm
@@ -137,6 +137,7 @@ class UTR(object):
         self.ID = ID
         self.eps_coord = str_to_intfloat(epsilon_coord)
         self.eps_rel_size = str_to_intfloat(epsilon_rel_size)
+        self.epsilon_beyond_aTTS = str_to_intfloat(epsilon_beyond)
         # Get the _absoulte_ epsilong length and the distance from annotanted
         # end
         if self.eps_rel_size != 'NA':
@@ -782,7 +783,6 @@ class Plotter(object):
         # OK but I think it's best to print them on top of each other to really
         # show how many more there are of the cis-strand one.
 
-        debug()
 
     def rec_sensitivity(self, sensitivities, intervals, attributes):
         """
@@ -900,6 +900,113 @@ class Plotter(object):
                          'length is highly variable for low RPKM for {0}'\
                          .format(dset_name), size=23)
 
+    def wc_compartment(self, co_occurence):
+        """
+        Bar-plot of the co-occurence of polyA clusters in different compartments
+        """
+        # title translation dict
+        title_transf = {'Cytoplasm Whole_Cell': 'C + WC',
+                        'Cytoplasm Nucleus Whole_Cell': 'C + N + WC',
+                        'Cytoplasm': 'C',
+                        'Whole_Cell': 'WC',
+                        'Nucleus': 'N',
+                        'Nucleus Whole_Cell': 'N + WC',
+                        'Cytoplasm Nucleus': 'C + N'
+                       }
+        # make one plot per cell line
+        for (cell_line, comp_sets) in co_occurence.items():
+            # Skip non-included cell lines
+            if comp_sets == {}:
+                continue
+
+            # Modify the thing to remove the single-compartment ones
+            for name, count in comp_sets.items():
+                if len(name.split()) == 1:
+                    comp_sets.pop(name)
+
+            for_plot = sorted([(v,k) for (k,v) in comp_sets.items()], reverse=True)
+            (heights, labels) = zip(*for_plot)
+            transf_labels = [title_transf[lab] for lab in labels]
+            x_coords = range(1, len(for_plot)+1)
+
+            fig, ax = plt.subplots()
+            ax.bar(x_coords, heights, align='center', width=0.5)
+            ax.set_xticks(x_coords)
+            ax.set_xticklabels(transf_labels)
+
+            ax.set_ylabel('Poly(A) cluster count', size=20)
+            ax.set_xlabel('Poly(A) clusters found in the same position in more than'\
+                          ' one compartment', size=20)
+            fig.suptitle('Few poly(A) clusters are common to only cytosol and '\
+                         'nucleus -- as expected', size=20)
+
+    def utr_length(self, for_pie, cell_line):
+        """
+        For one cell-line, plot the difference between the compartments, and
+        whole cell + MAX(compartment) for estimation of data integrity.
+        # REMEMBER: WHOLE CELL IS THE SUM OF NUCLEUS AND CYTOPLASM
+        # WHOLE CELL = NUCLEUS + CYTOPLASM
+        # THUS YOU ALWAYS EXPECT len(WHOLE_CELL) = MAX(len(NUCLEUS),len(CYTOPLASM)
+        # FOR HIGH RPKM -- CAN YOU TEST FOR THIS? IT WOULD BE A BOON TO THE
+        # ACERTATION OF THE VERACITY OF YOUR DATA
+
+        Note with plots: are you comparing relevant enteties? Maybe two plots?
+        1st is Expressed vs Not expressed and lowly expressed (explain what they
+        are).
+
+        Remember that this is what you select from the annotation -- after
+        removing for overlapping stuffz! That number should be included here in
+        the first pie-plot. There should be a 'removed due to overlap' slice of
+        pie.
+        """
+
+        # Two subplots :)
+        # TODO aspect ratio is not good. The figures don't come out good. Color
+        # must be changed. Maybe not colors but stripes? "Screened out" should
+        # appear. 
+        # TODO INCLUDE absoulte numbers
+        (fig, axxes) = plt.subplots(1,2)
+
+        # Make count and frequency dictionaries 
+        count_dict = dict((name, len(entry)) for (name, entry) in
+                          for_pie.items())
+        total_count = sum(count_dict.values())
+        freq_dict = dict((n, l/total_count) for (n, l) in count_dict.items())
+
+        # First plot will only have the expressed vs nonexpressed parts
+        expressed = ['Undetermined', 'Same length', 'Different length']
+        non_expressed = ['Lowly expressed', 'Not expressed']
+
+        # Get the expressed and non_expressed parts
+        # What I need are the fractions and labels of expressed and nonexpressd
+        expr_namefreq = [('Expressed', sum([freq_dict[exp] for exp in expressed]))]
+        non_expr_namefreq = [(name, freq_dict[name]) for name in non_expressed]
+        namefreq = expr_namefreq + non_expr_namefreq
+        labels, freqs = zip(*namefreq)
+
+        # Sort labels and freqs
+        freqs, labels = zip(*sorted(zip(freqs, labels)))
+
+        # Frequencies of the above
+        ax = axxes[0]
+        ax.pie(freqs, labels=labels, autopct='%1.1f%%', shadow=True)
+        ax.set_title('All 3UTRs', size=20)
+
+        # Second plot is for the details of the expressed 3UTRs
+        ax = axxes[1]
+
+        exprsum = sum([count_dict[name] for name in expressed])
+        expr_namefreqs = [(name, count_dict[name]/exprsum) for name in expressed]
+        labels, piefracs = zip(*expr_namefreqs)
+
+        # Sort piefracs, explode, and labels according to piefracs
+        piefracs, labels = zip(*sorted(zip(piefracs, labels), reverse=True))
+        ax.pie(piefracs, labels=labels, autopct='%1.1f%%', shadow=True)
+        ax.set_title('Expressed 3UTRs', size=20)
+
+        # Set figure super-title
+        fig.suptitle('Fraction of 3UTRs with different length in {0}'\
+                     .format(cell_line), size=23)
 
 def pairwise_intersect(in_terms_of, dset_dict, cutoff):
     """
@@ -1083,7 +1190,27 @@ def get_utrs(settings, svm=False):
     2) If present, read through the polyA file, updating the UTR object created
     in step 1
 
+    I would like a structure like this:
+
+        dsets['cell lines'] = ([HeLa][comp1, comp2, comp3], [K562][com[1, ...]])
+
+        and
+
+        dsets['compartments'] = ([comp1][HeLa, K562, ...], [comp2][HeLa, K563, ...] )
+
+    I will use the following terminology
+    dsets[dset][dset_inverse] = utr_dict
+    because the second level is the inverse of the first level.
+
     """
+    # Define your 'cell lines' and 'compartments' variable names: the datasets
+    # will be scanned for these
+    cell_lines = ['K562', 'K562_Minus', 'HeLa', 'GM12878']
+    compartments = ['Whole_Cell', 'Nucleus', 'Cytoplasm', 'Chromatin']
+
+    dsets = {'cell lines': dict((cln, {}) for cln in cell_lines),
+             'compartments': dict((comp, {}) for comp in compartments)}
+
     # Do everything for the length files
     length_files = settings.length_files()
     cluster_files = settings.polyA_files()
@@ -1095,7 +1222,6 @@ def get_utrs(settings, svm=False):
     # Check if all length files exist or that you have access
     [verify_access(f) for f in length_files.values()]
 
-    all_utrs = {}
     for dset_name in settings.datasets:
 
         lengthfile = open(length_files[dset_name], 'rb')
@@ -1110,8 +1236,7 @@ def get_utrs(settings, svm=False):
 
         # Add cluster objects to the utr objects (line[3] is UTR_ID
         for line in clusterfile:
-            utr_dict[line.split()[3]].clusters.append(Cluster(line,
-                                                              full_info=False))
+            utr_dict[line.split()[3]].clusters.append(Cluster(line))
 
         # Update the UTRs
         for (utr_id, utr_obj) in utr_dict.iteritems():
@@ -1137,10 +1262,21 @@ def get_utrs(settings, svm=False):
                 #Update UTR object with SVM info
                 utr_dict[utr_id].svm_coordinates.append(svm_beg)
 
-        all_utrs[dset_name] = UTRDataset(utr_dict, dset_name)
+        # Add the utr_dict for this cellLine-compartment dataset to BOTH the
+        # cell-line and compartment dictionaries.
+        for cln in cell_lines:
+            if cln in dset_name:
+                for comp in compartments:
+                    if comp in dset_name:
+                        dsets['cell lines'][cln][comp] = utr_dict
 
-    return all_utrs
+        for comp in compartments:
+            if comp in dset_name:
+                for cln in cell_lines:
+                    if cln in dset_name:
+                        dsets['compartments'][comp][cln] = utr_dict
 
+    return dsets
 
 def verify_access(f):
     """
@@ -1171,6 +1307,209 @@ def str_to_intfloat(element):
 
     return element
 
+def utr_length_diff(dsets):
+    """
+    Compare the epsilon length of 3UTRs in the different datasets.
+    """
+    # And what about poly(A) support? You should call a function to check if
+    # each epsilon site has poly(A) support within +/- 100 nt or so.
+
+    # Estimation of sensitivity: you expect results to be similar between whole
+    # cell and eah of the compartments; you get get sensitivity for length
+    # difference and for presence/nonpresence by comparing these for high RPKMs.
+
+    # RESULT: most lenghts are the same. You need to find a way that highlights
+    # those that DO differ, both in terms of presence-nonpresence or
+    # significantly different expression.
+
+    # New idea: classify cell compartment differences in 3 categories:
+        # 1) Same length
+        # 2) Indeterminable (whole-cell is too different)
+        # 3) Different length (by whole-cell criteria)
+        # 4) Mutually exclusive. Found in WC and one compartment, but not in the
+        # other.
+
+    # In the long term, do this for each cell line -- and make a second pie of
+    # which have different length in only 1 cell line, 2 cell lines, or in 3 or
+    # more cell lines. Then investigate those that are found in more than 3 cell
+    # lines case by case (should not be too many).
+
+    # If one cell-line is particularily weak, you may leave it out of the
+    # comparison (3utr coverage in the nucleus compartment will be my bane)
+    # Why is coverage of 3UTR so bad in nucleus?????????????
+    # Is the loss of polyadenylation in nucleus solely due to low rpkm?
+
+    p = Plotter()
+
+    # Set for checking of you have enough compartments
+    WC_N_C = set(['Whole_Cell', 'Nucleus', 'Cytoplasm'])
+    length_dict = {}
+    for cell_line, comp_dict in dsets['cell lines'].items():
+
+        # Skip empty ones
+        if comp_dict == {}:
+            continue
+
+        # check if this cell line has at least (WC, Nuc, and Cyt)
+        if not WC_N_C.issubset(comp_dict.keys()):
+            print('Not enough compartments for comparison. Skipping.')
+            continue
+
+        # Get all combinations of the compartments and whole-cell compartments
+        all_combs = list(combins(comp_dict.keys(), 2))
+        for (compartment, utrs) in comp_dict.iteritems():
+
+            # Set the name ... should be a more standardized way of doing that.
+            dset_name = cell_line +' '+ compartment
+
+            for (utr_id, utr) in utrs.iteritems():
+
+                # Get the absoulte 3UTR length determined by epsilon
+                if utr.eps_rel_size != 'NA':
+                    eps_length = utr.eps_rel_size*utr.length
+                else:
+                    eps_length = 'NA'
+
+                # Add compartment name, length, and rpkm information
+                if utr_id not in length_dict:
+                    length_dict[utr_id] = {compartment: (eps_length, utr.RPKM,
+                                                       utr.eps_rel_size)}
+                else:
+                    length_dict[utr_id][compartment] = (eps_length, utr.RPKM,
+                                                      utr.eps_rel_size)
+
+        # IDEA: the difference is going to scale with length to a certain
+        # degree, simply because the epsilon end gets less accurate for long
+        # 3UTRs (I assume).
+        # SOLUTION: make a function that shows how the length of WC, N, and C
+        # co-vary for increasing RPKM.
+
+        # Question? How many have 'NA' in whole cell but presence in a
+        # compartment?  How does this scale for RPKM? Another measure of
+        # correctness.
+
+        # Set the minimum rpkm
+        rpkm_min = 1
+        v_low_rpkm = 0.1 # if below this, consider as 'not expressed'
+
+        # Make another dict with the length-differences themselves 
+        for_pie = {'Same length': [],
+                   'Undetermined': [],
+                   'Different length': [],
+                   'Not expressed': [],
+                   'Lowly expressed': []}
+
+
+        # Get the index of the whole cell datapoint in the tuple
+        for (utr_id, lpm) in length_dict.iteritems():
+
+            # Get lenghts and rpkms for checking min rpkm
+            (lengths, rpkms, eps_rel) = zip(*lpm.values())
+
+            # Define some shortcut parameters to save space
+            WClen = lpm['Whole_Cell'][0]
+            Nlen = lpm['Nucleus'][0]
+            Clen = lpm['Cytoplasm'][0]
+
+            WCrpkm = lpm['Whole_Cell'][1]
+            Nrpkm = lpm['Nucleus'][1]
+            Crpkm = lpm['Cytoplasm'][1]
+
+            WCepsrel = lpm['Whole_Cell'][2]
+            Nepsrel = lpm['Nucleus'][2]
+            Cepsrel = lpm['Cytoplasm'][2]
+
+            # Skip those with too small an rpkm
+            # ignore rpkms if the length is 'NA'
+            noNArpkms = [rp for (i, rp) in enumerate(rpkms) if lengths[i] != 'NA']
+
+            # If non are expressed anywhere, or have VERY low expression 
+            # -> 'Not expressed'
+            if noNArpkms == []:
+                for_pie['Not expressed'].append((utr_id, lpm))
+                continue
+
+            # If the maximum rpkm is lower than the set minimum
+            # -> 'Low RPKM'
+            # the checks so far
+            if max(noNArpkms) < rpkm_min:
+                for_pie['Lowly expressed'].append((utr_id, lpm))
+                continue
+
+            # If one is NA and the rest are 6 and 9?
+            # => 'Different length'.
+            if (Clen == 'NA') and (Nrpkm > rpkm_min and WCrpkm > rpkm_min):
+                for_pie['Different length'].append((utr_id, lpm))
+                continue
+
+            if (Nlen == 'NA') and (Crpkm > rpkm_min and WCrpkm > rpkm_min):
+                for_pie['Different length'].append((utr_id, lpm))
+                continue
+
+            # If any of the comps have 'NA' and have not been picked up by now, or
+            # whole cell rpkm is so low that it cannot be used for comparison
+            # -> 'Undetermined'
+            # add the rpkms if you want to check it out later
+            if 'NA' in eps_rel or WCrpkm < v_low_rpkm:
+                for_pie['Undetermined'].append((utr_id, lpm))
+                continue
+
+            # All differences in relative and absolute length
+            absdiffs = [abs(lpm[comb[0]][0] - lpm[comb[1]][0]) for comb in all_combs]
+            reldiffs = [abs(lpm[comb[0]][2] - lpm[comb[1]][2]) for comb in all_combs]
+
+            # If they have a relative length within 10% or 100nt variation
+            # -> 'same length'
+            if max(reldiffs) < 0.1 or max(absdiffs) < 100:
+                for_pie['Same length'].append((utr_id, lpm))
+                continue
+            # If not, check if whole cell supports the longest.
+            else:
+                # Finally check if some of them have too low RPKM to be caught by
+                # the checks so far
+                if min(noNArpkms) < rpkm_min:
+                    for_pie['Lowly expressed'].append((utr_id, lpm))
+                    continue
+
+                # The distance from WC to the smallest length must be 80% or more
+                # of the distance from the smallest to the largest length
+                # -> 'Different length'
+                wc_compmin_reldist = abs((WCepsrel - min(Cepsrel, Nepsrel))) # eg 0.05
+                comp_reldist = abs(Cepsrel - Nepsrel) # eg 0.4
+                # hey, did I lose my favorite case???
+                if wc_compmin_reldist > 0.8*comp_reldist:
+                    for_pie['Different length'].append((utr_id, lpm))
+                    continue
+
+                # WC could be low by accident of PCR. If the other two are 200 nt or
+                # more apart and have high enough RPKM, keep them
+                comp_absdist = abs(Clen - Nlen) #absolute distance
+                comp_minrpkms = min(Crpkm, Nrpkm) # minimum rpkm
+                if (comp_absdist > 200 or comp_reldist > 0.2) and comp_minrpkms < 3:
+                    for_pie['Different length'].append((utr_id, lpm))
+                    continue
+
+                # If not close enough, you cannot determine
+                # -> 'Undetermined'
+                else:
+                    for_pie['Undetermined'].append((utr_id, lpm))
+                    continue
+                    # eg 0.08, the upper limit for wc
+
+            # If you make it here, I'd be very interested in how to file you! :)
+            debug()
+
+        # only send the lp part of for_pie to the plotter
+        for_pie_plot = {}
+        for (category, id_lpmlist) in for_pie.items():
+            for_pie_plot[category] = [entr[1] for entr in id_lpmlist]
+
+        p.utr_length(for_pie_plot, cell_line)
+
+        # TODO compare the 'for_pie' dict for the different cell lines
+        # Save the UTR ID as part of the set and compare them; are they in
+        # common? Do they go the same way?
+
 def utr_length_comparison(settings, dsets):
     """
     * compare 3UTR length in general (with boxplot)
@@ -1186,6 +1525,10 @@ def utr_length_comparison(settings, dsets):
     # 2) Differences are only significant for high-RPKM and 'long' 3UTRS:
         # i) Short 3UTRs are more susceptible to coverage variation
 
+    # Show the fraction of 3UTRs with different length across the cell
+    # compartments Cytosol and Nucleus
+    utr_length_diff(dsets)
+
     # From the datasets you need to differentiate between the different cell
     # lines, the compartments, and 'whole cell'.
 
@@ -1200,11 +1543,9 @@ def utr_length_comparison(settings, dsets):
     #simple_length_boxplot(dsets, minRPKM=2)
 
     # PLOT 1 Box plot of distances from annotated end as function of RPKM
-    rpkm_dependent_distance_from_end(dsets)
+    #rpkm_dependent_distance_from_end(dsets)
 
     # PLOT 2 similar thing but for changes in upstream/downsteam coverage
-
-    debug()
 
 def rpkm_dependent_distance_from_end(dsets):
     """
@@ -1218,7 +1559,7 @@ def rpkm_dependent_distance_from_end(dsets):
     """
     p = Plotter()
 
-    def dist_fromend(dset, rpkm, intvals, outp_variables):
+    def dist_fromend(utrs, rpkm, intvals, outp_variables):
         """
         input:
          1) The string "RPKM" or another delimiting variable
@@ -1241,7 +1582,7 @@ def rpkm_dependent_distance_from_end(dsets):
             if intrvl_max == 'inf':
                 intrvl_max = 10**9
 
-            for (utr_name, utr) in dset.utrs.iteritems():
+            for (utr_name, utr) in utrs.iteritems():
                 # Skip those with no epsilon length
                 if utr.eps_coord == 'NA':
                     continue
@@ -1261,9 +1602,9 @@ def rpkm_dependent_distance_from_end(dsets):
 
     distances = {}
     # The utrs that fall in these bins will be reported
-    #rpkm_intervals = [(0,1), (1,3), (3,6), (6,10), (10,20), (20,40), (40,80),
-                               #(80,120), (120,'inf')]
-    rpkm_intervals = [(0,1), (1,'inf')]
+    rpkm_intervals = [(0,1), (1,3), (3,6), (6,10), (10,20), (20,40), (40,80),
+                               (80,120), (120,'inf')]
+    #rpkm_intervals = [(0,1), (1,'inf')]
     # The output variables
     outp_vars = set(['eps_rel_size', 'eps_abs_size', 'length', 'eps_remainder'])
     titles = {'eps_rel_size': 'Relative epsilon length', 'eps_abs_size':
@@ -1276,10 +1617,11 @@ def rpkm_dependent_distance_from_end(dsets):
 
     # Go through all dsets and get the respective output variables for the
     # different RPKM clusters 
-    for (dset_name, dset) in dsets.items():
-        distances[dset_name] = dist_fromend(dset, 'RPKM', rpkm_intervals,
-                                            outp_vars)
-
+    for (cell_line, compartment_dict) in dsets['cell lines'].items():
+        for (compartment, utrs) in compartment_dict.items():
+            dset_name = cell_line +' '+ compartment
+            distances[dset_name] = dist_fromend(utrs, 'RPKM', rpkm_intervals,
+                                                outp_vars)
 
     p.rpkm_dependent_epsilon(distances, rpkm_intervals, titles, order)
 
@@ -1322,6 +1664,7 @@ def cluster_size_sensitivity(dsets):
 
     # Get number of utrs that have X clusters with minimum poly(A) read coverage
     # of Y
+    p = Plotter()
     for dset in dsets:
 
         min_covrg = [1, 2, 3, 4, 5, 6 ,7] # minimum coverage for each cluster
@@ -1362,74 +1705,77 @@ def udstream_coverage_last_clusters(dsets):
 
     p = Plotter()
 
-    for dset in dsets.values():
+    #for dset in dsets:
+    for (cell_line, compartment_dict) in dsets['cell lines'].items():
 
-        # first second thrid and fourth
-        # nr of clusters
-        clrs_nr = 3
-        clus_list = [{'ud_ratio':[], 'support':[]} for val in range(clrs_nr)]
+        for (compartment, utrs) in compartment_dict.items():
 
-        for (utr_id, utr) in dset.utrs.iteritems():
+            # first second thrid and fourth
+            # nr of clusters
+            clrs_nr = 3
+            clus_list = [{'ud_ratio':[], 'support':[]} for val in range(clrs_nr)]
 
-            if utr.cluster_nr < clrs_nr:
-                continue
+            for (utr_id, utr) in utrs.iteritems():
 
-            if utr.strand == '+':
-                clu = sorted(utr.clusters, key=attrgetter('polyA_coordinate'))
-                clu = clu[-clrs_nr:] # get only the last clrs_nr
-                # for + strand, reverse clu
-                clu = clu[::-1]
+                if utr.cluster_nr < clrs_nr:
+                    continue
 
-            if utr.strand == '-':
-                clu = sorted(utr.clusters, key=attrgetter('polyA_coordinate'))
-                clu = clu[:clrs_nr] # get only the first clrs_nr
+                if utr.strand == '+':
+                    clu = sorted(utr.clusters, key=attrgetter('polyA_coordinate'))
+                    clu = clu[-clrs_nr:] # get only the last clrs_nr
+                    # for + strand, reverse clu
+                    clu = clu[::-1]
 
-            # The order of clsters in clu is '1st, 2nd, 3rd...'
+                if utr.strand == '-':
+                    clu = sorted(utr.clusters, key=attrgetter('polyA_coordinate'))
+                    clu = clu[:clrs_nr] # get only the first clrs_nr
 
-            eps_end = utr.beg + utr.eps_coord
+                # The order of clsters in clu is '1st, 2nd, 3rd...'
 
-            # only get UTRs that have the final polyA cluster close to the
-            # coverage end!
-            if not (eps_end - 50 < clu[0].polyA_coordinate < eps_end + 50):
-                continue
+                eps_end = utr.eps_coord
 
-            # Normalize the ratios by the largest absolute deviation from 1
-            ud_ratios = []
+                # only get UTRs that have the final polyA cluster close to the
+                # coverage end!
+                if not (eps_end - 50 < clu[0].polyA_coordinate < eps_end + 50):
+                    continue
 
-            for cls in clu:
-                # Make 0 into an almost-zero ...
-                if cls.dstream_covrg == 0:
-                    cls.dstream_covrg = 0.01
+                # Normalize the ratios by the largest absolute deviation from 1
+                ud_ratios = []
 
-                if cls.ustream_covrg == 0:
-                    cls.ustream_covrg = 0.01
+                for cls in clu:
+                    # Make 0 into an almost-zero ...
+                    if cls.dstream_covrg == 0:
+                        cls.dstream_covrg = 0.01
 
-                # do log2 ratios (if ==1, twice as big)
-                udratio = math.log(cls.ustream_covrg/cls.dstream_covrg,2)
+                    if cls.ustream_covrg == 0:
+                        cls.ustream_covrg = 0.01
 
-                ud_ratios.append(udratio)
+                    # do log2 ratios (if ==1, twice as big)
+                    udratio = math.log(cls.ustream_covrg/cls.dstream_covrg,2)
 
-            #maxratio = max(max(ud_ratios), abs(min(ud_ratios)))
-            #norm_ud_ratios = [rat/maxratio for rat in ud_ratios]
-            norm_ud_ratios = ud_ratios
+                    ud_ratios.append(udratio)
 
-            # Append the normailzed ratios to the arrays
-            for (indx, norm_rat) in enumerate(norm_ud_ratios):
-                clus_list[indx]['ud_ratio'].append(norm_rat)
+                #maxratio = max(max(ud_ratios), abs(min(ud_ratios)))
+                #norm_ud_ratios = [rat/maxratio for rat in ud_ratios]
+                norm_ud_ratios = ud_ratios
 
-            # Normalize the read support
-            read_supp = [cl.nr_support_reads for cl in clu]
-            #maxsupp = max(read_supp)
-            #norm_read_supp = [supp/maxsupp for supp in read_supp]
-            norm_read_supp = read_supp
+                # Append the normailzed ratios to the arrays
+                for (indx, norm_rat) in enumerate(norm_ud_ratios):
+                    clus_list[indx]['ud_ratio'].append(norm_rat)
 
-            # Append normalized support ratios to arrays
-            for (indx, norm_supp) in enumerate(norm_read_supp):
-                clus_list[indx]['support'].append(norm_supp)
+                # Normalize the read support
+                read_supp = [cl.nr_support_reads for cl in clu]
+                #maxsupp = max(read_supp)
+                #norm_read_supp = [supp/maxsupp for supp in read_supp]
+                norm_read_supp = read_supp
 
-        # Do teh plots
-        p.last_three_clustersites(clus_list)
-         #RESULT you see the trend you imagined.
+                # Append normalized support ratios to arrays
+                for (indx, norm_supp) in enumerate(norm_read_supp):
+                    clus_list[indx]['support'].append(norm_supp)
+
+            # Do teh plots
+            p.last_three_clustersites(clus_list)
+             #RESULT you see the trend you imagined.
 
 def correlate_polyA_coverage_counts(dsets, super_clusters):
     """
@@ -1455,13 +1801,13 @@ def correlate_polyA_coverage_counts(dsets, super_clusters):
             #debug()
 
     # get all pairwise combinations of the dsets
-    pairs = [pa for pa in itertools.combinations([ds_name for ds_name in dsets], 2)]
+    pairs = [pa for pa in combins([ds_name for ds_name in dsets], 2)]
     for pa in pairs:
         (p1, p2) = (pa[0], pa[1])
     title = 'PolyA-site read count variation'
     p.scatterplot(count_dset[p1], count_dset[p2], p1, p2, title)
 
-def compare_cluster_evidence(dsets, clusters, super_clusters, dset_2super):
+def compare_cluster_evidence(dsets, super_clusters, dset_2super):
     """
     Find the co-occurence for all the evidence for polyA clusters you have (in
     annotation, svm support, etc).
@@ -1472,75 +1818,80 @@ def compare_cluster_evidence(dsets, clusters, super_clusters, dset_2super):
     p = Plotter()
 
     #for dset in dsets:
-    for dset in dsets.values():
+    for (cell_line, compartment_dict) in dsets['cell lines'].items():
 
-        all_read_counter = {} # cluster_size : read_count for all clusters
-        svm_support = {} # for all clusters: do they have SVM support?
-        annot_read_counter = {} # cluster_size : read_count for clusters w/annot
-        other_dsets = {} # cluster_size : read_count for clusters in other dsets
+        for (compartment, utrs) in compartment_dict.items():
 
-        for (utr_id, utr) in dset.utrs.iteritems():
+            all_read_counter = {} # cluster_size : read_count for all clusters
+            svm_support = {} # for all clusters: do they have SVM support?
+            annot_read_counter = {} # cluster_size : read_count for clusters w/annot
+            other_dsets = {} # cluster_size : read_count for clusters in other dsets
 
-            if utr.clusters == []:
-                continue
+            dset_name = cell_line +' '+ compartment
 
-            for cls in utr.clusters:
+            for (utr_id, utr) in utrs.iteritems():
 
-                # key that uniquely defines this polyA_cluster
-                # this key will be used to do unions and intersections
-                keyi = dset.name+utr.chrm+utr.strand+str(cls.polyA_coordinate)
+                if utr.clusters == []:
+                    continue
 
-                # All clusters
-                if cls.nr_support_reads in all_read_counter:
-                    all_read_counter[cls.nr_support_reads].append(keyi)
-                else:
-                    all_read_counter[cls.nr_support_reads] = [keyi]
+                for cls in utr.clusters:
 
-                # SVM support
-                if utr.svm_coordinates != []:
-                    # Look for svm support for this cluster
-                    found = False
-                    for crd in utr.svm_coordinates:
-                        if crd-30 < cls.polyA_coordinate < crd+30:
-                            found = True
-                            break
+                    # key that uniquely defines this polyA_cluster
+                    # this key will be used to do unions and intersections
+                    keyi = dset_name+utr.chrm+utr.strand+str(cls.polyA_coordinate)
 
-                    # If you found it, add to the svm_support cluster
-                    if found:
-                        if cls.nr_support_reads in svm_support:
-                            svm_support[cls.nr_support_reads].append(keyi)
-                        else:
-                            svm_support[cls.nr_support_reads] = [keyi]
-
-                # Annotated clusters
-                if cls.annotated_polyA_distance != 'NA':
-                    if cls.nr_support_reads in annot_read_counter:
-                        annot_read_counter[cls.nr_support_reads].append(keyi)
+                    # All clusters
+                    if cls.nr_support_reads in all_read_counter:
+                        all_read_counter[cls.nr_support_reads].append(keyi)
                     else:
-                        annot_read_counter[cls.nr_support_reads] = [keyi]
+                        all_read_counter[cls.nr_support_reads] = [keyi]
 
-                # Clusters in other datasets
-                if cls.nr_support_reads in other_dsets:
-                    all_key = dset_2super[keyi] # the in-between key
-                    for (dn, sup_reads) in zip(*super_clusters[all_key]):
-                        if dn != dset.name: # don't count yourself!!
-                            if sup_reads > 1: # maybe set treshold?
-                                other_dsets[cls.nr_support_reads].append(keyi)
-                else:
-                    other_dsets[cls.nr_support_reads] = [keyi]
+                    # SVM support
+                    if utr.svm_coordinates != []:
+                        # Look for svm support for this cluster
+                        found = False
+                        for crd in utr.svm_coordinates:
+                            if crd-30 < cls.polyA_coordinate < crd+30:
+                                found = True
+                                break
 
-        cluster_dicts = (all_read_counter, svm_support, annot_read_counter)
-        titles = ('All clusters', 'SVM_support', 'Annotated_TTS')
+                        # If you found it, add to the svm_support cluster
+                        if found:
+                            if cls.nr_support_reads in svm_support:
+                                svm_support[cls.nr_support_reads].append(keyi)
+                            else:
+                                svm_support[cls.nr_support_reads] = [keyi]
 
-        #clusters = (all_read_counter, svm_support, annot_read_counter, other_dsets)
-        #titles = ('All clusters', 'SVM_support', 'Annotated_TTS',
-                  #'In_other_compartments')
+                    # Annotated clusters
+                    if cls.annotated_polyA_distance != 'NA':
+                        if cls.nr_support_reads in annot_read_counter:
+                            annot_read_counter[cls.nr_support_reads].append(keyi)
+                        else:
+                            annot_read_counter[cls.nr_support_reads] = [keyi]
 
-        # make two figurses: one in terms of all clusters and on of annotated
-        # TTS sites
+                    # Clusters in other datasets
+                    if cls.nr_support_reads in other_dsets:
+                        all_key = dset_2super[keyi] # the in-between key
+                        for (dn, sup_reads) in zip(*super_clusters[all_key]):
+                            if dn != dset_name: # don't count yourself!!
+                                if sup_reads > 1: # maybe set treshold?
+                                    other_dsets[cls.nr_support_reads].append(keyi)
+                    else:
+                        other_dsets[cls.nr_support_reads] = [keyi]
 
-        in_terms_of = (titles[0], titles[2])
-        p.join_clusters(cluster_dicts, titles, in_terms_of)
+            cluster_dicts = (all_read_counter, svm_support, annot_read_counter)
+            titles = ('All clusters', 'SVM_support', 'Annotated_TTS')
+
+            #clusters = (all_read_counter, svm_support, annot_read_counter,
+                        #other_dsets)
+            #titles = ('All clusters', 'SVM_support', 'Annotated_TTS',
+                      #'In_other_compartments')
+
+            # make two figurses: one in terms of all clusters and on of annotated
+            # TTS sites
+
+            in_terms_of = (titles[0], titles[2])
+            p.join_clusters(cluster_dicts, titles, in_terms_of)
 
     plt.draw()
 
@@ -1603,7 +1954,7 @@ def recovery_sensitivity(dsets):
 
     p = Plotter()
 
-    def rec_sens(dset, utr_attribute, intvals):
+    def rec_sens(utrs, utr_attribute, intvals):
         """
         input:
          1) The attribute (rpkm, u/dstream coverage)
@@ -1627,7 +1978,7 @@ def recovery_sensitivity(dsets):
             if interval_max == 'inf':
                 interval_max = 10**9
 
-            for (utr_name, utr) in dset.utrs.iteritems():
+            for (utr_name, utr) in utrs.iteritems():
                 # Skip those that don't have nearby annotated TTS
                 if utr.annotTTS_dist == 'NA':
                     continue
@@ -1667,46 +2018,113 @@ def recovery_sensitivity(dsets):
                                (80,120), (120,'inf')]}
 
     # Go through all dsets and give 
-    for (dset_name, dset) in dsets.items():
-        sensitivity[dset_name] = {}
+    for (cell_line, compartment_dict) in dsets['cell lines'].items():
+        for (compartment, utrs) in compartment_dict.items():
+            dset_name = cell_line +' '+ compartment
 
-        for atr in attributes:
-            intrv = intervals[atr]
-            sensitivity[dset_name][atr] = rec_sens(dset, atr, intrv)
+            # Ceate empty dict for each d_set combination
+            sensitivity[dset_name] = {}
+
+            for atr in attributes:
+                intrv = intervals[atr]
+                sensitivity[dset_name][atr] = rec_sens(utrs, atr, intrv)
 
     # Plot the false negative ratio as a function of the attributes
+    # NOTE for comparing between cell lines or between compartments, it could be
+    # wise to move this plotting function into the previous for-loop and re-make
+    # the sensitbity dict for each either 'cell line' or 'compartments'.
     p.rec_sensitivity(sensitivity, intervals, attributes)
 
+def wc_compartment_reproducability(dsets, super_clusters, dset_2super):
+    """
+    Compare the overlap of polyA sites between compartment-compartment and
+    between whole_cell-compartment. You expect higher reproducibility between
+    whole_cell-compartment than for compartment-compartment.
 
-def polyadenylation_comparison(settings, dsets, clusters, super_clusters, dset_2super):
+    Should you add a min-RPKM or a min-coverage?
+    """
+
+    # single cluster minimum read coverage
+    min_covr = 2
+
+    mis_aligned_clusters = 0
+
+    # make a co_occurence dict for all cell lines
+    co_occurence = {}
+    # Get all combinations of compartments of this cell line
+    for (cell_line, comp_dict) in dsets['cell lines'].items():
+        combs = []
+        for cn in range(1, len(comp_dict)+1):
+            all_combs = [p for p in combins([co for co in comp_dict.keys()], cn)]
+            combs.append(all_combs)
+
+        # Sort the combinations and make a hash-entry by combining them
+        # Later you can then sort these things and look them up with certainty.
+        co_occurence[cell_line] = {}
+        for co in combs:
+            for ki in co:
+                co_occurence[cell_line][' '.join(sorted(ki))] = 0
+
+    # Go through the super_clusters
+    for ikey, clst in super_clusters.iteritems():
+        (cl_comp, covrg) = clst
+
+        # if the clusters have been mis-aligned on the second run, skip them,
+        # but keep count!
+        if len(set(cl_comp)) < len(cl_comp):
+            mis_aligned_clusters += 1
+            continue
+
+        # Skip the single-hit ones if they have length 1
+        if len(covrg) == 1 and covrg[0] < min_covr:
+            continue
+
+        cluster_stuff = {}
+        # Split up the cell_line--compartment information
+        for cc in cl_comp:
+            (cl, comp) = cc.split()
+            # attribute to each cell line all the compartment in this cluster
+            if cl in cluster_stuff:
+                cluster_stuff[cl].append(comp)
+            else:
+                cluster_stuff[cl] = [comp]
+
+        # add a count to the co_occurence list depending on compartmentcomp
+        for cline, compments in cluster_stuff.items():
+            co_occurence[cline][' '.join(sorted(compments))] += 1
+
+    p = Plotter()
+    p.wc_compartment(co_occurence)
+
+
+def polyadenylation_comparison(settings, dsets, super_clusters, dset_2super):
     """
     * compare 3UTR polyadenylation in general
     * compare 3UTR polyadenylation UTR-to-UTR
     """
 
-    # Compare the compartments; how many annotated do we find? etc.
-    #compare_cluster_evidence(dsets, clusters, super_clusters, dset_2super)
+    #### Compare the compartments; how many annotated do we find? etc.
+    compare_cluster_evidence(dsets, super_clusters, dset_2super)
 
-    # Get the sensitivity rates for of recovery of poly(A) clusters
-    #recovery_sensitivity(dsets)
+    #### Get the sensitivity rates for of recovery of poly(A) clusters
+    recovery_sensitivity(dsets)
 
-    ## Correlate the coverage counts of common polyadenylation sites between
-    ## clusters
-    #correlate_polyA_coverage_counts(dsets, super_clusters)
+    #### Get the reproducibility rate of poly(A) clusters for each compartment
+    #### compared to whole cell (if it is in on of the compartment, it should
+    #### presumably be in whole cell as well, albeit dilluted, that is, coverage
+    #### should be lower).
+    #wc_compartment_reproducability(dsets, super_clusters, dset_2super)
 
-    ## Get the change in coverage ratio of the 3 (or so) last polyadenylation
-    ## sites from the 3 UTR
+    #### Correlate the coverage counts of common polyadenylation sites between
+    #### clusters
+    #correlate_polyA_coverage_counts(dsets, super_clusters) NOT DSETS READY
+
+    #### Get the change in coverage ratio of the 3 (or so) last polyadenylation
+    #### sites from the 3 UTR
     #udstream_coverage_last_clusters(dsets)
 
-    ## See the effects of excluding pA sites with 1, 2, 3, etc, coverage
-    #cluster_size_sensitivity(dsets)
-
-    #####################################################################
-    # It depends on PAS-type, PAS-distance, polyA-number (1, 2, .., last)
-
-    # 1) Usage of multiple polyadenylation sites in each UTR
-    # 2) When multiple sites, what is the read frequency of the sites?
-    # 3) Compare utr-by-utr: is there a difference in polyA usage?
+    #### See the effects of excluding pA sites with 1, 2, 3, etc, coverage
+    #cluster_size_sensitivity(dsets) NOT DSETS READY
 
     pass
 
@@ -2066,29 +2484,30 @@ def itatr(tup):
 
     return g(f(tup))
 
-def merge_clusters(clusters):
+def merge_clusters(dsets):
     """
     Merge all clusters from all datasets into one huge cluster.
     """
 
     all_clusters = {} # keys = cluster_centers
-    each_cluster_2all = {}
+    each_cluster_2all = {} # mapping from the individual clusters to super-cluster
 
     chrms = ['chr'+str(nr) for nr in range(1,23) + ['X','Y','M']]
     tsdict = dict((chrm, {'+':[], '-':[]}) for chrm in chrms)
 
     # Put all the polyAclusters in a dict with cluster pos and dset.name
-    for dset in clusters:
-        for cls in dset.pAclusters:
-            tsdict[cls.chrm][cls.strand].append((cls, dset.name))
+    for (cell_line, compartment_dict) in dsets['cell lines'].items():
+        for (compartment, utrs) in compartment_dict.items():
+            dset_name = cell_line +' '+ compartment
+            for (utr_id, utr) in utrs.iteritems():
+                if utr.clusters != []:
+                    for cls in utr.clusters:
+                        tsdict[cls.chrm][cls.strand].append((cls, dset_name))
 
     for (chrm, strand_dict) in tsdict.items():
         if strand_dict == {'+': [], '-': []}:
             continue
         for (strand, cls) in strand_dict.iteritems():
-            if cls == []:
-                # or put a placeholder?
-                continue
 
             # initialize the first mega_cluster
             clustsum = 0
@@ -2230,110 +2649,120 @@ def before_after_ratio(dsets):
     Give emipirical credence to the before/after ratios
     """
 
-    for (dset_name, dset) in dsets.items():
-        #for rpkm_lim in [0, 1, 5, 10]:
-        for rpkm_lim in [0]:
-            ratios = []
-            for (utr_name, utr) in dset.utrs.iteritems():
-                #save before/after ratio if epsilon end is close to annotated end
-                if utr.RPKM < rpkm_lim:
-                    continue
-                # screen out those that extend well beyond the annotated end
-                if utr.epsilon_beyond > 50:
-                    continue
-                if utr.annotTTS_dist != 'NA':
-                    us_covrg = utr.eps_upstream_covrg
-                    if us_covrg == 0:
-                        us_covrg = 0.04
-                    ds_covrg = utr.eps_downstream_covrg
-                    if ds_covrg == 0:
-                        ds_covrg = 0.04
-                    ratios.append(math.log(us_covrg/ds_covrg, 2))
+    for (cell_line, compartment_dict) in dsets['cell lines'].items():
+        for (compartment, utrs) in compartment_dict.items():
+            for rpkm_lim in [0, 1, 5, 20]:
+                ratios = []
+                dset_name = cell_line + ' ' + compartment
+                for (utr_id, utr) in utrs.iteritems():
+                    #save before/after ratio if epsilon end is close to annotated end
+                    if utr.RPKM < rpkm_lim:
+                        continue
+                    # screen out those that extend well beyond the annotated end
+                    if utr.epsilon_beyond_aTTS > 60:
+                        continue
+                    if utr.annotTTS_dist != 'NA':
+                        us_covrg = utr.eps_upstream_covrg
+                        if us_covrg == 0:
+                            us_covrg = 0.04
+                        ds_covrg = utr.eps_downstream_covrg
+                        if ds_covrg == 0:
+                            ds_covrg = 0.04
+                        ratios.append(math.log(us_covrg/ds_covrg, 2))
 
-            #plt.ioff()
-            fig, ax = plt.subplots()
-            #(N, bins, patches) = ax.hist(ratios, bins=200) # for log
-            (N, bins, patches) = ax.hist(ratios, bins=50) # for +1
-            ax.set_xlabel('Log2 ratios of upstream/downstream coverage, RPKM > {0}'\
-                          .format(rpkm_lim), size=20)
-            ax.set_title('$Log2(upstream/downstream)$ {0}'.format(dset_name),
-                         size=20)
+                #plt.ioff()
+                fig, ax = plt.subplots()
+                #(N, bins, patches) = ax.hist(ratios, bins=200) # for log
+                (N, ains, patches) = ax.hist(ratios, bins=50) # for +1
+                ax.set_xlabel('Log2 ratios of upstream/downstream coverage'\
+                              ' for RPKM > {0}'\
+                              .format(rpkm_lim), size=20)
+                ax.set_title('$Log2(upstream/downstream)$ {0}'.format(dset_name),
+                             size=20)
 
-            # Set some vertical lines
-            vert_lines = [-1, 0, 1] # for log ratios
-            line_nr = len(vert_lines)
-            for x_pos in vert_lines:
-                ax.axvline(x=x_pos, c='r')
+                # Set some vertical lines
+                vert_lines = [-1, 0, 1] # for log ratios
+                line_nr = len(vert_lines)
+                for x_pos in vert_lines:
+                    ax.axvline(x=x_pos, c='r')
 
-            # Calculate percentaes the before 0, between 0 and 2, and after 2
-            partition = [0 for v in range(line_nr+1)]
-            tot_ratios = len(ratios)
-            for val in ratios:
-                found = False
+                # Calculate percentaes the before 0, between 0 and 2, and after 2
+                partition = [0 for v in range(line_nr+1)]
+                tot_ratios = len(ratios)
+                for val in ratios:
+                    found = False
+                    for (indx, x_pos) in enumerate(vert_lines):
+                        if val < x_pos:
+                            partition[indx] += 1
+                            found = True
+                            break
+                    if not found:
+                        partition[-1] +=1
+
+                percentages = [part/tot_ratios for part in partition]
+
+                # Place text with percentages
+                max_yval = ax.get_ylim()[1]
+                y_coord = max_yval - math.floor(max_yval*0.05)
+
+                # Get x-coordinates depending on the vertical lines
+                (xmin, xmax) = ax.get_xlim()
+                x_coords = []
                 for (indx, x_pos) in enumerate(vert_lines):
-                    if val < x_pos:
-                        partition[indx] += 1
-                        found = True
-                        break
-                if not found:
-                    partition[-1] +=1
+                    if indx == 0:
+                        x_coords.append((xmin-x_pos)/2)
+                    else:
+                        x_coords.append((vert_lines[indx-1]+x_pos)/2 -0.3)
+                # Ad hoc at the end add the last x_coord
+                x_coords.append((xmax-x_pos)/2)
 
-            percentages = [part/tot_ratios for part in partition]
-
-            # Place text with percentages
-            max_yval = ax.get_ylim()[1]
-            y_coord = max_yval - math.floor(max_yval*0.05)
-
-            # Get x-coordinates depending on the vertical lines
-            (xmin, xmax) = ax.get_xlim()
-            x_coords = []
-            for (indx, x_pos) in enumerate(vert_lines):
-                if indx == 0:
-                    x_coords.append((xmin-x_pos)/2)
-                else:
-                    x_coords.append((vert_lines[indx-1]+x_pos)/2 -0.3)
-            # Ad hoc at the end add the last x_coord
-            x_coords.append((xmax-x_pos)/2)
-
-            for (indx, x_coord) in enumerate(x_coords):
-                percent = format(percentages[indx]*100, '.0f')+'%'
-                ax.text(x_coord, y_coord, percent, size=15)
-
+                for (indx, x_coord) in enumerate(x_coords):
+                    percent = format(percentages[indx]*100, '.0f')+'%'
+                    ax.text(x_coord, y_coord, percent, size=15)
 
 def rpkm_dist(dsets):
     """
-    Simply plot the rpkms of the differnt datasets
+    Simply plot the rpkms of the different datasets
     """
     thresh = 50
-    for (dset_name, dset) in dsets.items():
-        rpkms_norm = []
-        rpkms_log = []
-        for (utr_name, utr) in dset.utrs.iteritems():
-            if utr.eps_coord != 'NA':
-                # SKip those with rpkm = 0
-                if utr.RPKM == 0:
-                    continue
-                if utr.RPKM > thresh:
-                    rpkms_norm.append(thresh)
-                else:
-                    rpkms_norm.append(utr.RPKM)
-                rpkms_log.append(math.log(utr.RPKM, 2))
+    axis_list = []
+    for (cell_line, compartment_dict) in dsets['cell lines'].items():
+        for (compartment, utrs) in compartment_dict.items():
+            rpkms_norm = []
+            rpkms_log = []
+            dset_name = cell_line +' '+ compartment
+            for (utr_id, utr) in utrs.iteritems():
+                if utr.eps_coord != 'NA':
+                    # SKip those with rpkm = 0
+                    if utr.RPKM == 0:
+                        continue
+                    if utr.RPKM > thresh:
+                        rpkms_norm.append(thresh)
+                    else:
+                        rpkms_norm.append(utr.RPKM)
+                    rpkms_log.append(math.log(utr.RPKM, 2))
 
-        fig, ax = plt.subplots()
-        (N, bins, blah) = ax.hist(rpkms_log, bins=200)
-        ax.set_xlabel('RPKM, log2 transformed', size=20)
-        ax.set_ylabel('3UTR count', size=20)
-        ax.set_title('Distribution of RPKM values for 3UTR objects')
-        #Set x axis
-        (xmin, xmax) = ax.get_xlim()
-        ax.set_xticks(np.arange(xmin, xmax, 2))
+            fig, ax = plt.subplots()
+            axis_list.append(ax)
+            (N, bins, blah) = ax.hist(rpkms_log, bins=200)
+            ax.set_xlabel('RPKM, log2 transformed', size=20)
+            ax.set_ylabel('3UTR count', size=20)
+            ax.set_title('Distribution of RPKM values for {0}'.format(dset_name))
+
+            # Percentages above/below 0
+            less_zero = len([1 for v in rpkms_norm if v>1])/float(len(rpkms_norm))
+            print('\n{0}: Percentage of UTRs with RPKM larger than 1: {1}%'\
+                  .format(dset_name, format(less_zero*100, '.0f')))
+
+    # Set the x-axis according to the largest x-interval found
+    # Strangely, these things are only correct after a final plt.draw()
+    min_x = min([ax.get_xlim()[0] for ax in axis_list])
+    max_x = max([ax.get_xlim()[1] for ax in axis_list])
+    for ax in axis_list:
+        ax.set_xlim((min_x, max_x))
+        ax.set_xticks(np.arange(min_x, max_x, 2))
         ax.grid()
-
-        # Percentages above/below 0
-        less_zero = len([1 for v in rpkms_norm if v>1])/float(len(rpkms_norm))
-        print('\n{0}: Percentage of UTRs with RPKM larger than 1: {1}%'\
-              .format(dset_name, format(less_zero*100, '.0f')))
-
+        plt.draw()
 
 def main():
     # The path to the directory the script is located in
@@ -2349,48 +2778,43 @@ def main():
 
     # Get the dsets with utrs and their clusters from the length and polyA files
     # Optionally get SVM information as well
-    dsets = get_utrs(settings, svm=False)
-
-    # Get just the clusters from the polyA files
-    clusters = get_clusters(settings)
+    dsets = get_utrs(settings, svm=True)
 
     #### RPKM distribution
     #### What is the distribution of 3UTR RPKMS? run this function and find out!
-    rpkm_dist(dsets)
+    #rpkm_dist(dsets)
 
     #### Extend beyond distribution and number
     #### How many 3UTRs extend significantly? beyond the aTTS
     #### NOTE that, with current code, they must be checked by hand, as the
     #### extended area can overlap a genomic feature
+    # Give feedback to Simone, then start documenting.
     #beyond_aTTS(dsets) TODO
 
     ##### Write a bedfile with all the polyA sites confirmed by both annotation and
     ##### 3UT poly(A) reads (For Sarah)
-    #write_verified_TTS(clusters)
+    #write_verified_TTS(clusters) broken, clusters replaced with dsets
 
     ##### get the before/after coverage ratios for trusted epsilon ends
-    before_after_ratio(dsets)
+    #before_after_ratio(dsets)
 
     # RESULT the before/after ratio is not as informative as we had hoped.
     # I should print out a good few of them that have ratios in the gray zone
     # and check them in the browser. However, this could just mean that the
     # ratio is not important for classifying ends.
-
     # TODO check it in the browser to see if our intutition is correct ... !:)
     # For the non-beyond_aTTS ones.
 
-    ##### Merge all clusters in datset. Return interlocutor-dict for going from each
-    ##### poly(A) cluster in each dataset to the
-    #(super_cluster, dset_2super) = merge_clusters(clusters)
+    ##### Merge all clusters in datset in the dictionary super_cluster. Also
+    ##### return the dset_2super dict, which acts as a translator dict from the
+    ##### key of each individual cluster to its corresponding key in super_cluster
+    #(super_cluster, dset_2super) = merge_clusters(dsets)
 
     #output_control(settings, dsets)
 
-    #utr_length_comparison(settings, dsets)
+    utr_length_comparison(settings, dsets)
 
-    #polyadenylation_comparison(settings, dsets, clusters, super_cluster, dset_2super)
-
-    # Then do the 3utr length-plots again. How many cases of absolute certain
-    # difference in 3UTR length?
+    #polyadenylation_comparison(settings, dsets, super_cluster, dset_2super)
 
     ## The classic polyA variation distributions
     #classic_polyA_stats(settings, dsets)
@@ -2407,20 +2831,31 @@ def main():
 
     #rouge_polyA_sites(settings)
 
-    plt.show()
-
 
 if __name__ == '__main__':
     main()
 
 # DISCUSSION #
 
+# On internal representation:
+    # Your main dataset will be the cell compartments; therefore, it makes sense
+    # to organize your internal datasets to facilitate comparison within
+    # cell-lines as well as between compartments of different cell lines.
+    # However, forcing this structure upon the internal representation would
+    # make it impossible to analyze datasets that do not come from the cell
+    # lines (human genome project, drosophila, wtf).
+    # An alternative could be to define the two dimensions of comparison in a
+    # pre-written list. One dimension could be ('whole_cell' ,'cy..', 'nu..),
+    # and another dimension could be ('HeLa', 'K562', ...) and make your plots
+    # take these dimensions into account. Then these lists can be modified for
+    # each type of datset (gencode, 1000 genomes, drosophila...)
+    # I want to do this so that I can quickly compare across compartments or
+    # across cell lines without too much fuss.
+
 # You have to convince the reviewers that the difference you see in
 # polyadenylation usage is not just down to low coverage or the biased effects
 # of sequencing.
-
-# Regardless, the datatype is poly(A)+, which should mean that we are only
-# dealing with polyadenylated RNA sequences.
+# UPDATE: you have shown that you readily detect poly(A) clusters for high RPKM
 
 # How reproducable are the polyA reads?
 # If for the same gene, for a similar before/after coverage, what is the

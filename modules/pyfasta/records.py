@@ -1,5 +1,5 @@
 import cPickle
-import numpy as np
+#import numpy as np # COMMENTED OUT FOR PYPY
 import sys
 import os
 

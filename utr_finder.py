@@ -30,8 +30,6 @@ Dependencies:
     * pyFasta
     * bedGraphToBigWig
     * bedTools
-    * numpy (can easily be removed -- just mean and std used)
-    * matplotlib (optional -- for plotting)
     * python 2.6.4 or greater
 
 """
@@ -106,7 +104,7 @@ class Settings(object):
         self.chr1 = True
         #self.chr1 = False
         #self.read_limit = False
-        self.read_limit = 1000000
+        self.read_limit = 100000
         self.max_cores = 3
         #self.polyA = True
         self.polyA = False
@@ -1332,12 +1330,13 @@ def read_settings(settings_file):
     datasets = dict((dset, files.split(':')) for dset, files in conf.items('DATASETS'))
     annotation = conf.get('ANNOTATION', 'annotation')
 
-    # Remove the 'carrie' link (you should remove all references to shortcut
-    # folders
-    # HINT if entry[0].islower(), entry remove. Say that all dsets must start
-    # with uppercase name.
-    if 'carrie' in datasets:
-        datasets.pop('carrie')
+    # Go through all the items in 'datsets'. Pop the directories from the list.
+    # They are likely to be shortcuts.
+    for (dset, dpaths) in datasets.items():
+        for pa in dpaths:
+            if os.path.isdir(pa):
+                datasets.pop(dset)
+
     # check if the files are actually there...
     for dset, files in datasets.items():
         [verify_access(f) for f in files]
@@ -1385,6 +1384,8 @@ def read_settings(settings_file):
     bigwig_url = ''
     if bigwig:
         bigwig_datasets = conf.get('BIGWIG', 'datasets').split(':')
+        if bigwig_datasets[0] == 'all':
+            bigwig_datasets = datasets.keys()
         bigwig_savedir = conf.get('BIGWIG', 'save_dir')
         bigwig_url = conf.get('BIGWIG', 'url')
 
@@ -1395,7 +1396,7 @@ def read_settings(settings_file):
         polyA = conf.get('POLYA_READS', 'polya')
         verify_access(polyA) # Check if is a file
 
-    # tuning of the 99.5% value
+    # tuning of the epsilon value. Write output file or not?
     cuml_tuning = conf.getboolean('UTR_LENGTH_TUNING', 'tuning')
 
     # if polyA is false, you can't do tuning
@@ -1661,7 +1662,7 @@ def process_reads(pA_reads_path):
             As = seq.count('A')
             Ts = seq.count('T')
             # only save if A/T frequencies are not abnormal
-            if (As/seqlen < 0.50) and (Ts/seqlen < 0.50):
+            if (As/seqlen < 0.70) and (Ts/seqlen < 0.70):
                 length_sum += seqlen
                 tot_reads += 1
                 # trim the title
@@ -2026,7 +2027,8 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs, settings,
     options = '-d'
     coverage_path = coverage_wrapper(dset_id, bed_reads, utrfile_path, options)
 
-    # Iterate through the coverage files and write to output files
+    # Collect read coverage for each 3UTR exon, join the multi-exon 3UTRs, and
+    # write to file the parameters you calculate
     print('Writing output files... {0} ...\n'.format(dset_id))
     output_files = output_writer(dset_id, coverage_path, annotation, utr_seqs,
                                  rpkm, extendby, polyA_reads, settings,
@@ -2488,8 +2490,8 @@ def main():
     # function (called below). It also affects the 'temp' and 'output'
     # directories, respectively.
 
-    #DEBUGGING = True
-    DEBUGGING = False
+    DEBUGGING = True
+    #DEBUGGING = False
 
     # The path to the directory the script is located in
     here = os.path.dirname(os.path.realpath(__file__))
@@ -2500,10 +2502,10 @@ def main():
     (tempdir, beddir, output_dir) = make_directories(here, dirnames, DEBUGGING)
 
     # Location of settings file
-    settings_file = os.path.join(here, 'UTR_SETTINGS')
+    #settings_file = os.path.join(here, 'UTR_SETTINGS')
 
     ###### TESTING Pedro's old annotation settings
-    #settings_file = os.path.join(here, 'OLD_ENCODE_SETTINGS')
+    settings_file = os.path.join(here, 'OLD_ENCODE_SETTINGS')
     ######
 
     # Get the necessary variables from the settings file and create the settings
@@ -2538,6 +2540,8 @@ def main():
 
     # You extract all annotated polyA sites into a bedfile: a_polyA_sites_path
     annotation.a_polyA_sites_path = get_a_polyA_sites_path(settings, beddir)
+    # TODO this step is not annotation-independent. What happens if the
+    # genome-region bedfile does not intersect a single annotated 3UTR?
 
     # You intersect the annotated polyA files with the 3UTR bedfile you got from
     # the annotation. Put the intersected annotated polyA sites in a dictionary.

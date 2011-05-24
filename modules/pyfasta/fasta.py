@@ -1,6 +1,6 @@
 import string
 import os.path
-import numpy as np
+#import numpy as np # COMMENTED OUT FOR PYPY
 
 from records import NpyFastaRecord
 
