@@ -76,10 +76,10 @@ class Settings(object):
         self.chr1 = True
         #self.chr1 = False
         #self.read_limit = False
-        self.read_limit = 1000000
+        self.read_limit = 100000
         self.max_cores = 1
-        self.polyA = True
-        #self.polyA = False
+        #self.polyA = True
+        self.polyA = False
         #self.polyA = '/users/rg/jskancke/phdproject/3UTR/the_project/temp_files'\
                 #'/polyA_reads_HeLa-S3_Nucleus_processed_mapped.bed'
         #self.bed_reads = '/users/rg/jskancke/phdproject/3UTR/the_project/temp_files'\
@@ -1288,9 +1288,13 @@ def read_settings(settings_file):
         print('The following options sections are missing: {}'.format(missing))
         sys.exit()
 
-    # datasets and annotation
-    datasets = dict((dset, files.split(':')) for dset, files in conf.items('DATASETS'))
+    # annotation
     annotation = conf.get('ANNOTATION', 'annotation')
+    if annotation != 'false':
+        verify_access(annotation)
+
+    # datasets
+    datasets = dict((dset, files.split(':')) for dset, files in conf.items('DATASETS'))
 
     # Go through all the items in 'datsets'. Pop the directories from the list.
     # They are likely to be shortcuts.
@@ -1299,13 +1303,13 @@ def read_settings(settings_file):
             if os.path.isdir(pa):
                 datasets.pop(dset)
 
-    # check if the files are actually there...
+    # check if the datset files are actually there...
     for dset, files in datasets.items():
         [verify_access(f) for f in files]
 
     # set minimum length of 3 utr
     try:
-        min_utrlen = conf.getint('MIN_3UTR_LENGTH', '3utrlen')
+        min_utrlen = conf.getint('MIN_3UTR_LENGTH', 'min3utrlen')
     except ValueError:
         min_utrlen = 100
 
@@ -1332,7 +1336,7 @@ def read_settings(settings_file):
         verify_access(utr_bedfile_path) # Check if is a file
 
     # restrict to chromosome 1
-    chr1 = conf.getboolean('CHROMOSOME1', 'chr1')
+    chr1 = conf.getboolean('CHROMOSOME1', 'only_chr1')
 
     # human genome fasta file
     hg_fasta = conf.get('HG_FASTA', 'hg_fasta')
@@ -1361,7 +1365,7 @@ def read_settings(settings_file):
         verify_access(polyA) # Check if is a file
 
     # If poly(A) reads == True, you need the index file for the gem-mapper
-    if polyA:
+    if polyA == True:
         try:
             gem_index = conf.get('POLYA_READS', 'gem_mapper_index')
             verify_access(gem_index+'.blf') # Check if is a file

@@ -56,25 +56,26 @@ HeLa-S3_Cytoplasm = %(carrie)s/011C/genome/LID8469_FC61AHAAAXX_1_2.gem.map.gz:%(
 
 [ANNOTATION]
 # The annotation should be in the gencode format
-annotation = /users/rg/jskancke/phdproject/3UTR/gencode5/gencode5_annotation.gtf
+# annotation = /users/rg/jskancke/phdproject/3UTR/gencode5/gencode5_annotation.gtf
+annotation = false
 
 
 [CHROMOSOME1]
-# chr1 = true:
+# only_chr1 = true:
 # run the whole simulation only with chromosome 1. This is for making
 # speed-runs of the program. The first time this setting is used, the
 # chromosome 1 entries from the annotation file above will be filtered out to a
 # separate file.
 #
-# chr1 = false:
+# only_chr1 = false:
 # run with all chromosomes
-chr1 = false
+only_chr1 = false
 
 
 [MIN_3UTR_LENGTH]
 # When extracting 3UTRs from the annotation, ignore those smaller than this
 # value. Setting should never be below 100 nt.
-3utrlen = 200
+min3utrlen = 200
 
 
 [POLYA_READS]
@@ -158,7 +159,8 @@ hg_fasta = /users/rg/jskancke/phdproject/3UTR/hg19fasta/hg19.fa
 # overwritten. Thus if you want to remake the files because you changed
 # something about the original read-files, you must delete the files.
 #
-bigwig = true
+bigwig = false
+# bigwig = true
 # datasets = HeLa-S3_Whole_Cell:HeLa-S3_Cytoplasm:HeLa-S3_Nucleus
 datasets = K562_Cytoplasm:K562_Nucleus:K562_Whole_Cell
 save_dir = /users/rg/jskancke/public_html/bigWigs
