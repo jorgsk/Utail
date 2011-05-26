@@ -1,20 +1,6 @@
 """
-Create bed files from annotation file. Specifically, create bed-files for all
-annotated introns and exons in 5UTR, CDS, and 3UTR, as well as all annotated TTS
-sites.
-
-From the original annotation file, I must extract the following
-aTTS
-3UTR_exons
-3UTR_terminal_exon
-3UTR_introns
-CDS_exons
-CDS_introns
-5UTR_exons
-5UTR_introns
-
-As well, the program has a function to get only 3UTR regions.
-
+**Module for representing GENCODE transcripts as class objects and performing
+calculations on them.**
 """
 def run_from_ipython():
     try:
@@ -55,8 +41,38 @@ class Region(object):
         self.length = 0
 
 class Transcript(object):
+    """
+    Represents transcripts as they occur in GENCODE annotation files.
+
+    Instances of the transcript class are initialized with the input:
+
+    - transcript_id
+    - gene_id
+    - transcript type
+    - chromosome
+    - beg
+    - end
+    - strand
+
+    These are fields from the GENCODE gft file.
+
+    Further, it initializes by itself four attributes that will be filled as the
+    annotation file is parsed
+
+    - three_utr (holds the 3UTR exons and methods to act on them)
+    - cds (as for CDS)
+    - five_utr (as for 5UTR)
+    - exons (to hold all exons associated with this transcript)
+    """
 
     def __init__(self, t_id, g_id, t_type, chrm, beg, end, strand):
+        """
+        Take transcriptID, geneID, transcript type, chromosome, beginning and
+        end coordinates, and strand. Add these to the transcript object.
+
+        Additionally, create placeholders for 3UTR exons, CDS exons, 5UTR exons,
+        and an empty list of all exons.
+        """
         self.ts_id = t_id
         self.gene_id = g_id
         self.t_type = t_type
@@ -71,6 +87,9 @@ class Transcript(object):
         self.exons = []
 
     def add_cds(self, cds):
+        """
+        Add CDS exons to the CDS list of exons.
+        """
         self.cds.exons.append(cds)
 
     def get_cds_introns(self):
@@ -86,8 +105,8 @@ class Transcript(object):
         self.exons.append(exon)
 
     def get_aTTS(self, with_utr=True):
-        """ Return the aTTS of a transcript. If processed, also return for those
-        who have not a 3UTR"""
+        #Return the aTTS of a transcript. If processed, also return for those
+        #who have not a 3UTR
 
         if with_utr:
             if self.three_utr.exons != []:
@@ -111,16 +130,18 @@ class Transcript(object):
 
 
     def add_utr(self, utr):
-        # Determine if 5' or 3' by comparing with cds_beg and strand add utr to
-        # the corresponding list.
-        # if no CDS was annotated, don't annotate the UTR either because you
-        # don't know if it's 5' or 3'
+        """
+        Determine if UTR is 5' or 3' by comparing with cds_beg and strand and
+        add to the corresponding list.
+
+        Do nothing if no CDS was annotated
+        """
+
         if self.cds.exons == []:
             return
         self.cds.exons.sort(key=itemgetter(1))
         cds_beg = self.cds.exons[0][1]
         utr_beg = utr[1]
-
 
         if self.strand == '+':
             if utr_beg <= cds_beg:
@@ -167,12 +188,16 @@ class Transcript(object):
 
 
 def make_transcripts(annotation):
-    """Loop through a (GENCODE) annotation file and get the exon fields.
-    Finally compose them into sets of transcripts. As well return a dictionary
-    of genes with the list of transcripts belonging to that gene.
+    """
+    Loop through the GENCODE annotation file (the input), create instancees
+    of :class:`Transcript`, and save these in a dictionary. Also create a
+    dictionary, *genes*, with the transcript -> gene correspondence.
 
     Since we go from GFF/GTF to .BED format, it's important to subtract 1 from
-    the beg-coordinate. 9 9 in GTF is 8 9 in BED."""
+    the beg-coordinate. 9 9 in GTF is 8 9 in BED.
+
+    :returns: transcripts, genes
+    """
 
     # Skip first 4 lines of annotation (for gencode at least.......)
     a_handle = skip_lines(annotation, 7)
@@ -557,11 +582,15 @@ def get_last_exons(transcripts):
     return last_exons
 
 def get_3utr_bed_all_exons(settings, outfile_path):
-    """Get the regions of all 3UTRs in the annotation. Cluster them by the
-    UTR-beg, and save for each cluster a 'super-UTR' that contains all the
-    exons in that cluster. Save these regions to a bedfile in outfile_path.
-    Make sure that the last exon in each UTR is extended by the value set in
-    settings.extendby"""
+    """
+    Get the regions of all 3UTRs in the annotation (from *settings*). Cluster
+    them by the UTR-beg, and save for each cluster a 'super-UTR' that contains
+    all the exons in that cluster. Save these regions to a bedfile in
+    outfile_path. Make sure that the last exon in each UTR is extended by the
+    value set in *settings.extendby*
+
+    :returns: writes 3UTR-bedfile to *outfile_path*
+    """
 
     raw_path = os.path.splitext(outfile_path)[0] + '_raw.bed'
     raw_handle = open(raw_path, 'wb')
@@ -934,8 +963,12 @@ def longest_utr(utr_list):
 
 def get_a_polyA_sites_bed(settings, outfile_path):
     """Get the polyA sites (end position of last exon) of annotated 3UTRs.
-    Save these positions to a bedfile in outfile_path. Cluster the polyA sites
-    and return the averages of the clusters."""
+    Save these positions to a bedfile in *outfile_path*. Cluster the polyA sites
+    and return the averages of the clusters along with the number of reads part
+    of the cluster.
+
+    :returns: annotated TTS sites as bedfile in *outfile_path*
+    """
 
     out_handle = open(outfile_path, 'wb')
     # Get transcripts from annotation
@@ -1010,8 +1043,12 @@ def get_a_polyA_sites_bed(settings, outfile_path):
     out_handle.close()
 
 def get_seqs(utr_dict, hgfasta):
-    """Use the pyfasta module to get sequences quickly from an indexed version
-    of the human genome fasta file"""
+    """
+    Use the *pyfasta* module to get sequences quickly from an indexed version
+    of the human genome fasta file.
+
+    :returns: *utr_dict*, an exon -> sequence dictionary
+    """
     f = Fasta(hgfasta, record_class=FastaRecord)
     #f = Fasta(hgfasta)
     seq_dict = {}
@@ -1023,7 +1060,6 @@ def get_seqs(utr_dict, hgfasta):
         if strand == '-':
             seq_dict[ts_id] = f.sequence({'chr':chrm,'start':beg+2, 'stop':end,
                                           'strand':strand}).upper()
-
     return seq_dict
 
 def main():

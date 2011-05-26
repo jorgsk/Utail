@@ -2897,3 +2897,22 @@ if __name__ == '__main__':
     # IDEA XXX TODO XXX what happens if you take random before/after ratios
     # in the coverage vector? And what happens if you increase the
     # average-area to 100?
+
+# code snippet for generating colors; this way you don't have to know in advance
+# how many colors you need.
+#def gen_color():
+    #"""generator for getting n of evenly distributed colors using
+    #hsv color and golden ratio. It always return same order of colors
+ #
+    #:returns: RGB tuple
+    #"""
+    #import colorsys
+    #golden_ratio = 0.618033988749895
+    #h = 0.22717784590367374
+ #
+    #while 1:
+        #h += golden_ratio
+        #h %= 1
+        #HSV_tuple = [h, 0.95, 0.95]  # this defines how "deep" are the colors
+        #RGB_tuple = colorsys.hsv_to_rgb(*HSV_tuple)
+        #yield map(lambda x:str(int(x * 256)), RGB_tuple)
