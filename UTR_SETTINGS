@@ -1,9 +1,27 @@
 
 [DATASETS]
-# The read files must be either gem-files, zipped gem-files, bed-files, or
-# zipped bedfiles. The extensions must thus be either of: .map.gz, .gem.map.gz,
-# Avoid spaces and punctuation marks (.) in the filenames to aviod problems...
-# .bed, or .bed.gz.
+# Provide paths to the RNA-seq read files. The files must be either gem-files,
+# zipped gem-files, bed-files, or zipped bedfiles. The extensions must thus be
+# either of: .map.gz, .gem.map.gz, .bed, or .bed.gz.
+# Avoid spaces and punctuation marks (.) in the filenames to aviod problems.
+#
+# You can use directory-shortcuts. Multiple files for one dataset are separated
+# by ':'. Example:
+# mydir = /myfolder/myreads
+# Dset1 = %(mydir)s/subdir1/gem_mapped_reads1.gem.map.gz:%(mydir)s/subdir1/gem_mapped_reads1.gem.map.gz:%(mydir)s/subdir2/other_gem_mapped_reads.gem.map.gz
+#
+# All the files in one dataset will be merged, and each dataset will have one
+# output file. For example, if you have 2 technical replicates lane1.gem.map
+# and lane2.gem.map (two lanes in the sequences), you could define three
+# datsets:
+#
+# lane1_alone = %(mydir)s/lane1.gem.map
+# lane2_alone = %(mydir)s/lane2.gem.map
+# both_lanes = %(mydir)s/lane1.gem.map:%(mydir)s/lane2.gem.map
+#
+# This way you can examine the output of each lane individually and also their
+# merger for more statistical power.
+#
 carrie = /users/rg/projects/NGS/Projects/ENCODE/hg19main/GingerasCarrie
 
 #### POLYA MINUS CONTROLS
@@ -38,40 +56,43 @@ HeLa-S3_Cytoplasm = %(carrie)s/011C/genome/LID8469_FC61AHAAAXX_1_2.gem.map.gz:%(
 
 [ANNOTATION]
 # The annotation should be in the gencode format
-# Example of commented out line
 annotation = /users/rg/jskancke/phdproject/3UTR/gencode5/gencode5_annotation.gtf
 
 
 [CHROMOSOME1]
-# running the whole simulation only with chromosome 1.
-# The first time this setting is used, the chromosome 1 entries from the
-# annotation file above will be filtered out to a separate file.
-# chr1 = true
+# chr1 = true:
+# run the whole simulation only with chromosome 1. This is for making
+# speed-runs of the program. The first time this setting is used, the
+# chromosome 1 entries from the annotation file above will be filtered out to a
+# separate file.
+#
+# chr1 = false:
+# run with all chromosomes
 chr1 = false
 
 
 [MIN_3UTR_LENGTH]
-# Set the minimum 3UTR length to grab from the annotation. Some annotated 3UTRs
-# are very short - down to 1 nucleotide. The default setting is to select only
-# 3UTRs longer than 250 nt. Setting should not be below 100 nt.
+# When extracting 3UTRs from the annotation, ignore those smaller than this
+# value. Setting should never be below 100 nt.
 3utrlen = 200
 
 
 [POLYA_READS]
-# The program can improve the detection of 3UTR ends by using reads that fall
-# across the junction between UTR and poly(A) tail, which are the poly(A)
-# reads. This takes extra time but improves the detection considearably.
-# Three settings: 
-# true : the program will attempt to get poly(A) reads from the
-# original gem-mapping. 
-# false : the program will not use poly(A) reads. 
-# /some/path : provide the path to a .bed file that contains the poly(A) reads. This
-# would be the case if you wish to extract the poly(A) reads yourself, instead
-# of using the default settings of the program.
-#
 polya = true
-# polya = false
-# polya = /path/to/bedfile/with/poly(A)/reads
+# polya = true:
+# the program will attempt to get poly(A) reads from the gem-mapped-reads. Only
+# use this option if your gem-mapped reads have not been trimmed.
+#
+# polya = false:
+# the program will not use poly(A) reads
+#
+# polya = /some/path:
+# the path to a .bed file that contains the poly(A) reads. Use this setting if
+# you yourself have extracted poly(A) reads, trimmed them, and remapped them.
+#
+# If you set polya = true, supply the path to the gem-mapper index file
+# NOTE: leve out the suffix of the index file!!
+gem_mapper_index = /users/rg/atanzer/DATA/GEM_indices/Genomes/H.sapiens.genome.hg19.main
 
 
 [CPU_CORES]
@@ -83,34 +104,76 @@ max_cores = 5
 
 [RESTRICT_READS]
 # Set RESTRICT_READS to the number of reads to grab from the datasets. This
-# will make the script run faster. if 'false': grab all reads.
-# restrict_reads = 10000
+# option is primarily for debugging purposes.
+# restrict_reads = false:
+# Use all the reads in the read-files
 restrict_reads = false
 
 
 [SUPPLIED_3UTR_BEDFILE]
-# The path to a .bed-file that contains the 3UTRS you want to investigate.
-# If 'false', a .bed file will be generated from the annotation above (the
-# first time the setting is used; later the stored .bed-file will be used).
+# If you don't want to extract 3UTRs from the annotation, or if you wish in
+# investigate some other genomic region than the 3UTR, you can supply a bedfile
+# yourself.
 utr_bed_path = false
 # utr_bed_path = /users/rg/pferreira/desktop/motifsapa/data/bedannotation/hg19/3utr_hg19.selectedcases.bed
 
 
 [EXTEND]
-# By how much should the annotated 3UTRs be extended (in the 3' direction...)?
-# It is recommended to let the default setting stay
+# The pipeline can extend the 3UTR beyond their annotated end. This is useful
+# for discovering those 3UTRs that are longer than what is reported in the
+# annotation.
+# It is recommended to let the default setting (100) stay.
 extend_by = 100
 
 
 [HG_FASTA]
-# Supply the path to a fasta file of the entire human genome, where each fasta
-# entry is one chromosome (big 3G file). The genome version in the fasta file
-# must be the same as all the genome versions in the other files.
+# Supply the path to a fasta file (3G) of the entire human genome. Each entry in the
+# fasta file should be one chromosome. The genome version in the fasta file
+# must be the same as all the genome versions to which the RNA-seq reads were
+# mapped.
 hg_fasta = /users/rg/jskancke/phdproject/3UTR/hg19fasta/hg19.fa
 
 
+[BIGWIG]
+# The pipeline can turn the read-coverage (both ordinary reads and poly(A)
+# reads) into bigWig files. These files can either be viewed on a local genome
+# browser, or they can be placed in a directory from where the UCSC genome browser
+# can access them. Specify below which datasets you would like to have bigWig
+# files from, using
+# datasets = Dset1:Deset2:Dest3...
+# Alternatively, set 'bigwig = all' to make bigWig files from all
+# the datsets defined in the [DATASETS] section.
+#
+# If you do not use 'bigwig = all', you must set 'bigwig = true', otherwise no
+# files will be made.
+#
+# In 'save_dir' supply the directories where the bigwig files should be output,
+# and in 'url' give the url for this directory (i.e, "as it appears to the internet").
+#
+# The process of making bigWig files may use a lot of memory. Watch with 'top'
+# carefully if you have less than 4 GB RAM. Depending on the size of the
+# genomic region under investigation much more could potentialyl be needed.
+#
+# Note that if bigWig files for the datsets are already found, they will not be
+# overwritten. Thus if you want to remake the files because you changed
+# something about the original read-files, you must delete the files.
+#
+bigwig = true
+# datasets = HeLa-S3_Whole_Cell:HeLa-S3_Cytoplasm:HeLa-S3_Nucleus
+datasets = K562_Cytoplasm:K562_Nucleus:K562_Whole_Cell
+save_dir = /users/rg/jskancke/public_html/bigWigs
+url = http://genome.crg.es/~jskancke/bigWigs
+
+# K562_Cytoplasm_Minus:K562_Nucleus_Minus:K562_Whole_Cell_Minus
+
+
+
+#############################################
+# Below settings are for debugging-purposes #
+#############################################
+
 [UTR_LENGTH_TUNING]
-# WARNING: if you run the 
+# For debugging purposes. Prints an extra output file with some statistics.
 # If polyA is True, you can train the cumulative percentage by seeing at what
 # cumulative percentage the polyA reads are found. The default value is the
 # result of this tuning in the ENCODE cell-compartment dataset.
@@ -128,23 +191,11 @@ tuning = true
 # tuning = false
 
 
-[BIGWIG]
-# list the datasets you would like to make into bigWig. The reads that overlap
-# the 3UTR and the polyA reads will be turned into bigWig files.
-# Note that this process requires a lot of memory. More than 6 gigabytes
-# recommended for normal usage (needed for sorting). If region under
-# investigation is large, more is required.
-# Note that if bigWig files are found, they will not be overwritten. Delete
-# files you want to re-make.
-bigwig = true
-# datasets = HeLa-S3_Whole_Cell:HeLa-S3_Cytoplasm:HeLa-S3_Nucleus
-datasets = K562_Cytoplasm:K562_Nucleus:K562_Whole_Cell
-save_dir = /users/rg/jskancke/public_html/bigWigs
-url = http://genome.crg.es/~jskancke/bigWigs
-
-# K562_Cytoplasm_Minus:K562_Nucleus_Minus:K562_Whole_Cell_Minus
-
 [PLOTTING]
+###############################################################
+# This setting can be ignored. It is for developmental purposes.
+# #############################################################
+#
 # List the datasets from which you wish plots to be generated
 # These datasets must at a previous point have been analyzed.
 # datasets = HeLa-S3_Cytoplasm:HeLa-S3_Whole_Cell:HeLa-S3_Nucleus
