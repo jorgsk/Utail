@@ -76,8 +76,8 @@ class Settings(object):
         self.chr1 = True
         #self.chr1 = False
         #self.read_limit = False
-        self.read_limit = 100000
-        self.max_cores = 1
+        self.read_limit = 1000000
+        #self.max_cores = 1
         #self.polyA = True
         self.polyA = False
         #self.polyA = '/users/rg/jskancke/phdproject/3UTR/the_project/temp_files'\
@@ -319,15 +319,20 @@ class UTR(object):
             self.a_polyA_sites.append(site)
 
         # Update sequence and coverage vectors
-        # This works, because the utrs have been sorted
+        # This works, because the utrs have been sorted by chrm_beg. The next
+        # exon always has HIGHER utr_beg coordinate. You don't need to
+        # special-case for each strand for 'covr_vector', since this array is
+        # strand-inspecific. The 'sequence' array, however, is always in the
+        # 3->5 direction, so you must special-case it.
+
+        # No covr_vector is strand-insensitive
+        self.covr_vector = self.covr_vector + new_exon.covr_vector
+
+        # sequence is strand-sensitive
         if self.strand == '+':
             self.sequence = self.sequence + new_exon.sequence
-            self.covr_vector = self.covr_vector + new_exon.covr_vector
-
-        # If - strand, new.exon is upstream self.exon
-        if self.strand == '-':
+        elif self.strand == '-':
             self.sequence = new_exon.sequence + self.sequence
-            self.covr_vector = new_exon.covr_vector + self.covr_vector
 
         # If last exon, recalculate the cumulative coverage
         if new_exon.this_exnr == self.tot_exnr:
@@ -1115,6 +1120,7 @@ def output_writer(dset_id, coverage, annotation, utr_seqs, rpkm, extendby,
                 # If so, add to multi_exon archive
                 utr_name = this_utr.utr_ID[:-2]
 
+
                 if utr_name in multi_exons:
                     multi_exons[utr_name].append(this_utr)
                 else:
@@ -1145,6 +1151,7 @@ def output_writer(dset_id, coverage, annotation, utr_seqs, rpkm, extendby,
                 # Save output to files
                 length_output.write_output(length_outfile, this_utr)
                 pAread_output.write_output(polyA_outfile, this_utr)
+
 
                 # If tuning, calculate the tuning variables and write to file
                 if settings.cumul_tuning:
@@ -1289,8 +1296,10 @@ def read_settings(settings_file):
         sys.exit()
 
     # annotation
-    annotation = conf.get('ANNOTATION', 'annotation')
-    if annotation != 'false':
+    try:
+        annotation = conf.getboolean('ANNOTATION', 'annotation')
+    except ValueError:
+        annotation = conf.get('ANNOTATION', 'annotation')
         verify_access(annotation)
 
     # datasets
@@ -1335,6 +1344,13 @@ def read_settings(settings_file):
         utr_bedfile_path = conf.get('SUPPLIED_3UTR_BEDFILE', 'utr_bed_path')
         verify_access(utr_bedfile_path) # Check if is a file
 
+    # If both 'annotation' and '3utr_bedfile' are false, your program isn't
+    # going to go too far
+    if not annotation and not utr_bedfile_path:
+        print('You must either use a GENCODE annotation or supply a bedfile'\
+              ' yourself. Not both can be false.')
+        sys.exit()
+
     # restrict to chromosome 1
     chr1 = conf.getboolean('CHROMOSOME1', 'only_chr1')
 
@@ -1364,14 +1380,11 @@ def read_settings(settings_file):
         polyA = conf.get('POLYA_READS', 'polya')
         verify_access(polyA) # Check if is a file
 
+    # Get the gem_index_file
+    gem_index = conf.get('POLYA_READS', 'gem_mapper_index')
     # If poly(A) reads == True, you need the index file for the gem-mapper
     if polyA == True:
-        try:
-            gem_index = conf.get('POLYA_READS', 'gem_mapper_index')
-            verify_access(gem_index+'.blf') # Check if is a file
-        except ValueError:
-            print('You need to supply a gem-index file')
-            sys.exit()
+        verify_access(gem_index+'.blf') # Check if is a file
 
     # tuning of the epsilon value. Write output file or not?
     cuml_tuning = conf.getboolean('UTR_LENGTH_TUNING', 'tuning')
