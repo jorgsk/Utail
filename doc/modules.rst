@@ -4,13 +4,13 @@
 Modules
 =======
 
-The central classes and methods of the 3UTR finder program.
+The central classes and methods of Utail
 
 =================
-:mod:`utr_finder`
+:mod:`utail`
 =================
 
-.. automodule:: utr_finder
+.. automodule:: utail
 
 Classes
 """""""

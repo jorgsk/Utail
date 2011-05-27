@@ -9,15 +9,9 @@
 .. toctree::
     :maxdepth: 2
 
-    installation
     introduction
+    installation
+    configuration
+    running
+    understanding
     modules
-
-
-Indices and tables
-==================
-
-* :ref:`genindex`
-* :ref:`modindex`
-* :ref:`search`
-

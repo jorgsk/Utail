@@ -1,5 +1,5 @@
 """
-Script for displaying and summarizing the results from utr_finder.py.
+Script for displaying and summarizing the results from utail.py.
 """
 
 from __future__ import division
@@ -276,17 +276,17 @@ class Settings(object):
 
         # Get the settings file of the utr_analyzer; use this file to get the
         # correct path of the 3utr-bedfile.
-        import utr_finder as finder
+        import utail as utail
 
-        finder_settings = finder.Settings\
-                (*finder.read_settings(self.settings_file))
+        utail_settings = utail.Settings\
+                (*utail.read_settings(self.settings_file))
 
         if chr1:
-            finder_settings.chr1 = True
+            utail_settings.chr1 = True
 
         # Check if 3UTRfile has been made or provided; if not, get it from annotation
         beddir = os.path.join(self.here, 'source_bedfiles')
-        utr_bed = finder.get_utr_path(finder_settings, beddir)
+        utr_bed = utail.get_utr_path(utail_settings, beddir)
 
         # Check that it's accessible
         verify_access(utr_bed)
