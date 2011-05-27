@@ -73,13 +73,13 @@ class Settings(object):
         debugging!
         """
 
-        self.chr1 = True
+        #self.chr1 = True
         #self.chr1 = False
         #self.read_limit = False
-        self.read_limit = 1000000
+        #self.read_limit = 1000000
         #self.max_cores = 1
         #self.polyA = True
-        self.polyA = False
+        #self.polyA = False
         #self.polyA = '/users/rg/jskancke/phdproject/3UTR/the_project/temp_files'\
                 #'/polyA_reads_HeLa-S3_Nucleus_processed_mapped.bed'
         #self.bed_reads = '/users/rg/jskancke/phdproject/3UTR/the_project/temp_files'\
@@ -2479,8 +2479,8 @@ def main():
     # function (called below). It also affects the 'temp' and 'output'
     # directories, respectively.
 
-    DEBUGGING = True
-    #DEBUGGING = False
+    #DEBUGGING = True
+    DEBUGGING = False
 
     # The path to the directory the script is located in
     here = os.path.dirname(os.path.realpath(__file__))
@@ -2493,17 +2493,15 @@ def main():
     # Location of settings file
     settings_file = os.path.join(here, 'UTR_SETTINGS')
 
+    ########################XXX###################################
     ###### TESTING Pedro's old annotation settings
     #settings_file = os.path.join(here, 'OLD_ENCODE_SETTINGS')
-    ######
+    ########################XXX###################################
 
-    # Get the necessary variables from the settings file and create the settings
-    # object. This object will be sent around the program, so that settings are
-    # always acessable.
+    # Create the settings object from the settings file
     settings = Settings(*read_settings(settings_file))
 
-    # You can chose to not simulate. The only remaining function is making
-    # bigwig files.
+    # You can chose to not simulate. Only purpose is to make bigwigs.
     #simulate = False
     simulate = True
     #settings.bigwig = False
@@ -2562,16 +2560,15 @@ def main():
                          settings, annotation, DEBUGGING)
 
             #### FOR DEBUGGING #######
-            akk = pipeline(*arguments)
+            #akk = pipeline(*arguments)
             #########################
 
-            #result = my_pool.apply_async(pipeline, arguments)
-            #results.append(result)
+            result = my_pool.apply_async(pipeline, arguments)
+            results.append(result)
 
         # Wait for all procsses to finish
-        debug()
-        #my_pool.close()
-        #my_pool.join()
+        my_pool.close()
+        my_pool.join()
 
         dsets = settings.datasets.keys()
         # Get the paths from the final output

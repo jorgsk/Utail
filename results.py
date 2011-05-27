@@ -126,7 +126,7 @@ class UTR(object):
          epsilon_rel_size, epsilon_downstream_covrg, epsilon_upstream_covrg,
          annotTTS_dist, annot_downstream_covrg, annot_upstream_covrg,
          epsilon_PAS_type, epsilon_PAS_distance, epsilon_beyond, RPKM,
-         avrg_covrg ) = input_line.split('\t')
+         avrg_covrg) = input_line.split('\t')
 
         self.chrm = chrm
         self.beg = str_to_intfloat(beg)
@@ -940,7 +940,7 @@ class Plotter(object):
             fig.suptitle('Few poly(A) clusters are common to only cytosol and '\
                          'nucleus -- as expected', size=20)
 
-    def utr_length(self, for_pie, cell_line):
+    def utr_length(self, for_pie, cell_line, index_dict):
         """
         For one cell-line, plot the difference between the compartments, and
         whole cell + MAX(compartment) for estimation of data integrity.
@@ -965,6 +965,7 @@ class Plotter(object):
         # must be changed. Maybe not colors but stripes? "Screened out" should
         # appear. 
         # TODO INCLUDE absoulte numbers
+
         (fig, axxes) = plt.subplots(1,2)
 
         # Make count and frequency dictionaries 
@@ -1339,11 +1340,19 @@ def utr_length_diff(dsets):
     # Why is coverage of 3UTR so bad in nucleus?????????????
     # Is the loss of polyadenylation in nucleus solely due to low rpkm?
 
+    # Later, you will add (eps_length, utr.RPKM, utr.eps_rel_size) as a tuple.
+    # Make a dictionary for indexing this
+
+    index_dict = {'eps_len':0, 'rpkm':1, 'rel_size':2}
+
     p = Plotter()
 
     # Set for checking of you have enough compartments
     WC_N_C = set(['Whole_Cell', 'Nucleus', 'Cytoplasm'])
-    length_dict = {}
+
+    # a super-pie-dict for each cell_line
+    super_pie = {}
+
     for cell_line, comp_dict in dsets['cell lines'].items():
 
         # Skip empty ones
@@ -1352,11 +1361,15 @@ def utr_length_diff(dsets):
 
         # check if this cell line has at least (WC, Nuc, and Cyt)
         if not WC_N_C.issubset(comp_dict.keys()):
-            print('Not enough compartments for comparison. Skipping.')
+            print('Not enough compartments for comparison for {0}. Skipping.'\
+                 .format(cell_line))
             continue
+
+        length_dict = {}
 
         # Get all combinations of the compartments and whole-cell compartments
         all_combs = list(combins(comp_dict.keys(), 2))
+
         for (compartment, utrs) in comp_dict.iteritems():
 
             # Set the name ... should be a more standardized way of doing that.
@@ -1393,12 +1406,11 @@ def utr_length_diff(dsets):
         v_low_rpkm = 0.1 # if below this, consider as 'not expressed'
 
         # Make another dict with the length-differences themselves 
-        for_pie = {'Same length': [],
-                   'Undetermined': [],
-                   'Different length': [],
-                   'Not expressed': [],
-                   'Lowly expressed': []}
-
+        for_pie = {'Same length': {},
+                   'Undetermined': {},
+                   'Different length': {},
+                   'Not expressed': {},
+                   'Lowly expressed': {}}
 
         # Get the index of the whole cell datapoint in the tuple
         for (utr_id, lpm) in length_dict.iteritems():
@@ -1426,24 +1438,24 @@ def utr_length_diff(dsets):
             # If non are expressed anywhere, or have VERY low expression 
             # -> 'Not expressed'
             if noNArpkms == []:
-                for_pie['Not expressed'].append((utr_id, lpm))
+                for_pie['Not expressed'][utr_id] = lpm
                 continue
 
             # If the maximum rpkm is lower than the set minimum
             # -> 'Low RPKM'
             # the checks so far
             if max(noNArpkms) < rpkm_min:
-                for_pie['Lowly expressed'].append((utr_id, lpm))
+                for_pie['Lowly expressed'][utr_id] = lpm
                 continue
 
             # If one is NA and the rest are 6 and 9?
             # => 'Different length'.
             if (Clen == 'NA') and (Nrpkm > rpkm_min and WCrpkm > rpkm_min):
-                for_pie['Different length'].append((utr_id, lpm))
+                for_pie['Different length'][utr_id] = lpm
                 continue
 
             if (Nlen == 'NA') and (Crpkm > rpkm_min and WCrpkm > rpkm_min):
-                for_pie['Different length'].append((utr_id, lpm))
+                for_pie['Different length'][utr_id] = lpm
                 continue
 
             # If any of the comps have 'NA' and have not been picked up by now, or
@@ -1451,7 +1463,7 @@ def utr_length_diff(dsets):
             # -> 'Undetermined'
             # add the rpkms if you want to check it out later
             if 'NA' in eps_rel or WCrpkm < v_low_rpkm:
-                for_pie['Undetermined'].append((utr_id, lpm))
+                for_pie['Undetermined'][utr_id] = lpm
                 continue
 
             # All differences in relative and absolute length
@@ -1461,14 +1473,14 @@ def utr_length_diff(dsets):
             # If they have a relative length within 10% or 100nt variation
             # -> 'same length'
             if max(reldiffs) < 0.1 or max(absdiffs) < 100:
-                for_pie['Same length'].append((utr_id, lpm))
+                for_pie['Same length'][utr_id] = lpm
                 continue
             # If not, check if whole cell supports the longest.
             else:
                 # Finally check if some of them have too low RPKM to be caught by
                 # the checks so far
                 if min(noNArpkms) < rpkm_min:
-                    for_pie['Lowly expressed'].append((utr_id, lpm))
+                    for_pie['Lowly expressed'][utr_id] = lpm
                     continue
 
                 # The distance from WC to the smallest length must be 80% or more
@@ -1478,7 +1490,7 @@ def utr_length_diff(dsets):
                 comp_reldist = abs(Cepsrel - Nepsrel) # eg 0.4
                 # hey, did I lose my favorite case???
                 if wc_compmin_reldist > 0.8*comp_reldist:
-                    for_pie['Different length'].append((utr_id, lpm))
+                    for_pie['Different length'][utr_id] = lpm
                     continue
 
                 # WC could be low by accident of PCR. If the other two are 200 nt or
@@ -1486,29 +1498,132 @@ def utr_length_diff(dsets):
                 comp_absdist = abs(Clen - Nlen) #absolute distance
                 comp_minrpkms = min(Crpkm, Nrpkm) # minimum rpkm
                 if (comp_absdist > 200 or comp_reldist > 0.2) and comp_minrpkms < 3:
-                    for_pie['Different length'].append((utr_id, lpm))
+                    for_pie['Different length'][utr_id] = lpm
                     continue
 
                 # If not close enough, you cannot determine
                 # -> 'Undetermined'
                 else:
-                    for_pie['Undetermined'].append((utr_id, lpm))
+                    for_pie['Undetermined'][utr_id] = lpm
                     continue
                     # eg 0.08, the upper limit for wc
 
-            # If you make it here, I'd be very interested in how to file you! :)
+            # If you make it here, I'd be very interested in how to classify you! :)
             debug()
+
+        # Add to super-pie for across-cell_line comparison
+        super_pie[cell_line] = for_pie
 
         # only send the lp part of for_pie to the plotter
         for_pie_plot = {}
-        for (category, id_lpmlist) in for_pie.items():
-            for_pie_plot[category] = [entr[1] for entr in id_lpmlist]
+        for (category, lpm_dict) in for_pie.items():
+            for_pie_plot[category] = lpm_dict.values()
 
-        p.utr_length(for_pie_plot, cell_line)
+        # plot each pie
+        #p.utr_length(for_pie_plot, cell_line, index_dict)
 
         # TODO compare the 'for_pie' dict for the different cell lines
         # Save the UTR ID as part of the set and compare them; are they in
         # common? Do they go the same way?
+
+    # If you have more than 1 cell line, start comparing them
+    compare_pies(super_pie)
+
+    debug()
+
+def compare_pies(super_pie):
+    """
+    Look for 3UTRs that have different length in all the cell compartments
+    """
+
+    # Dictionary that holds the 3UTRs of different length for each cell line
+    diff_lens = {}
+    for (cell_line, cl_pie) in super_pie.items():
+        diff_lens[cell_line] = set(cl_pie['Different length'].keys())
+
+    # Method: make sets from the UTRs in each pie_dicts, and simply intersect
+    # the dicts. See what comes out.
+    # Get all intersection numbers of 2 or more couples. Also get the number of
+    # intersections that would be expected from random.
+
+    # Do it the monte carlo way. Sample randomly from the whole pool of 3UTRs
+    # the number that is in each cell line, and do the same intersection 1000
+    # times, and take a mean and std.
+
+    # Get all combinations of the compartments and whole-cell compartments
+    all_combs = list(combins(super_pie.keys(), 2))
+
+    # Go through all combinations and get the intersection of UTRs
+    isects = {}
+    for comb in all_combs:
+        # list of sets of diff-length utrs from the combination
+        comb_sampl = [set(diff_lens[co]) for co in comb]
+        # for each combination, add the number of intersecting utrs
+        isects['_'.join(comb)] = len(set.intersection(*comb_sampl))
+
+    random_isects = random_intersections(super_pie, diff_lens, all_combs)
+
+    # TODO Check if the common ones have the SAME PATTERN of long-short
+
+    debug()
+
+def random_intersections(super_pie, diff_lens, all_combs):
+    """
+    Return the number of intersections expected by random. Chance from all 3UTRs
+    or chance from all expressed 3UTRs?
+
+    Result: by comparing with all 3UTRs the average is very low, just 1.8. Maybe
+    you have to compare with all expressed ones instead to get a realistic
+    picture?
+    """
+    import random
+
+    counts = dict((cl, len(utr_ids)) for (cl, utr_ids) in diff_lens.items())
+
+    # Those that can be considered expressed
+    expressed = ['Undetermined', 'Same length', 'Different length']
+
+    oggg = []
+
+    # Now you're getting all the expressed from one of them. You should only get
+    # those that are expressed in common.
+
+    # Get the expressed utrs in all cell lines. Then intersect them so you only
+    # sample from the utrs that are commonly expressed
+    expressed_utrs = {}
+    for (cell_line, class_dict) in super_pie.items():
+        cl_expressed_utrs = set()
+
+        for (gog, lendict) in class_dict.items():
+            if gog in expressed:
+                cl_expressed_utrs.update(set(lendict.keys()))
+
+        expressed_utrs[cell_line] = cl_expressed_utrs
+
+    all_utrs = set.intersection(*expressed_utrs.values())
+
+    random_nr = 10000
+
+    r_isects = dict(('_'.join(comb), []) for comb in all_combs)
+
+    for i in range(random_nr):
+
+        #draw as many as 'counts' utrs for each cell line and intersect them
+        r_sampl = dict((cl, random.sample(all_utrs, nr)) for (cl, nr) in
+                    counts.items())
+
+        for comb in all_combs:
+            comb_sampl = [set(r_sampl[co]) for co in comb]
+            # for each combination, add the number of intersecting utrs
+            r_isects['_'.join(comb)].append(len(set.intersection(*comb_sampl)))
+
+    # Return a dictionary of the mean and std of the number of intersections
+    # between the datasets resulting from the random sampling
+    ret_dict = {}
+    for combo, isects in r_isects.items():
+        ret_dict[combo] = {'mean': np.mean(isects), 'std': np.std(isects)}
+
+    return ret_dict
 
 def utr_length_comparison(settings, dsets):
     """
@@ -2801,7 +2916,8 @@ def main():
     # RESULT the before/after ratio is not as informative as we had hoped.
     # I should print out a good few of them that have ratios in the gray zone
     # and check them in the browser. However, this could just mean that the
-    # ratio is not important for classifying ends.
+    # ratio is not important for classifying ends. The cause of this could be
+    # the intrinsic variablity in the read coverage.
     # TODO check it in the browser to see if our intutition is correct ... !:)
     # For the non-beyond_aTTS ones.
 
