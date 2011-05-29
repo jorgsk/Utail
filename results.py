@@ -1009,6 +1009,47 @@ class Plotter(object):
         fig.suptitle('Fraction of 3UTRs with different length in {0}'\
                      .format(cell_line), size=23)
 
+    def compartment_congruence(self, isect_utrs, super_pie):
+        """
+        For utrs that have different length in the different compartments,
+        compare the lengths by plotting.
+        """
+        for (cl_combo, common_utrs) in isect_utrs.items():
+            c_lines = cl_combo.split('+')
+            lengths = {}
+            # For each cell line go through all the utrs and get the lenghts in
+            # cyto and nucleus
+            for utr in common_utrs:
+                lengths[utr] = {}
+                for cline in c_lines:
+                    difflen = super_pie[cline]['Different length']
+                    lengths[utr][cline] = {'cyto': difflen[utr]['Cytoplasm'][0],
+                                           'nucl': difflen[utr]['Nucleus'][0],
+                                           'whole_c':difflen[utr]['Whole_Cell'][0]}
+
+            # Go through the lengths dir and make a simplified version; for each
+            # cell line, print 1 if Cytocol is longest and -1 if nucleus is
+            # longest.
+            simple_diff = {}
+            for (utr, cl_dict) in lengths.items():
+                simple_diff[utr] = {}
+                for (cl, compartments) in cl_dict.items():
+
+                    if compartments['cyto'] > compartments['nucl']:
+                        simple_diff[utr][cl] = 1
+
+                    if compartments['cyto'] < compartments['nucl']:
+                        simple_diff[utr][cl] = -1
+
+            # RESULT: they certainly don't follow the same pattern: they almost
+            # follow the opposite pattern. Is there any dataset bias that cause
+            # HeLa to have cyto longer than nucl, or K562 to have nucl longer
+            # than cyto? Is it part of the over-all trend in the two
+            # differentially expressed ones? You need to make the same table for
+            # each individual cell line (is there a shif)
+            debug()
+
+
 def pairwise_intersect(in_terms_of, dset_dict, cutoff):
     """
     For 'all clusters' and 'annotated clusters', get the intersection with all
@@ -1531,6 +1572,44 @@ def utr_length_diff(dsets):
 
     debug()
 
+def lenbias(diff_lens, super_pie):
+    """
+    Check if the cell lines with different lengths between cytosol and nucleus
+    have any bias in which is longer.
+    """
+    for (cell_line, utrs) in diff_lens.items():
+        cyto_longer = 0
+        nucl_longer = 0
+
+        cyto_rpkm_bigger = 0
+        nucl_rpkm_bigger = 0
+
+        difflen = super_pie[cell_line]['Different length']
+        total_diff = len(difflen)
+        for utr in utrs:
+            if difflen[utr]['Cytoplasm'][0] > difflen[utr]['Nucleus'][0]:
+                cyto_longer +=1
+            if difflen[utr]['Cytoplasm'][0] < difflen[utr]['Nucleus'][0]:
+                nucl_longer +=1
+
+            if difflen[utr]['Cytoplasm'][1] > difflen[utr]['Nucleus'][1]:
+                cyto_rpkm_bigger +=1
+            if difflen[utr]['Cytoplasm'][1] < difflen[utr]['Nucleus'][1]:
+                nucl_rpkm_bigger +=1
+
+
+
+        cyfrac = cyto_longer/total_diff
+        nufrac = nucl_longer/total_diff
+
+        cyrpkmfrac = cyto_rpkm_bigger/total_diff
+        nurpkmfrac = nucl_rpkm_bigger/total_diff
+
+        print('{0}\tcytosol rpkm larger: {1}\n\tnucleus rpkm larger: {2}\n'\
+              .format(cell_line, cyrpkmfrac, nurpkmfrac, total_diff))
+        print('{0}\tcytosol longer: {1}\n\tnucleus longer: {2}\ntotal:\t{3}\n'.\
+              format(cell_line, cyfrac, nufrac, total_diff))
+
 def compare_pies(super_pie):
     """
     Look for 3UTRs that have different length in all the cell compartments
@@ -1540,6 +1619,16 @@ def compare_pies(super_pie):
     diff_lens = {}
     for (cell_line, cl_pie) in super_pie.items():
         diff_lens[cell_line] = set(cl_pie['Different length'].keys())
+
+    # Check the diff_len utrs for bias in the length-difference (is nucleus
+    # always shorter than cytosol, for example).
+    lenbias(diff_lens, super_pie)
+
+    # RESULT there is a clear bias in which compartment is longer between the
+    # two cell lines. What is good, however, is that the RPKM distribution is
+    # the same for both datasets. Conclusion, difference in RPKM distribution
+    # between nucl and cyt don't explain the bias in which compartment is
+    # longest.
 
     # Method: make sets from the UTRs in each pie_dicts, and simply intersect
     # the dicts. See what comes out.
@@ -1551,19 +1640,38 @@ def compare_pies(super_pie):
     # times, and take a mean and std.
 
     # Get all combinations of the compartments and whole-cell compartments
-    all_combs = list(combins(super_pie.keys(), 2))
+    all_combs = []
+    for i in range(2, len(super_pie.keys()) + 1):
+        all_combs += list(combins(super_pie.keys(), i))
 
     # Go through all combinations and get the intersection of UTRs
-    isects = {}
+    isect_nrs = {} # the number of intersecting utsr
+    isect_utrs = {} # the intersecting 3UTRs themselves
     for comb in all_combs:
         # list of sets of diff-length utrs from the combination
         comb_sampl = [set(diff_lens[co]) for co in comb]
         # for each combination, add the number of intersecting utrs
-        isects['_'.join(comb)] = len(set.intersection(*comb_sampl))
+        isect_nrs['+'.join(comb)] = len(set.intersection(*comb_sampl))
+        isect_utrs['+'.join(comb)] = set.intersection(*comb_sampl)
 
+
+    # See how many intersection you would expect between the cell lines by
+    # random sampling of the commonly expressed 3UTRs
     random_isects = random_intersections(super_pie, diff_lens, all_combs)
 
-    # TODO Check if the common ones have the SAME PATTERN of long-short
+    # RESULT YES! They habve 10-20 times more UTRS in common than expected, and
+    # further, all 3 cell lines have some of these in common!
+    # The final test is if they vary in the same direction...!
+
+    # TODO make a table of the distribution of same length, different length,
+    # together with the overall bias for the compartments. Dashing on the
+    # RPKM-bias between the compartments.
+    debug()
+
+    p = Plotter()
+
+    p.compartment_congruence(isect_utrs, super_pie)
+
 
     debug()
 
