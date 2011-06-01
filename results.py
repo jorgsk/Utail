@@ -1,3 +1,4 @@
+# -*- coding: UTF-8 -*-
 """
 Script for displaying and summarizing the results from utail.py.
 """
@@ -17,6 +18,9 @@ import math
 
 import numpy as np
 
+# For making nice tables
+from TableFactory import *
+
 ########################################
 # only get the debug function if run from Ipython #
 def run_from_ipython():
@@ -31,7 +35,7 @@ if run_from_ipython():
     debug = Tracer()
 else:
     def debug():
-        print ('Warning: debugging mark present. This is a bug.')
+        print ('Warning: debugging mark present.')
         pass
 ########################################
 
@@ -354,52 +358,7 @@ class Plotter(object):
         #ax.set_ylim = ylim
         fig.draw()
 
-    def triangleplot_scatter(self, datas, titles):
-        """
-        A scatterplot of multiple variables. Plots all the variables in 'datas'
-        aginst each other. To remove redundancy, only the upper triangle of the
-        matrix is shown.
-        """
-        var_nr = len(datas)
-        plots = range(var_nr)
-
-        fig = plt.figure()
-        axis_nr = 0
-
-        max_plot =  var_nr*var_nr
-
-        # Determine which should have xlabel and which should have ylabel
-        xlables = range(max_plot-var_nr+1, max_plot+1)
-        ylables = range(1, max_plot, var_nr)
-
-        remove_indices = []
-        for v in range(2, var_nr+1):
-            mymax = v*v
-            remove_indices += range(v, mymax, var_nr)
-
-        for indx_1 in plots:
-            for indx_2 in plots:
-                axis_nr += 1
-
-                ax = fig.add_subplot(var_nr, var_nr, axis_nr)
-                if axis_nr not in remove_indices:
-                    ax.scatter(datas[indx_2], datas[indx_1])
-
-                # Set only labels where they should be
-                if axis_nr in xlables:
-                    ax.set_xlabel(titles[indx_2], size=15)
-                if axis_nr in ylables:
-                    ax.set_ylabel(titles[indx_1], size=15)
-
-                # Remove axis when not needed
-                if axis_nr not in xlables:
-                    ax.set_xticks([])
-                if axis_nr not in ylables:
-                    ax.set_yticks([])
-
-        fig.draw()
-
-    def last_three_clustersites(self, clus_list):
+    def last_three_clustersites(self, clus_list, dset_name):
         """
         The input are the last X clusters (counting from the end -- 'first'
         is the last cluster in the utr). You want to make a sublot with two
@@ -446,11 +405,11 @@ class Plotter(object):
 
             n = str(len(plotarray[0]))
 
-
             # Set y limits depending on if log(ratio) or read count
             if plotnr == 1:
                 ax.set_title("The 3'-most poly(A) cluster has most poly(A)"\
-                             "reads and highest drop in coverage", size=25)
+                             "reads and highest drop in coverage\n{0}"\
+                             .format(dset_name), size=25)
                 ax.set_ylim(-3.2, 13.2)
                 ax.set_xticks([])
 
@@ -550,7 +509,7 @@ class Plotter(object):
 
         plt.draw()
 
-    def join_clusters(self, cluster_dicts, titles, in_terms_of):
+    def join_clusters(self, cluster_dicts, titles, in_terms_of, dset_name):
         """
         Show side-by-side the number of clusters with a given read count from
         the dicts where the number of clusters have been obtained by different
@@ -578,10 +537,12 @@ class Plotter(object):
         # matrix and a row-identifer for the matrix
         pairw_all_annot = pairwise_intersect(in_terms_of, dset_dict, cutoff)
 
-
         # Print two figures; one where all_clusters is main and one where
         # annotated_clusters are main
         for (dset_ind, (pairw_matrix, pairw_mrows)) in enumerate(pairw_all_annot):
+            # Skip the ones where annotated clusters are main
+            if dset_ind == 1:
+                continue
 
             cols = ['#0000FF','#3333FF','#4C3380','#8A5CE6','#AD85FF','#AD39FF']
 
@@ -633,7 +594,8 @@ class Plotter(object):
                          for ind in range(bar_nr)]
 
             # 4) put numbers on top of the bars (and skip the 'union' axis)
-            myaxes = [ax_list[0]] + ax_list[2:]
+            #myaxes = [ax_list[0]] + ax_list[2:]
+            myaxes = ax_list[1:]
             for (bars_nr, bars_axes) in enumerate(myaxes):
                 for (rect_nr, rect) in enumerate(bars_axes):
                     height = rect.get_height()
@@ -669,7 +631,7 @@ class Plotter(object):
             ax.set_ylabel('Number of poly(A) clusters')
 
             ax.set_title('Clusters with high coverage are often found in'\
-                         ' supporting data ', size=20)
+                         ' supporting data\n{0}'.format(dset_name), size=22)
 
             legend_titles = [pairw_mrows[0][0]] + [tup[1] for tup in pairw_mrows]
             legend_axes = (ax[0] for ax in ax_list)
@@ -793,7 +755,13 @@ class Plotter(object):
         # present. Potentially make different ranges for the different
         # attributes.
 
-        colors = ['c', 'r', 'b', 'g']
+        #col_nr = len(sensitivities.keys())
+        #color_gen = gen_color()
+        #colors = [tuple(color_gen.next()) for i in range(col_nr)]
+        colors = ['AntiqueWhite', 'Aquamarine', 'BlueViolet', 'Brown', 'Coral',
+                  'CornflowerBlue', 'Cornsilk', 'Crimson', 'Cyan', 'DarkBlue',
+                  'DarkCyan', 'DarkGoldenRod', 'Red']
+
         for atr in attributes:
             int_ranges = intervals[atr]
 
@@ -858,8 +826,8 @@ class Plotter(object):
             # Set xlim so that 
             ax.set_xlim((0.5, max(x_coords)+0.5))
 
-            title = 'We detect most poly(A) clusters for high-RPKM 3UTRs'
-            ax.set_title(title, size=20)
+            title = 'We detect most poly(A) clusters for high-RPKM 3UTRs\n{0}'
+            ax.set_title(title.format(dset), size=22)
 
 
     def rpkm_dependent_epsilon(self, distances, rpkm_intervals, titles, order):
@@ -882,7 +850,7 @@ class Plotter(object):
             for (indx, outp_variable) in enumerate(order):
                 ax = axes[indx]
                 ax.boxplot(outp_dict[outp_variable])
-                ax.set_title(titles[outp_variable])
+                ax.set_ylabel(titles[outp_variable])
 
             # Reduce the space between subplots
             fig.subplots_adjust(hspace=0.1)
@@ -964,19 +932,23 @@ class Plotter(object):
         # TODO aspect ratio is not good. The figures don't come out good. Color
         # must be changed. Maybe not colors but stripes? "Screened out" should
         # appear. 
-        # TODO INCLUDE absoulte numbers
 
         (fig, axxes) = plt.subplots(1,2)
-
-        # Make count and frequency dictionaries 
-        count_dict = dict((name, len(entry)) for (name, entry) in
-                          for_pie.items())
-        total_count = sum(count_dict.values())
-        freq_dict = dict((n, l/total_count) for (n, l) in count_dict.items())
 
         # First plot will only have the expressed vs nonexpressed parts
         expressed = ['Undetermined', 'Same length', 'Different length']
         non_expressed = ['Lowly expressed', 'Not expressed']
+
+        # Make count and frequency dictionaries 
+        count_dict = dict((name, len(entry)) for (name, entry) in
+                          for_pie.items())
+        # Coutn dict for updating labels
+        labelcount = dict((name, len(entry)) for (name, entry) in
+                          for_pie.items())
+        labelcount['Expressed'] = sum([count_dict[exp] for exp in expressed])
+        #
+        total_count = sum(count_dict.values())
+        freq_dict = dict((n, l/total_count) for (n, l) in count_dict.items())
 
         # Get the expressed and non_expressed parts
         # What I need are the fractions and labels of expressed and nonexpressd
@@ -987,10 +959,13 @@ class Plotter(object):
 
         # Sort labels and freqs
         freqs, labels = zip(*sorted(zip(freqs, labels)))
+        # Update labels to hold the absolute numbers as well
+        labels = [lab +' ('+str(labelcount[lab])+')' for lab in labels]
 
         # Frequencies of the above
         ax = axxes[0]
-        ax.pie(freqs, labels=labels, autopct='%1.1f%%', shadow=True)
+        cols = ['r', 'g', 'b']
+        ax.pie(freqs, labels=labels, autopct='%1.1f%%', colors=cols, shadow=True)
         ax.set_title('All 3UTRs', size=20)
 
         # Second plot is for the details of the expressed 3UTRs
@@ -1002,52 +977,190 @@ class Plotter(object):
 
         # Sort piefracs, explode, and labels according to piefracs
         piefracs, labels = zip(*sorted(zip(piefracs, labels), reverse=True))
-        ax.pie(piefracs, labels=labels, autopct='%1.1f%%', shadow=True)
+        col = {'Same length': 'b', 'Different length':'#FFFF00',
+                'Undetermined': '#000000'}
+        cols = [col[lab] for lab in labels]
+        # Update labels to hold the absolute numbers as well
+        labels = [lab +' ('+str(labelcount[lab])+')' for lab in labels]
+        ax.pie(piefracs, labels=labels, colors=cols, autopct='%1.1f%%', shadow=True)
         ax.set_title('Expressed 3UTRs', size=20)
 
         # Set figure super-title
-        fig.suptitle('Fraction of 3UTRs with different length in {0}'\
-                     .format(cell_line), size=23)
+        fig.suptitle(cell_line, size=22)
+        # can you add the total number after the labels? WholeCell (2001)
 
-    def compartment_congruence(self, isect_utrs, super_pie):
+    def compartment_congruence_table(self, isect_utrs, random_isects, super_pie, bias):
         """
         For utrs that have different length in the different compartments,
         compare the lengths by plotting.
         """
+
+        # TABLE 1 JUST THE CELL LINES -- NO TALK OF INTERSECTION
+        # First make a table of the different cell line lengths
+        alones = RowSpec(
+            ColumnSpec('cell_line', 'Cell line', width=1),
+            ColumnSpec('diflen_nr', 'Total 3UTRs w/different length', width=1),
+            ColumnSpec('long_nuc', 'Percent longest in nucleus', width=1),
+            ColumnSpec('long_cyt', 'Percent longest in cytosol', width=1),
+            ColumnSpec('rpkm_nuc', 'Percent highest RPKM in nucleus', width=1),
+            ColumnSpec('rpkm_cyt', 'Percent highest RPKM in cytosol', width=1))
+
+        rows = []
+        # Getting the table row-values
+        for cell_line, stat_dict in bias.items():
+            diflen_nr = len(super_pie[cell_line]['Different length'])
+
+            cyt_frac = format(stat_dict['Cytosol-longest']*100, '.0f')+ ' %'
+            nuc_frac = format(stat_dict['Nucleus-longest']*100, '.0f')+ ' %'
+
+            cyt_rpkm = format(stat_dict['Cytosol RPKM largest']*100, '.0f')+ ' %'
+            nuc_rpkm = format(stat_dict['Nucleus RPKM largest']*100, '.0f') + ' %'
+
+            rows.append(alones({'cell_line': cell_line,
+                                'diflen_nr': diflen_nr,
+                                'long_nuc': nuc_frac,
+                                'long_cyt': cyt_frac,
+                                'rpkm_nuc': nuc_rpkm,
+                                'rpkm_cyt': cyt_rpkm}))
+
+        # Writing the table itself
+        outfile = open('table1.pdf', 'wb')
+        mytable = PDFTable('Tab1', 'test', headers = [alones]).render(rows)
+        outfile.write(mytable)
+        outfile.close()
+
+        # TABLE 2: The UTRS that intersect
+        # Make a the columns for the table
+        tog_rows = []
+        together = RowSpec(
+            ColumnSpec('cell_combo', 'Intersection', width=2),
+            ColumnSpec('common_nr', 'Total 3UTRs in common', width=1),
+            ColumnSpec('samplr_nr', 'Common 3UTRs by sampling', width=1),
+            ColumnSpec('same_way', 'Same direction of lengthening', width=1))
+
+        al_rows = []
+        # TABLE 3: The UTRS that intersect -- but each alone
+        alone = RowSpec(
+            ColumnSpec('cell_line', 'Cell line', width=2),
+            ColumnSpec('long_nuc', 'Longest in nucleus', width=1),
+            ColumnSpec('long_cyt', 'Longest in cytosol', width=1),
+            ColumnSpec('rpkm_nuc', 'Highest RPKM in nucleus', width=1),
+            ColumnSpec('rpkm_cyt', 'Highest RPKM in cytosol', width=1))
+
         for (cl_combo, common_utrs) in isect_utrs.items():
             c_lines = cl_combo.split('+')
-            lengths = {}
-            # For each cell line go through all the utrs and get the lenghts in
-            # cyto and nucleus
+
+            cell_combo = cl_combo
+            common_nr = len(common_utrs)
+            randd = random_isects[cl_combo]
+            samplr_nr = format(randd['mean'], '.1f') + ' +/- '\
+            + format(randd['std'], '.1f')
+
+            # Get how many go the same way, and how many go different ways
+            same_way = 0
             for utr in common_utrs:
-                lengths[utr] = {}
+                direction = []
                 for cline in c_lines:
                     difflen = super_pie[cline]['Different length']
-                    lengths[utr][cline] = {'cyto': difflen[utr]['Cytoplasm'][0],
-                                           'nucl': difflen[utr]['Nucleus'][0],
-                                           'whole_c':difflen[utr]['Whole_Cell'][0]}
+                    if difflen[utr]['Cytoplasm'][0] > difflen[utr]['Nucleus'][0]:
+                        direction.append(1)
+                    else:
+                        direction.append(-1)
 
-            # Go through the lengths dir and make a simplified version; for each
-            # cell line, print 1 if Cytocol is longest and -1 if nucleus is
-            # longest.
-            simple_diff = {}
-            for (utr, cl_dict) in lengths.items():
-                simple_diff[utr] = {}
-                for (cl, compartments) in cl_dict.items():
+                if len(set(direction)) == 1:
+                    same_way +=1
 
-                    if compartments['cyto'] > compartments['nucl']:
-                        simple_diff[utr][cl] = 1
+            tog_rows.append(together({'cell_combo': cell_combo,
+                                'common_nr': common_nr,
+                                'samplr_nr': samplr_nr,
+                                'same_way': same_way}))
 
-                    if compartments['cyto'] < compartments['nucl']:
-                        simple_diff[utr][cl] = -1
+            # Go through the cell lines in this combo, adding their values
+            for cline in c_lines:
+                cyto_longer = 0
+                nucl_longer = 0
+                cyto_rpkm_bigger = 0
+                nucl_rpkm_bigger = 0
 
+                difflen = super_pie[cline]['Different length']
+
+                for utr in common_utrs:
+
+                    if difflen[utr]['Cytoplasm'][0] >= difflen[utr]['Nucleus'][0]:
+                        cyto_longer +=1
+                    else:
+                        nucl_longer +=1
+
+                    if difflen[utr]['Cytoplasm'][1] >= difflen[utr]['Nucleus'][1]:
+                        cyto_rpkm_bigger +=1
+                    else:
+                        nucl_rpkm_bigger +=1
+
+                cyfrac = format(100*cyto_longer/common_nr, '.0f') +'%'
+                nufrac = format(100*nucl_longer/common_nr, '.0f') +'%'
+
+                cyrpkm = format(100*cyto_rpkm_bigger/common_nr, '.0f') +'%'
+                nurpkm = format(100*nucl_rpkm_bigger/common_nr, '.0f') +'%'
+
+                al_rows.append(alone({'cell_line': cline,
+                                    'long_nuc': cyfrac,
+                                    'long_cyt': nufrac,
+                                    'rpkm_nuc': cyrpkm,
+                                    'rpkm_cyt': nurpkm}))
+
+        debug()
+        # Writing the table itself
+        outfile = open('table2.pdf', 'wb')
+        mytable = PDFTable('Tab2', 'tust', headers=[together]).render(tog_rows)
+        outfile.write(mytable)
+        outfile.close()
+
+        outfile = open('table3.pdf', 'wb')
+        mytable = PDFTable('Tab3', 'tast', headers=[alone]).render(al_rows)
+        outfile.write(mytable)
+        outfile.close()
             # RESULT: they certainly don't follow the same pattern: they almost
             # follow the opposite pattern. Is there any dataset bias that cause
             # HeLa to have cyto longer than nucl, or K562 to have nucl longer
             # than cyto? Is it part of the over-all trend in the two
             # differentially expressed ones? You need to make the same table for
             # each individual cell line (is there a shif)
+
+            # Finally, make plots of the lengths of those in common? Plot the
+            # length of whole cell, nucleus, and cytoplasm for all
+
+    def isect_utrs_lengths(self, isect_utrs, super_pie):
+        """
+        Plot the lenghts of those 3UTRs that intersect. Show 10 random 3UTRs if
+        the number of intersecting 3UTRs is above 10.
+        """
+
+        # make one plot per intersection
+        for (cl_combo, utrs) in iseect_utrs.items():
+
             debug()
+            (fig, ax) = plt.subplots()
+
+            ## the arbitrary x axis range
+            ind = range(1, len(isect_utrs)+1)
+
+            #ax.bar(ind, counter, align = 'center', facecolor='#777777', width=0.5)
+
+            #ax.set_title('Distribution of read counts of poly(A) cluster for {0}'\
+                         #.format(my_title))
+
+            #ax.set_xlim((0, cutoff+1))
+            #ax.set_ylim((0, max_height + 0.2*max_height))
+            #ax.set_yticks(range(0, int(math.ceil(max_height+0.2*max_height)), 1000))
+            #ax.yaxis.grid(True)
+        debug()
+
+    def compartment_congruence_barplot(self, isect_utrs, super_pie):
+        """
+        For each intersection of diff-len 3UTRS, plot the fraction of
+        cytosol-longest 3UTRs for each compartment + those only in the fraction.
+        """
+        pass
 
 
 def pairwise_intersect(in_terms_of, dset_dict, cutoff):
@@ -1223,7 +1336,7 @@ def get_clusters(settings):
 
     return clusters
 
-def get_utrs(settings, svm=False):
+def get_utrs(settings,speedrun=False, svm=False):
     """
     Return a list of UTR instances. Each UTR instance is
     instansiated with a list of UTR objects and the name of the datset.
@@ -1246,7 +1359,7 @@ def get_utrs(settings, svm=False):
 
     """
     # Define your 'cell lines' and 'compartments' variable names: the datasets
-    # will be scanned for these
+    # will be scanned for these. Soo this must be manually updated.
     cell_lines = ['K562', 'K562_Minus', 'HeLa', 'GM12878']
     compartments = ['Whole_Cell', 'Nucleus', 'Cytoplasm', 'Chromatin']
 
@@ -1264,6 +1377,11 @@ def get_utrs(settings, svm=False):
     # Check if all length files exist or that you have access
     [verify_access(f) for f in length_files.values()]
 
+    #
+    if speedrun:
+        maxreads = 1000
+
+    linenr = 0
     for dset_name in settings.datasets:
 
         lengthfile = open(length_files[dset_name], 'rb')
@@ -1274,11 +1392,19 @@ def get_utrs(settings, svm=False):
         c_header = clusterfile.next()
 
         # Create the utr objects from the length file
-        utr_dict = dict((line.split()[5], UTR(line)) for line in lengthfile)
+        utr_dict = {}
+        for (linenr, line) in enumerate(lengthfile):
+            # If a speedrun, limit the nr of 3UTRs to read.
+            if speedrun:
+                if linenr > maxreads:
+                    break
+            # key = utr_ID, value = UTR instance
+            utr_dict[line.split()[5]] = UTR(line)
 
         # Add cluster objects to the utr objects (line[3] is UTR_ID
         for line in clusterfile:
-            utr_dict[line.split()[3]].clusters.append(Cluster(line))
+            if line.split()[3] in utr_dict:
+                utr_dict[line.split()[3]].clusters.append(Cluster(line))
 
         # Update the UTRs
         for (utr_id, utr_obj) in utr_dict.iteritems():
@@ -1317,6 +1443,14 @@ def get_utrs(settings, svm=False):
                 for cln in cell_lines:
                     if cln in dset_name:
                         dsets['compartments'][comp][cln] = utr_dict
+
+    # Remove non-present cell lines or compartments
+    for (comp, compdict) in dsets['compartments'].items():
+        if compdict == {}:
+            dsets['compartments'].pop(comp)
+    for (cl, cldict) in dsets['cell lines'].items():
+        if cldict == {}:
+            dsets['cell lines'].pop(cl)
 
     return dsets
 
@@ -1412,9 +1546,6 @@ def utr_length_diff(dsets):
         all_combs = list(combins(comp_dict.keys(), 2))
 
         for (compartment, utrs) in comp_dict.iteritems():
-
-            # Set the name ... should be a more standardized way of doing that.
-            dset_name = cell_line +' '+ compartment
 
             for (utr_id, utr) in utrs.iteritems():
 
@@ -1535,7 +1666,8 @@ def utr_length_diff(dsets):
                     continue
 
                 # WC could be low by accident of PCR. If the other two are 200 nt or
-                # more apart and have high enough RPKM, keep them
+                # more apart and have high enough RPKM, keep them. Choose rpkm=2
+                # for more hits ...
                 comp_absdist = abs(Clen - Nlen) #absolute distance
                 comp_minrpkms = min(Crpkm, Nrpkm) # minimum rpkm
                 if (comp_absdist > 200 or comp_reldist > 0.2) and comp_minrpkms < 3:
@@ -1563,13 +1695,116 @@ def utr_length_diff(dsets):
         # plot each pie
         #p.utr_length(for_pie_plot, cell_line, index_dict)
 
-        # TODO compare the 'for_pie' dict for the different cell lines
-        # Save the UTR ID as part of the set and compare them; are they in
-        # common? Do they go the same way?
+    # Quick -- what is the percent of overlap between the sections, including
+    # 'expressed'?
+    #classification_overlap(super_pie) TODO
 
     # If you have more than 1 cell line, start comparing them
-    compare_pies(super_pie)
+    #compare_pies(super_pie) TODO
 
+    debug()
+
+def wc_is_n_plus_c(dsets):
+    """
+    Your assumption is that whole cell is n + c. This means that the length of
+    whole cell should often be between n or c. Is this true?
+    """
+    lengths = {}
+    for (cell_line, comp_dict) in dsets['cell lines'].items():
+        lengths[cell_line] = {}
+        for (compartment, utrs) in comp_dict.items():
+            for (utr_id, utr) in utrs.iteritems():
+
+                # Skip the small-rpkm utrs
+                if utr.RPKM < 1:
+                    continue
+
+                # Get the absolute 3UTR length determined by epsilon
+                if utr.eps_rel_size != 'NA':
+                    eps_length = utr.eps_rel_size*utr.length
+                else:
+                    eps_length = 'NA'
+
+                # Add compartment name, length, and rpkm information
+                if utr_id not in lengths[cell_line]:
+                    lengths[cell_line][utr_id] = {compartment: eps_length}
+                else:
+                    lengths[cell_line][utr_id][compartment] = eps_length
+
+    # Go through all the compartments. Count if whole cell length is lower,
+    # bigger, or in the middle of the two compartments.
+
+    #countdict = {}
+    #abs_dist_dict = {} # also get the absolute differences for the different cases
+
+    #for (cell_line, utrs) in lengths.items():
+
+        #countdict[cell_line] = {'low':0, 'mid':0, 'big':0}
+        #abs_dist_dict[cell_line] = {'low':[], 'mid':[], 'big':[]}
+
+        #for (utr_id, c_d) in utrs.iteritems():
+            ##Skip those that don't have all compartments
+            #if len(c_d) < 3:
+                #continue
+
+            #if c_d['Whole_Cell'] < min(c_d['Nucleus'], c_d['Cytoplasm']):
+                #countdict[cell_line]['low'] += 1
+
+                #abs_dist = c_d['Whole_Cell'] - min(c_d['Nucleus'], c_d['Cytoplasm'])
+                #abs_dist_dict[cell_line]['low'].append(abs_dist)
+
+            #elif c_d['Whole_Cell'] > max(c_d['Nucleus'], c_d['Cytoplasm']):
+                #countdict[cell_line]['big'] += 1
+
+                #abs_dist = c_d['Whole_Cell'] - max(c_d['Nucleus'], c_d['Cytoplasm'])
+                #abs_dist_dict[cell_line]['big'].append(abs_dist)
+
+            #else:
+                #countdict[cell_line]['mid'] += 1
+
+                #mid = (2*c_d['Whole_Cell']-c_d['Nucleus']-c_d['Cytoplasm'])/2
+                #abs_dist_dict[cell_line]['mid'].append(mid)
+
+    #avrg_dist_dict = {}
+    #for (cl, ddict) in abs_dist_dict.items():
+        #avrg_dist_dict[cl] = dict((n, sum(o)/len(o)) for (n, o) in
+                                  #ddict.iteritems())
+
+    # NOTE you stopped to investigate extensions. What purpose is there to
+    # measure this when almost all of them have abs_length 1 or 0.999?
+
+    #ALSO! what are the distances for the min, max, and medium lengths??
+    minmax = {} # ALSO! get min max distances
+    for (cell_line, utrs) in lengths.items():
+        minmax[cell_line] = []
+        for (utr_id, c_d) in utrs.iteritems():
+            #Skip those that don't have all compartments
+            if len(c_d) < 3:
+                continue
+
+            #minmax[cell_line].append(max(c_d.values())-min(c_d.values()))
+            minmax[cell_line].append(abs((c_d['Nucleus']-c_d['Cytoplasm'])))
+
+    for (cl, mm) in minmax.items():
+        print(cl)
+        print('Mean min-max distance: {0} +/- {1}'.format(np.mean(mm),
+                                                         np.std(mm)))
+        fig, ax = plt.subplots()
+        ax.boxplot(mm)
+        ax.set_title('Max-min distance for cytosol and nucleus\n{0}'.format(cl))
+
+    # RESULT Mean min-max distance: 29.9979385274 +/- 66.2790973153
+    # For RPKM > 1. This lends credance to not accepting 3UTRs as of different
+    # length when the distance is less than 100 nt :)
+    # RESULT: min-max for CYTOPLASM AND NUCLEUS only are 22. +/- 58
+    debug()
+
+def classification_overlap(super_pie):
+    """
+    3UTRs are classified into 'Expressed', 'Different length', etc. What is the
+    degree of overlap between each of these classifications between the cell
+    lines?
+    """
     debug()
 
 def lenbias(diff_lens, super_pie):
@@ -1577,6 +1812,7 @@ def lenbias(diff_lens, super_pie):
     Check if the cell lines with different lengths between cytosol and nucleus
     have any bias in which is longer.
     """
+    bias = {}
     for (cell_line, utrs) in diff_lens.items():
         cyto_longer = 0
         nucl_longer = 0
@@ -1597,18 +1833,24 @@ def lenbias(diff_lens, super_pie):
             if difflen[utr]['Cytoplasm'][1] < difflen[utr]['Nucleus'][1]:
                 nucl_rpkm_bigger +=1
 
-
-
         cyfrac = cyto_longer/total_diff
         nufrac = nucl_longer/total_diff
 
         cyrpkmfrac = cyto_rpkm_bigger/total_diff
         nurpkmfrac = nucl_rpkm_bigger/total_diff
 
+        bias[cell_line] = {'Cytosol-longest': cyfrac,
+                           'Nucleus-longest': nufrac,
+                           'Cytosol RPKM largest': cyrpkmfrac,
+                           'Nucleus RPKM largest': nurpkmfrac,
+                          }
+
         print('{0}\tcytosol rpkm larger: {1}\n\tnucleus rpkm larger: {2}\n'\
               .format(cell_line, cyrpkmfrac, nurpkmfrac, total_diff))
         print('{0}\tcytosol longer: {1}\n\tnucleus longer: {2}\ntotal:\t{3}\n'.\
               format(cell_line, cyfrac, nufrac, total_diff))
+
+    return bias
 
 def compare_pies(super_pie):
     """
@@ -1622,7 +1864,7 @@ def compare_pies(super_pie):
 
     # Check the diff_len utrs for bias in the length-difference (is nucleus
     # always shorter than cytosol, for example).
-    lenbias(diff_lens, super_pie)
+    bias = lenbias(diff_lens, super_pie)
 
     # RESULT there is a clear bias in which compartment is longer between the
     # two cell lines. What is good, however, is that the RPKM distribution is
@@ -1654,24 +1896,27 @@ def compare_pies(super_pie):
         isect_nrs['+'.join(comb)] = len(set.intersection(*comb_sampl))
         isect_utrs['+'.join(comb)] = set.intersection(*comb_sampl)
 
-
     # See how many intersection you would expect between the cell lines by
     # random sampling of the commonly expressed 3UTRs
     random_isects = random_intersections(super_pie, diff_lens, all_combs)
 
-    # RESULT YES! They habve 10-20 times more UTRS in common than expected, and
+    # RESULT YES! They have 10-20 times more UTRS in common than expected, and
     # further, all 3 cell lines have some of these in common!
     # The final test is if they vary in the same direction...!
+
+    p = Plotter()
 
     # TODO make a table of the distribution of same length, different length,
     # together with the overall bias for the compartments. Dashing on the
     # RPKM-bias between the compartments.
-    debug()
 
-    p = Plotter()
+    #p.compartment_congruence_table(isect_utrs, random_isects, super_pie, bias)
+    #p.compartment_congruence_barplot(isect_utrs, super_pie)
 
-    p.compartment_congruence(isect_utrs, super_pie)
-
+    # If you intersect 3 or more cell lines, specifically plot those that
+    # intersect for all cell lines. Plot WC, N, and C, including RPKM somewhere,
+    # for all of them!
+    p.isect_utrs_lengths(isect_utrs, super_pie)
 
     debug()
 
@@ -1691,8 +1936,6 @@ def random_intersections(super_pie, diff_lens, all_combs):
     # Those that can be considered expressed
     expressed = ['Undetermined', 'Same length', 'Different length']
 
-    oggg = []
-
     # Now you're getting all the expressed from one of them. You should only get
     # those that are expressed in common.
 
@@ -1710,9 +1953,9 @@ def random_intersections(super_pie, diff_lens, all_combs):
 
     all_utrs = set.intersection(*expressed_utrs.values())
 
-    random_nr = 10000
+    random_nr = 1000
 
-    r_isects = dict(('_'.join(comb), []) for comb in all_combs)
+    r_isects = dict(('+'.join(comb), []) for comb in all_combs)
 
     for i in range(random_nr):
 
@@ -1723,7 +1966,7 @@ def random_intersections(super_pie, diff_lens, all_combs):
         for comb in all_combs:
             comb_sampl = [set(r_sampl[co]) for co in comb]
             # for each combination, add the number of intersecting utrs
-            r_isects['_'.join(comb)].append(len(set.intersection(*comb_sampl)))
+            r_isects['+'.join(comb)].append(len(set.intersection(*comb_sampl)))
 
     # Return a dictionary of the mean and std of the number of intersections
     # between the datasets resulting from the random sampling
@@ -1763,7 +2006,7 @@ def utr_length_comparison(settings, dsets):
     # with different utrs, supported by poly(A) reads!!!11
 
     # Make a simple boxplot of all the relative lengths above a certain rpkm
-    #simple_length_boxplot(dsets, minRPKM=2)
+    #simple_length_boxplot(dsets, minRPKM=2) # BUSTED
 
     # PLOT 1 Box plot of distances from annotated end as function of RPKM
     #rpkm_dependent_distance_from_end(dsets)
@@ -1830,8 +2073,8 @@ def rpkm_dependent_distance_from_end(dsets):
     #rpkm_intervals = [(0,1), (1,'inf')]
     # The output variables
     outp_vars = set(['eps_rel_size', 'eps_abs_size', 'length', 'eps_remainder'])
-    titles = {'eps_rel_size': 'Relative epsilon length', 'eps_abs_size':
-              'Absolute epsilon length', 'length': 'Length of 3UTR',
+    titles = {'eps_rel_size': 'Relative length by read coverage', 'eps_abs_size':
+              'Absolute epsilon length', 'length': 'Length of 3UTR in annotation',
               'eps_remainder': 'Distance from epsilon_end to annotated end'}
     # set the order in which you want the plots
     #order = ['length', 'eps_abs_size', 'eps_remainder', 'eps_rel_size']
@@ -1938,6 +2181,8 @@ def udstream_coverage_last_clusters(dsets):
             clrs_nr = 3
             clus_list = [{'ud_ratio':[], 'support':[]} for val in range(clrs_nr)]
 
+            dset_name = cell_line +' '+ compartment
+
             for (utr_id, utr) in utrs.iteritems():
 
                 if utr.cluster_nr < clrs_nr:
@@ -1997,7 +2242,7 @@ def udstream_coverage_last_clusters(dsets):
                     clus_list[indx]['support'].append(norm_supp)
 
             # Do teh plots
-            p.last_three_clustersites(clus_list)
+            p.last_three_clustersites(clus_list, dset_name)
              #RESULT you see the trend you imagined.
 
 def correlate_polyA_coverage_counts(dsets, super_clusters):
@@ -2092,7 +2337,7 @@ def compare_cluster_evidence(dsets, super_clusters, dset_2super):
                         else:
                             annot_read_counter[cls.nr_support_reads] = [keyi]
 
-                    # Clusters in other datasets
+                    # Clusters in other datasets TODO broken somehow.
                     if cls.nr_support_reads in other_dsets:
                         all_key = dset_2super[keyi] # the in-between key
                         for (dn, sup_reads) in zip(*super_clusters[all_key]):
@@ -2105,7 +2350,7 @@ def compare_cluster_evidence(dsets, super_clusters, dset_2super):
             cluster_dicts = (all_read_counter, svm_support, annot_read_counter)
             titles = ('All clusters', 'SVM_support', 'Annotated_TTS')
 
-            #clusters = (all_read_counter, svm_support, annot_read_counter,
+            #cluster_dicts = (all_read_counter, svm_support, annot_read_counter,
                         #other_dsets)
             #titles = ('All clusters', 'SVM_support', 'Annotated_TTS',
                       #'In_other_compartments')
@@ -2114,53 +2359,10 @@ def compare_cluster_evidence(dsets, super_clusters, dset_2super):
             # TTS sites
 
             in_terms_of = (titles[0], titles[2])
-            p.join_clusters(cluster_dicts, titles, in_terms_of)
+            p.join_clusters(cluster_dicts, titles, in_terms_of, dset_name)
 
     plt.draw()
 
-
-def output_control(settings, dsets):
-    """
-    Control: what is the correlation between # supporting reads; change in
-    coverage; PAS-type; PAS-distance; and rpkm?
-    """
-    p = Plotter()
-
-    # TRIANGLE PLOT ##
-
-    for dset in dsets.itervalues():
-
-        nr_supp_reads = []
-        covrg_down = []
-        covrg_up = []
-        rpkm = []
-
-        for (utr_id, utr) in dset.utrs.iteritems():
-
-            # For all polyA clusters get
-            # 1) NR of supporting reads
-            # 2) Coverage downstream
-            # 3) Coverage upstream
-            # 4) RPKM
-
-            for cls in utr.clusters:
-                nr_supp_reads.append(cls.nr_support_reads)
-                covrg_down.append(cls.dstream_covrg)
-                covrg_up.append(cls.ustream_covrg)
-                rpkm.append(utr.RPKM)
-
-        # Titles for the above variables
-        titles = ['Nr Supporting Reads', 'Downstream Coverage',
-                  'Upstream Coverage', 'RPKM']
-
-        array = [nr_supp_reads, covrg_down, covrg_up, rpkm]
-        p.triangleplot_scatter(array, titles)
-
-     #For the ones with 1, 2, 3, 4, ... polyA sites:
-        #1) box-plots of the ratio of downstream/upstream 
-        #2) box-plots of the # of covering reads
-
-     #Upstream/downstream ratios of polyA sites.
 
 def recovery_sensitivity(dsets):
     """
@@ -2319,18 +2521,39 @@ def wc_compartment_reproducability(dsets, super_clusters, dset_2super):
     p = Plotter()
     p.wc_compartment(co_occurence)
 
+def novel_polyAs(dsets, super_clusters, dset_2super):
+    """
+    For each cell line, what are the novel poly(A) sites?
 
-def polyadenylation_comparison(settings, dsets, super_clusters, dset_2super):
+    Accept 2> reads OR 1 read if supported by PAS or SVM
+    """
+
+    debug()
+    # Count novel poly(A) sites indexed by 
+
+    # 1) For each cell line, make a utr_novel_PA dict:
+        # utr_novelPA[utr] = {super_cluster} = {'max_coverage', 'support in # of
+        # compartments', 'in_annotation', 'has_PAS', 'has_SVM'}
+    # 2) Go through each compartment
+    # 3) Go through all utrs
+    # 4) Store the utr's dset_2super-linked cluster, with read_coverage
+    # 5) If the dset_2super is already there, update read coverage if higher,
+    # and also update that it's found in 2 or more compartments
+
+def polyadenylation_comparison(dsets, super_clusters, dset_2super):
     """
     * compare 3UTR polyadenylation in general
     * compare 3UTR polyadenylation UTR-to-UTR
     """
 
+    #### Novel polyA sites in annotated 3UTRS
+    novel_polyAs(dsets, super_clusters, dset_2super)
+
     #### Compare the compartments; how many annotated do we find? etc.
-    compare_cluster_evidence(dsets, super_clusters, dset_2super)
+    #compare_cluster_evidence(dsets, super_clusters, dset_2super)
 
     #### Get the sensitivity rates for of recovery of poly(A) clusters
-    recovery_sensitivity(dsets)
+    #recovery_sensitivity(dsets)
 
     #### Get the reproducibility rate of poly(A) clusters for each compartment
     #### compared to whole cell (if it is in on of the compartment, it should
@@ -2945,47 +3168,102 @@ def before_after_ratio(dsets):
 
 def rpkm_dist(dsets):
     """
-    Simply plot the rpkms of the different datasets
+    Simply plot the rpkms of the different datasets. Each row is a cell line and
+    each column is a compartment.
     """
-    thresh = 50
-    axis_list = []
-    for (cell_line, compartment_dict) in dsets['cell lines'].items():
-        for (compartment, utrs) in compartment_dict.items():
+    #thresh = 0
+    cl_max = len(dsets['cell lines'])
+    comp_max = len(dsets['compartments'])
+
+    (fig, axes) = plt.subplots(comp_max, cl_max, sharex=True, sharey=True)
+
+    for cl_nr, (cell_line, comp_dict) in enumerate(dsets['cell lines'].items()):
+        for comp_nr, (compartment, utrs) in enumerate(comp_dict.items()):
+
             rpkms_norm = []
             rpkms_log = []
             dset_name = cell_line +' '+ compartment
+
             for (utr_id, utr) in utrs.iteritems():
                 if utr.eps_coord != 'NA':
                     # SKip those with rpkm = 0
                     if utr.RPKM == 0:
                         continue
-                    if utr.RPKM > thresh:
-                        rpkms_norm.append(thresh)
-                    else:
-                        rpkms_norm.append(utr.RPKM)
+                    #if utr.RPKM > thresh:
+                        #rpkms_norm.append(thresh)
+                    #else:
+                    rpkms_norm.append(utr.RPKM)
                     rpkms_log.append(math.log(utr.RPKM, 2))
 
-            fig, ax = plt.subplots()
-            axis_list.append(ax)
+            ax = axes[comp_nr, cl_nr]
             (N, bins, blah) = ax.hist(rpkms_log, bins=200)
-            ax.set_xlabel('RPKM, log2 transformed', size=20)
-            ax.set_ylabel('3UTR count', size=20)
-            ax.set_title('Distribution of RPKM values for {0}'.format(dset_name))
+            ax.grid()
+
+            if cl_nr == 0:
+                ax.set_ylabel('{0}'.format(compartment), size=20)
+            if comp_nr == comp_max-1:
+                ax.set_xlabel('{0}'.format(cell_line), size=20)
 
             # Percentages above/below 0
             less_zero = len([1 for v in rpkms_norm if v>1])/float(len(rpkms_norm))
             print('\n{0}: Percentage of UTRs with RPKM larger than 1: {1}%'\
                   .format(dset_name, format(less_zero*100, '.0f')))
 
-    # Set the x-axis according to the largest x-interval found
-    # Strangely, these things are only correct after a final plt.draw()
-    min_x = min([ax.get_xlim()[0] for ax in axis_list])
-    max_x = max([ax.get_xlim()[1] for ax in axis_list])
-    for ax in axis_list:
-        ax.set_xlim((min_x, max_x))
-        ax.set_xticks(np.arange(min_x, max_x, 2))
-        ax.grid()
-        plt.draw()
+    fig.suptitle('log2-transformed distribution of RPKM values', size=20)
+
+    # Fine-tune figure; hide x ticks for top plots and y ticks for right plots
+    plt.setp([a.get_xticklabels() for a in axes[0:comp_max-1,:].flatten()],
+             visible=False)
+    plt.setp([a.get_yticklabels() for a in axes[:,1:].flatten()],
+             visible=False)
+
+    # Fine-tune: remove space between subplots
+    fig.subplots_adjust(hspace=0.07)
+    fig.subplots_adjust(wspace=0.07)
+
+def gen_color():
+    """generator for getting n of evenly distributed colors using
+    hsv color and golden ratio. It always return same order of colors
+
+    :returns: RGB tuple
+    """
+    import colorsys
+    golden_ratio = 0.618033988749895
+    h = 0.22717784590367374
+
+    while 1:
+        h += golden_ratio
+        h %= 1
+        HSV_tuple = [h, 0.95, 0.95]  # this defines how "deep" are the colors
+        RGB_tuple = colorsys.hsv_to_rgb(*HSV_tuple)
+        yield map(lambda x:str(int(x * 256)), RGB_tuple)
+
+def beyond_aTTS(dsets):
+    """
+    How much do 3UTRs extend beyong the aTTS?
+    """
+    # RESULT it seems that 95% are not extended beyond the annotation. For those
+    # that remain, a few might overlap some other annotatated area. A few might
+    # be genuinly longer. How to get them? They would slightly aid the diff-len
+    # compartment data.
+
+    for (cell_line, comp_dict) in dsets['cell lines'].items():
+        for (compartment, utrs) in comp_dict.items():
+            biggerthan = []
+            not_bigger = 0
+            for (utr_id, utr) in utrs.iteritems():
+                if utr.epsilon_beyond_aTTS == 0:
+                    not_bigger += 1
+                else:
+                    biggerthan.append(utr.epsilon_beyond_aTTS)
+
+        fig, ax = plt.subplots()
+        ax.boxplot(biggerthan)
+        print('{0}\nNot longer than annotation: {1}\n'.format(cell_line,
+                                                              not_bigger/len(utrs)))
+
+    debug()
+
 
 def main():
     # The path to the directory the script is located in
@@ -3001,18 +3279,23 @@ def main():
 
     # Get the dsets with utrs and their clusters from the length and polyA files
     # Optionally get SVM information as well
-    dsets = get_utrs(settings, svm=True)
+    #so that you will have the same 1000 3UTRs!
+    dsets = get_utrs(settings, speedrun=True, svm=True)
+    #dsets = get_utrs(settings, speedrun=False, svm=True)
 
     #### RPKM distribution
     #### What is the distribution of 3UTR RPKMS? run this function and find out!
     #rpkm_dist(dsets)
+
+    #### How does your WC = C + N model hold up? Plot relationships by RPMKM
+    #wc_is_n_plus_c(dsets) # RESULT: max-min(WC,N,C)-dist: 30 +/- 66 nt
 
     #### Extend beyond distribution and number
     #### How many 3UTRs extend significantly? beyond the aTTS
     #### NOTE that, with current code, they must be checked by hand, as the
     #### extended area can overlap a genomic feature
     # Give feedback to Simone, then start documenting.
-    #beyond_aTTS(dsets) TODO
+    #beyond_aTTS(dsets)
 
     ##### Write a bedfile with all the polyA sites confirmed by both annotation and
     ##### 3UT poly(A) reads (For Sarah)
@@ -3032,13 +3315,11 @@ def main():
     ##### Merge all clusters in datset in the dictionary super_cluster. Also
     ##### return the dset_2super dict, which acts as a translator dict from the
     ##### key of each individual cluster to its corresponding key in super_cluster
-    #(super_cluster, dset_2super) = merge_clusters(dsets)
+    (super_cluster, dset_2super) = merge_clusters(dsets)
 
-    #output_control(settings, dsets)
+    #utr_length_comparison(settings, dsets)
 
-    utr_length_comparison(settings, dsets)
-
-    #polyadenylation_comparison(settings, dsets, super_cluster, dset_2super)
+    polyadenylation_comparison(dsets, super_cluster, dset_2super)
 
     ## The classic polyA variation distributions
     #classic_polyA_stats(settings, dsets)
@@ -3054,7 +3335,6 @@ def main():
     #other_methods_comparison(settings)
 
     #rouge_polyA_sites(settings)
-
 
 if __name__ == '__main__':
     main()
@@ -3087,9 +3367,6 @@ if __name__ == '__main__':
 
 # IDEA: measure of coverage-limitation: how many polyA clusters (>5 reads) are
 # found with only 1 read in other compartments/datasets?
-
-# Q: is there variation between datasets in polyA-cluster usage in utrs that are
-# expressed in all datsets?
 
 # Q: what should we call a reliable cluster?
 
@@ -3124,19 +3401,3 @@ if __name__ == '__main__':
 
 # code snippet for generating colors; this way you don't have to know in advance
 # how many colors you need.
-#def gen_color():
-    #"""generator for getting n of evenly distributed colors using
-    #hsv color and golden ratio. It always return same order of colors
- #
-    #:returns: RGB tuple
-    #"""
-    #import colorsys
-    #golden_ratio = 0.618033988749895
-    #h = 0.22717784590367374
- #
-    #while 1:
-        #h += golden_ratio
-        #h %= 1
-        #HSV_tuple = [h, 0.95, 0.95]  # this defines how "deep" are the colors
-        #RGB_tuple = colorsys.hsv_to_rgb(*HSV_tuple)
-        #yield map(lambda x:str(int(x * 256)), RGB_tuple)
