@@ -203,5 +203,6 @@ tuning = true
 # datasets = 
 # datasets = K562_Cytoplasm:K562_Whole_Cell:K562_Nucleus:HeLa-S3_Cytoplasm:HeLa-S3_Whole_Cell:HeLa-S3_Nucleus:GM12878_Cytoplasm:GM12878_Whole_Cell:GM12878_Nucleus
 # datasets = GM12878_Cytoplasm:GM12878_Whole_Cell:GM12878_Nucleus:K562_Cytoplasm:K562_Whole_Cell:K562_Nucleus
-datasets = K562_Cytoplasm:K562_Whole_Cell:K562_Nucleus
+datasets = GM12878_Cytoplasm:GM12878_Whole_Cell:GM12878_Nucleus
+# datasets = K562_Cytoplasm:K562_Whole_Cell:K562_Nucleus
 # datasets = HeLa-S3_Cytoplasm:K562_Nucleus

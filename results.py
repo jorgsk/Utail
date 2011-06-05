@@ -10,6 +10,9 @@ import sys
 from itertools import combinations as combins
 
 import matplotlib.pyplot as plt
+import matplotlib.cm as cm
+from matplotlib import lines
+
 plt.ion() # turn on the interactive mode so you can play with plots
 
 from operator import attrgetter
@@ -493,6 +496,7 @@ class Plotter(object):
             ax.set_ylim((0, max_height + 0.2*max_height))
             ax.set_yticks(range(0, int(math.ceil(max_height+0.2*max_height)), 2000))
             ax.yaxis.grid(True)
+
 
             if row_nr == read_limits:
                 ax.set_xticks(range(start_pos,max_cluster+start_pos))
@@ -1161,6 +1165,265 @@ class Plotter(object):
         cytosol-longest 3UTRs for each compartment + those only in the fraction.
         """
         pass
+
+    def polydist_plot(self, polydist, annotdist, count, rel_usage):
+        """
+        Plot the distribution of polyA site usage from 3' to 5'.
+        polydist are the count of polyA sites read coverage
+        annotdist coutns only those sites that are annotated
+        count just counts how many of each 3utr you have
+
+        make 3 plots, one for each compartment (including whole cell). each plot
+        has 3 subplots. the subplots are the length 2, length 3, and length 4
+        polyA-count 3UTRs. simply plot the count of each with plot(). Should you
+        normalize though?
+        """
+
+        polycoverage = AutoVivification()
+        annotcount = AutoVivification()
+        utrcount = AutoVivification()
+
+        # make helper-dict for reorganizing dicts in one loop.
+        helper = {'covr': (polydist, polycoverage),
+                  'annot': (annotdist, annotcount),
+                  'utrcout': (count, utrcount)}
+
+        keepers = [2,3,4]
+
+        # re-organize the dicts to a [comp][count][cell_line] = [1,55,77]
+        for (name, changeme) in helper.items():
+            for (c_line, comp_dict) in changeme[0].items():
+                for comp, count_dict in comp_dict.items():
+                    for nr, nrlist in count_dict.items():
+                        if nr in keepers:
+                            changeme[1][comp][nr][c_line] = nrlist
+
+        # For each cell line, create an averaged poly(A) count for all the
+        # '1,2,3,...'. Keep the std.
+        avrg_annot = AutoVivification()
+
+        for (compartment, count_dict) in annotcount.items():
+            avrg_annot[compartment] = dict((ke, []) for ke in keepers)
+            for (count, cl_dict) in count_dict.items():
+                for (cl, countlist) in cl_dict.items():
+                    avrg_annot[compartment][count].append(countlist)
+
+                # averge depending on the number of cell lines
+                mean = np.mean(avrg_annot[compartment][count], axis=0)
+                stds = np.std(avrg_annot[compartment][count], axis=0)
+                avrg_annot[compartment][count] = (mean, stds)
+
+        # re-structure the rel_usage to a [cell_line][count][compartment]
+        # structure
+        rel_usage_restruct = AutoVivification()
+        for (cell_line, comp_dict) in rel_usage.items():
+            for (comp, count_dict) in comp_dict.items():
+                for (nr, nrlist) in count_dict.items():
+                    rel_usage_restruct[cell_line][nr][comp] = nrlist
+
+        # Get average and std of the relative usage of polyA sites to the
+        # 3'-one. If the variation is too big, make box-plots?
+        # AND do log-2 plots
+        # AND make one plot per cell line ... ... ... it's too much information
+        # alrady. Probably you'll only keep one cell line anyway.
+
+        # old version of this plot.. 
+        #old_plot()
+
+        for (cell_line, nr_dict) in rel_usage_restruct.items():
+            if cell_line != 'GM12878':
+                continue
+
+            # shorten the coutn_dict
+            newcount = dict((nr, nr_dict[nr]) for nr in nr_dict if nr in
+                            keepers)
+
+            #fig, axes = plt.subplots(1, len(newcount))
+            fig, axes = plt.subplots(len(newcount))
+
+            # set some scaling variables
+            tweenboxes = 0.5
+            tweengroups = tweenboxes*3
+
+            boxwidth = 0.25
+
+            # x_nr is the subplot number (the polyA cluster number)
+            for x_n, (nr, comp_dict) in enumerate(newcount.items()):
+
+                ax = axes[x_n]
+
+                ax.set_title('{0} poly(A) clusters'.format(nr))
+
+                # set coordinates according to scaling variables
+                xcoords = np.arange(1, nr, tweengroups)
+                if len(xcoords) < nr-1:
+                    xcoords = np.append(xcoords, xcoords[-1]+tweengroups)
+
+                # ticklist for makign the ticklabels
+                ticklist = []
+
+                comp_dict.pop('Whole_Cell') # Remove whole cell from comparison
+
+                # y_n is the number of boxplot-clusters in the subplot
+                for y_n, (comp, nrlist) in enumerate(comp_dict.items()):
+
+                    # make nr boxplots of the log2 transformed values.
+                    log2list = np.log2(nrlist)[:,:-1]
+
+                    # Scale for space between the boxes
+                    xpos = xcoords + tweenboxes*y_n
+
+                    wtf = ax.boxplot(log2list, widths=boxwidth, positions=xpos)
+
+                    # add the xpos to the ticklist
+                    for pos in xpos:
+                        ticklist.append((pos, comp))
+
+                    # add the annotated ratio
+                    annots = annotdist[cell_line][comp][nr]
+
+                    # skip those with 0 annotated in one of them
+                    if 0 not in annots:
+                        log2an = np.log2([an/annots[-1] for an in annots])[:-1]
+
+                        for (indx, ypos) in enumerate(log2an):
+                            x,y = ([xpos[indx]-0.15, xpos[indx]+0.15], [ypos, ypos])
+                            line = lines.Line2D(x, y, lw=3, color='g')
+                            ax.add_line(line)
+
+                ax.set_xlim(xcoords[0]-tweenboxes,
+                            xcoords[-1]+len(comp_dict)*tweenboxes)
+
+                # Get the ticks and their labels in order
+                tickpos, labs = zip(*sorted(ticklist))
+
+                ax.set_xticks(tickpos)
+                ax.set_xticklabels(labs)
+
+                ax.set_yticks(range(-3, 4))
+                ax.set_yticklabels(range(-3,4))
+                ax.set_ylim(-5, 5)
+                ax.yaxis.grid(True)
+
+            fig.suptitle('Relative usage of proximal and distal '\
+                         'polyA-sites\n{0}'.format(cell_line))
+
+            #fig.subplots_adjust(hspace=0.1)
+            #fig.subplots_adjust(wspace=0.2)
+
+        debug()
+
+        # TODO include the annotation coutn somehow. ticklabels 5', 3', and
+        # middle? better than 1, 2, 3.
+        # Then get the log2 of the average annotation and insert on the plot as
+        # a bar of some width.
+
+        # Then re-do the novel PA sites thing for each compartment
+
+        # Then go back and re-examine the 3UTR lengths that have
+        # different length in the compartments. Can you support your claims with
+        # poly(A) reads?
+
+        # Finally, redo all t
+        # This must lead you to reconsidering how you calculate he epsilon
+        # value. You can no longer base yourself on the annotated value -- you
+        # have to base yourself on the extension. I see a mountain of bugs
+        # before me, but it needs must be done.
+
+    def oldplot(self, polycoverage, avrg_annot):
+
+        # create 1 subplot for each compartment, and 1 subplot for each
+        # '2,3,4' polyA cluster counts. With 3 compartments, you get 9 subplots.
+        comp_nr = len(polycoverage)
+        clscount_nr = len(polycoverage.values()[0].keys())
+        fig, axes = plt.subplots(comp_nr, clscount_nr)
+
+        #normalize = False
+        normalize = True
+
+        # IDEA TODO IDEA
+        # From Pedro: make everything normalized to the 3'-proximal one. Thus
+        # the 3' would be 1 and the other would be relative to that one. You
+        # would do the normaization on each 3UTR.
+
+        for x_n, (compartment, clscount_dict) in enumerate(polycoverage.items()):
+            for y_n, (cls_count, cell_linedict) in enumerate(clscount_dict.items()):
+                # The base-level x-coords for this cls_count. place the bars
+                # incrimentally after this
+                xcoords = np.arange(1, cls_count+1)
+                # create the axes
+                ax = axes[x_n, y_n]
+                for z_n, (cell_line, actual_list) in enumerate(cell_linedict.items()):
+
+                    # Normalize the actual_list
+                    if normalize:
+                        lsum = sum(actual_list)
+                        actual_list = [ac/lsum for ac in actual_list]
+
+                    ## Plot the polyA-read counts
+                    # update the x-coords for this plot
+                    # the space of the bars depend on the size of the x-axis.
+                    plotcoords = xcoords + 0.2*z_n
+                    #cols = [cm.summer(val) for val in range(cls_count)]
+                    cols = ['g', 'r', 'k']
+                    ax.bar(plotcoords, actual_list, label=cell_line, width=0.2,
+                          align='center', color=cols)
+
+                ## Plot the frequency with which they are annotated
+                # get the average and std of the annotated coutns
+                anavrg = avrg_annot[compartment][cls_count][0]
+                anstd = avrg_annot[compartment][cls_count][1]
+
+                # normalize the annotated counts
+                ansum = sum(anavrg)
+                anavrg = [av/ansum for av in anavrg]
+                anstd = [ast/ansum for ast in anstd]
+
+                # Create a 'x-twinned' y axis.
+                ax2 = ax.twinx()
+                a_coords = plotcoords + 0.2
+                ax2.bar(a_coords, anavrg, color='#4C3380', width=0.2,
+                        yerr=anstd, label='Annotation frequency',
+                        align ='center')
+
+                ax2.set_ylim(0,1)
+
+                # Set the colors and fontsizes of the ticks
+                for tl in ax2.get_yticklabels():
+                    tl.set_color('#4C3380')
+                    tl.set_fontsize(12)
+
+                # Some hack to get the line-plot in front
+                ax.set_zorder(ax2.get_zorder()+1) # put ax in front of ax2
+                ax.patch.set_visible(False) # hide the 'canvas'
+
+                ## Set axis labels and that stuff
+                ax.set_xlim(1-cls_count*0.4, cls_count+cls_count*0.4)
+                if x_n == comp_nr-1:
+                    ax.set_xlabel('{0} poly(A) clusters'.format(cls_count))
+                    ax.set_xticks(xcoords)
+                else:
+                    ax.set_xticklabels([], visible=False)
+
+                if normalize:
+                    ax.set_ylim(0,1)
+                if y_n == 0:
+                    ax.set_ylabel(compartment)
+                else:
+                    if normalize:
+                        ax.set_yticklabels([], visible=False)
+
+        fig.suptitle('Usage of proximal and distal polyadenylation sites',
+                     size=20)
+
+        # Fine-tune: remove space between subplots
+        #if normalize:
+            #adj = 0.07
+        #else:
+            #adj = 0.15
+        #fig.subplots_adjust(hspace=adj)
+        #fig.subplots_adjust(wspace=adj)
+        debug()
 
 
 def pairwise_intersect(in_terms_of, dset_dict, cutoff):
@@ -2526,11 +2789,6 @@ def novel_polyAs(dsets, super_clusters, dset_2super):
     For each cell line, what are the novel poly(A) sites?
 
     Accept 2> reads OR 1 read if supported by PAS or SVM
-    """
-
-    debug()
-    # Count novel poly(A) sites indexed by 
-
     # 1) For each cell line, make a utr_novel_PA dict:
         # utr_novelPA[utr] = {super_cluster} = {'max_coverage', 'support in # of
         # compartments', 'in_annotation', 'has_PAS', 'has_SVM'}
@@ -2539,6 +2797,316 @@ def novel_polyAs(dsets, super_clusters, dset_2super):
     # 4) Store the utr's dset_2super-linked cluster, with read_coverage
     # 5) If the dset_2super is already there, update read coverage if higher,
     # and also update that it's found in 2 or more compartments
+    """
+
+    p = Plotter()
+
+    # prepare the novel_PA dict. It looks like this
+    super_cluster_nr = 0
+    novel_PA = {}
+    for (cell_line, comp_dict) in dsets['cell lines'].items():
+        novel_PA[cell_line] = {}
+        for (compartment, utrs) in comp_dict.items():
+            novel_PA[cell_line][compartment] = {}
+
+            # make a shortcut to the previous dict
+            compcls = novel_PA[cell_line][compartment]
+
+            dset_name = cell_line+' '+compartment
+            for (utr_id, utr) in utrs.iteritems():
+
+                # SKip those without clusters
+                if utr.clusters == []:
+                    continue
+
+                # Make dict if utr not found before
+                if utr_id not in compcls:
+                    compcls[utr_id] = {}
+
+                for cls in utr.clusters:
+                    # Get the various things from the cluster you want to
+                    # save
+                    if cls.nearby_PAS[0] != 'NA':
+                        has_PAS = True
+                    else:
+                        has_PAS = False
+
+                    max_covrg = cls.nr_support_reads
+
+                    if cls.annotated_polyA_distance != 'NA':
+                        has_annotation = True
+                    else:
+                        has_annotation = False
+
+                    # check if utr has svm and if this svm is within 40 nt
+                    # of the polyA site
+                    has_svm = False # assume not foudn; update if found
+
+                    # Update has_svm if you find them
+                    for svm_coord in utr.svm_coordinates:
+                       if svm_coord-40 < cls.polyA_coordinate < svm_coord+40:
+                           has_svm = True
+                           break
+
+                    # Get the super ID that links you with the super-cluster
+                    super_key = dset_name+cls.chrm+cls.strand+\
+                            str(cls.polyA_coordinate)
+                    super_id = dset_2super[super_key]
+
+                    # Check if this super_id has already been found; if so,
+                    # update it. If not, create it anew.
+
+                    if super_id not in compcls[utr_id]:
+
+                        super_cluster_nr += 1
+                        compcls[utr_id][super_id] =\
+                                {'max_covrg': max_covrg,
+                                 'compartment': 1,
+                                 'has_annotation': has_annotation,
+                                 'has_svm': has_svm,
+                                 'has_PAS': has_PAS,
+                                 'RPKM': utr.RPKM}
+                    else:
+                        # Update the entry (through g as shortcut)
+                        # PS normally you shuoldn't arrive here, but some spook
+                        # of the re-clustering causes two originally distinct
+                        # polyA clusters to cluster as one.
+                        g = compcls[utr_id][super_id]
+                        if g['max_covrg'] < max_covrg:
+                            g['max_covrg'] = max_covrg
+
+                        # True or False = True
+                        g['has_annotation'] = g['has_annotation'] or has_annotation
+                        g['has_svm'] = g['has_svm'] or has_svm
+                        g['has_PAS'] = g['has_PAS'] or has_PAS
+                        g['RPKM'] = max(utr.RPKM, g['RPKM'])
+
+                        g['compartment'] += 1
+
+
+    # Include in the count if the poly(A) site is annotated. From this you can
+    # also get the distribution of annotated vs novel coverage distributions.
+
+
+    #minRPKM = 30 # skip UTRs that have lower RPKM than this
+    # each UTR entry will
+    #polyAcounter = count_polyAs(novel_PA, dsets, minRPKM)
+    debug()
+
+    # plot the table you get out
+    #p.polyAcounterplot(polyAcounter, minRPKM)
+
+    # RESULT for minRPKM = 50
+    #
+    #{'GM12878': {'Cytoplasm': 372, 'Nucleus': 321},
+     #'HeLa': {'Cytoplasm': 500, 'Nucleus': 322},
+     #'K562': {'Cytoplasm': 312, 'Nucleus': 205}}
+    # To me this correlates with the sensitivity graphs.
+
+    # for each 3UTR, count the coverage of proximal to distal poly(A) sites.
+    # NOTE! This is independent of the coutn-analysis. Even if that doesn't
+    # work, this one should be good.
+    polydist, annotdist, count, rel_usage = polyAdistribution(novel_PA)
+
+    # Shit. You know, this information would have been better if you could
+    # compare with all other dsets. Then you could add 1 if found in other
+    # dsets for example.
+
+    #p.polydist_plot(polydist, annotdist, count, rel_usage)
+    # RESULT the fact is that the 3'-most site is expressed the most. There is
+    # no difference between cell compartments.
+    # I recomend that you ditch the cases with 4 clustesr. Then make it clearer
+    # from the context that they are on average less expressed than the 3'-most
+    # poly(A) site, but they are more expressed than the ratio of
+    # annotated/non-annotated would hint.
+
+    # TODO HELLO WHEN YOU COME BACK. I HOPE U ARE WELL.
+    # What you you need to start doing:
+    # 1) Using novel_PA, Print a small table of the novel poly(A) sites you
+    # find. First print for all compartments; then merge compartments and print
+    # for cell lines; then merge for cell lines and print for whole dataset.
+    # 2) Look again at the polydist_plot. You find no differences in the
+    # distributions of usage of poly(A) sites. You need to present this. Perhaps
+    # you can present just the cases with 3 poly(A) sites and show there is no
+    # difference. Also, make it more clear that the 3'-most one is mostly higher
+    # expressed.
+    # maybe it would be clear with distributions of the boxplots of the counts
+    # themselves? Don't add the coutns, but keep the distribution. Plot the
+    # distributions using box plots. I think that's the simplest, clearest way
+    # of showing the differencel.
+    # 3) Go back to the diff-len 3UTRs that Roderic wasn't so impresed by.
+    # Characterize better which compartment they lengthen in, and check if any
+    # of the cases are backed up by poly(A) evidence.
+    # 4) Start working on detecting 3UTRs that are longer than the annotation.
+    # Reshape the entire system for rel-length then ... or, keep the rel-length
+    # according to annotation, but introduce another variable (why not!?) that
+    # can be 1.3 1.5 whatever, and include the stop site for this one. Then you
+    # are in a better position to determine where things stop.
+
+    debug()
+
+def polyAdistribution(novel_PA):
+    """
+    For each compartment, for each gene, get how many polyA clusters the gene
+    has. Make a dict for each compartment '1, 2, 3,4' as keys. The key is the
+    max nr of "goood" clusters defined by your criteria. Each key contains the
+    number of read counts at those internal positions in the 3UTR. 1 is 5' and
+    the last value is 3' (If only 1 they are the same). Thus, when you find
+    clusters from the - strand, you need to take that into account.
+    """
+    polydist = AutoVivification()
+    annotdist = AutoVivification()
+    count = AutoVivification()
+
+    # pedro's idea: relative useage according to 3'-most
+    rel_usage = AutoVivification()
+
+    getreverse = {'-': True, '+': False}
+
+    for (cell_line, comp_dict) in novel_PA.items():
+        for (compartment, utr_dict) in comp_dict.iteritems():
+            for (utr_id, cls_dict) in utr_dict.iteritems():
+
+                trusted = {}
+                strand = 0
+                # Get the trusted polyA sites from cls_dict
+                for chmStrandCoord, cls in cls_dict.items():
+
+                    # if this UTR's RPKM is low, skip the whole thing.
+                    if cls['RPKM'] < 10:
+                        break
+
+                    # Demapd, pas, annot, or SVM, and covr > 1.
+                    if ((cls['has_PAS'] or\
+                       cls['has_annotation'] or\
+                       cls['has_svm']) ) or\
+                       cls['max_covrg'] > 1:
+
+                        # Extract the strand and coordinate
+                        if len(chmStrandCoord.split('-')) == 2:
+                            strand = '-'
+                            coord = chmStrandCoord.split('-')[1]
+                        elif len(chmStrandCoord.split('+')) == 2:
+                            strand = '+'
+                            coord = chmStrandCoord.split('+')[1]
+
+                        # key by coordinate
+                        trusted[int(coord)] = cls
+                    else:
+                        # go to next utr if one polyA site fails
+                        break
+
+                # Skip if no clusters are trusted
+                if len(trusted) == 0:
+                    continue
+
+                # nr of clusters
+                polyA_nr = len(trusted)
+
+                # Create [0, 0, .. ,0] if doesn't exist for this len
+                if polyA_nr not in polydist[cell_line][compartment]:
+                    polydist[cell_line][compartment][polyA_nr] =\
+                            [0 for i in range(polyA_nr)]
+
+                # same for annotdist
+                if polyA_nr not in annotdist[cell_line][compartment]:
+                    annotdist[cell_line][compartment][polyA_nr] =\
+                            [0 for i in range(polyA_nr)]
+
+                # same for count
+                if polyA_nr not in count[cell_line][compartment]:
+                    count[cell_line][compartment][polyA_nr] = 0
+
+                # Create a list for appending for rel_usage
+                if polyA_nr not in rel_usage[cell_line][compartment]:
+                    rel_usage[cell_line][compartment][polyA_nr] = []
+
+                # add a count of how many you have
+                count[cell_line][compartment][polyA_nr] +=1
+
+                # Go through trusted in the 5->3 order by sort. If strand is -,
+                # use reverse = True
+                rev = getreverse[strand]
+
+                usage = []
+                # Iterate through dict in sorted (5->3) manner
+                for (indx, pos) in enumerate(sorted(trusted, reverse=rev)):
+                    clstr = trusted[pos]
+                    polycov = clstr['max_covrg']
+                    polydist[cell_line][compartment][polyA_nr][indx] += polycov
+
+                    # append for 'usage'
+                    usage.append(polycov)
+
+                    # add for annotdist if this cluster is in annotation
+                    if clstr['has_annotation']:
+                        annotdist[cell_line][compartment][polyA_nr][indx] += 1
+
+                # normalize according to the last index in usage
+                rel_us = [us/usage[-1] for us in usage]
+                rel_usage[cell_line][compartment][polyA_nr].append(rel_us)
+
+    return polydist, annotdist, count, rel_usage
+
+def count_polyAs(novel_PA, dsets, minRPKM):
+    """
+    For each compartment, count the number of sure polyA sites above a certain
+    minimum RPKM.
+    """
+
+    polyAcompare = {}
+    for (cell_line, comp_dict) in novel_PA.items():
+        polyAcompare[cell_line] = {}
+        for (compartment, utr_dict) in comp_dict.iteritems():
+            for (utr_id, cls_dict) in utr_dict.iteritems():
+
+                #  if utr not present for this cell line, add it
+                if utr_id not in polyAcompare[cell_line]:
+                    polyAcompare[cell_line][utr_id] = {compartment: cls_dict}
+
+                else:
+                    polyAcompare[cell_line][utr_id][compartment] = cls_dict
+
+
+    polyAcounter = {}
+    for (cell_line, utrs) in polyAcompare.items():
+        all_comps = dsets['cell lines'][cell_line].keys()
+        all_comps.remove('Whole_Cell')
+
+        # initialize dict for all compartments
+        polyAcounter[cell_line] = dict((comp, 0) for comp in all_comps)
+
+        for (utr_id, comp_dict) in utrs.iteritems():
+            # Skip those that are not present in all compartments
+            if not set(comp_dict.keys()).issuperset(set(all_comps)):
+                continue
+
+            # Skip those that have low RPKM
+            rpkms = []
+            for (comp, cls_dict) in comp_dict.items():
+                if comp in all_comps:
+                    rpkms.append(cls_dict.items()[0][1]['RPKM'])
+
+            if min(rpkms) < minRPKM:
+                continue
+
+            for (comp, cls_dict) in comp_dict.items():
+
+                # Skip 'whole cell'
+                if comp not in all_comps:
+                    continue
+
+                # add the polyA sites in the cls_dict supported by at least one
+                # line of evidence:
+                for (super_coord, cls) in cls_dict.items():
+                    if cls['has_PAS'] or\
+                       cls['has_annotation'] or\
+                       cls['has_svm'] or\
+                       cls['max_covrg'] > 1:
+
+                        polyAcounter[cell_line][comp] += 1
+
+    return polyAcounter
 
 def polyadenylation_comparison(dsets, super_clusters, dset_2super):
     """
@@ -3264,6 +3832,45 @@ def beyond_aTTS(dsets):
 
     debug()
 
+class AutoVivification(dict):
+    """Implementation of perl's autovivification feature."""
+    def __getitem__(self, item):
+        try:
+            return dict.__getitem__(self, item)
+        except KeyError:
+            value = self[item] = type(self)()
+            return value
+
+def visualizedict(dictionary):
+    """
+    Print out the structire of a dictionary
+    """
+    maxdepth = 5
+    print dictionary.keys()[:maxdepth]
+    for nr1, (keys, subs) in enumerate(dictionary.iteritems()):
+        if nr1 > maxdepth:
+            continue
+        if type(subs) is not dict:
+            continue
+        print subs.keys()[:maxdepth]
+        for nr2, (k, su) in enumerate(subs.iteritems()):
+            if nr2 > maxdepth:
+                continue
+            if type(su) is not dict:
+                continue
+            print su.keys()[:maxdepth]
+            for nr3, (k3, su3) in enumerate(su.iteritems()):
+                if nr3 > maxdepth:
+                    continue
+                if type(su3) is not dict:
+                    continue
+                print su3.keys()[:maxdepth]
+                for nr4, (k4, su4) in enumerate(su3.iteritems()):
+                    if nr4 > maxdepth:
+                        continue
+                    if type(su4) is not dict:
+                        continue
+                    print su4.keys()[:maxdepth]
 
 def main():
     # The path to the directory the script is located in
@@ -3311,6 +3918,16 @@ def main():
     # the intrinsic variablity in the read coverage.
     # TODO check it in the browser to see if our intutition is correct ... !:)
     # For the non-beyond_aTTS ones.
+
+    # TODO the only way to compare polyA presence between cell compartments
+    # would be to do so for 3UTRs with rpkm > 40 or so. You won't have many
+    # samples, but they should hold true. It would be easy. Do what you did for
+    # novelcount but do it for each sub-compartment. Then query somewhere else
+    # to get the 3UTR RPKM. Compare polyA usage for those with high enough RPKM.
+
+    # When you have done that -- the only thing that remains could be
+    # investigating the 3UTRs that seeem to have longer length than in the
+    # annotation. Would be fun if we found some variation here as well.
 
     ##### Merge all clusters in datset in the dictionary super_cluster. Also
     ##### return the dset_2super dict, which acts as a translator dict from the
