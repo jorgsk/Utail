@@ -1,4 +1,3 @@
-# -*- coding: UTF-8 -*-
 """
 Script for displaying and summarizing the results from utail.py.
 """
@@ -22,7 +21,7 @@ import math
 import numpy as np
 
 # For making nice tables
-from TableFactory import *
+#from TableFactory import *
 
 ########################################
 # only get the debug function if run from Ipython #
@@ -1529,7 +1528,7 @@ def get_intersection_matrix(pair_names, unions_names, cutoff, dset_dict):
         counter[indx1,:,1] = isect_pcnt
 
     # Now all the pairs have been added. Add the unions
-    # Take the union of all dsets except
+    # Take the union of all dsetsxcept
     all_cls = [[] for val in range(cutoff)]
 
     # add all the clusters from the union datasets to all_cls
@@ -1610,24 +1609,15 @@ def get_utrs(settings,speedrun=False, svm=False):
 
     I would like a structure like this:
 
-        dsets['cell lines'] = ([HeLa][comp1, comp2, comp3], [K562][com[1, ...]])
-
-        and
-
-        dsets['compartments'] = ([comp1][HeLa, K562, ...], [comp2][HeLa, K563, ...] )
-
-    I will use the following terminology
-    dsets[dset][dset_inverse] = utr_dict
-    because the second level is the inverse of the first level.
+        dsets[cell_line][comp1][utr1])
 
     """
-    # Define your 'cell lines' and 'compartments' variable names: the datasets
-    # will be scanned for these. Soo this must be manually updated.
-    cell_lines = ['K562', 'K562_Minus', 'HeLa', 'GM12878']
-    compartments = ['Whole_Cell', 'Nucleus', 'Cytoplasm', 'Chromatin']
+    # parse the datasets to get the cell lines and compartments in this dataset
+    cell_lines = list(set([ds.split('_')[0] for ds in settings.datasets]))
+    compartments = list(set(['_'.join(ds.split('_')[1:]) for ds in settings.datasets]))
 
-    dsets = {'cell lines': dict((cln, {}) for cln in cell_lines),
-             'compartments': dict((comp, {}) for comp in compartments)}
+    # Initialize the dsets
+    dsets = dict((cln, {}) for cln in cell_lines)
 
     # Do everything for the length files
     length_files = settings.length_files()
@@ -1656,6 +1646,7 @@ def get_utrs(settings,speedrun=False, svm=False):
 
         # Create the utr objects from the length file
         utr_dict = {}
+
         for (linenr, line) in enumerate(lengthfile):
             # If a speedrun, limit the nr of 3UTRs to read.
             if speedrun:
@@ -1671,6 +1662,7 @@ def get_utrs(settings,speedrun=False, svm=False):
 
         # Update the UTRs
         for (utr_id, utr_obj) in utr_dict.iteritems():
+
             # Update with poly(A) cluster info
             utr_dict[utr_id].cluster_nr = len(utr_obj.clusters)
 
@@ -1693,29 +1685,73 @@ def get_utrs(settings,speedrun=False, svm=False):
                 #Update UTR object with SVM info
                 utr_dict[utr_id].svm_coordinates.append(svm_beg)
 
-        # Add the utr_dict for this cellLine-compartment dataset to BOTH the
-        # cell-line and compartment dictionaries.
-        for cln in cell_lines:
-            if cln in dset_name:
-                for comp in compartments:
-                    if comp in dset_name:
-                        dsets['cell lines'][cln][comp] = utr_dict
+        # Add the utr_dict for this cellLine-compartment 
+        this_cl = dset_name.split('_')[0]
+        this_comp = '_'.join(dset_name.split('_')[1:])
 
-        for comp in compartments:
-            if comp in dset_name:
-                for cln in cell_lines:
-                    if cln in dset_name:
-                        dsets['compartments'][comp][cln] = utr_dict
+        dsets[this_cl][this_comp] = utr_dict
 
-    # Remove non-present cell lines or compartments
-    for (comp, compdict) in dsets['compartments'].items():
-        if compdict == {}:
-            dsets['compartments'].pop(comp)
-    for (cl, cldict) in dsets['cell lines'].items():
-        if cldict == {}:
-            dsets['cell lines'].pop(cl)
+    ## Merge all clusters in datset in the dictionary super_cluster. Also
+    ## return the dset_2super dict, which acts as a translator dict from the
+    ## key of each individual cluster to its corresponding key in super_cluster
+    # send them to get_super_2utr to make super_3utrs
 
-    return dsets
+    super_3utr = get_super_3utr(dsets, *merge_clusters(dsets))
+
+    return dsets, super_3utr
+
+def get_super_3utr(dsets, super_cluster, dset_2super):
+    """
+    Let each 3UTR know about all the cell lines and compartments where its
+    poly(A) clusters are found.
+
+    Update all the 3UTR clusters in dsetswith their super-cluster key
+    At the same time create a 3UTR dict. Each 3UTR has information about the
+    compartments and cell lines where it resides.
+
+    3utr[cell_line][compartment].clusters
+    3utr.super_cluster_coords = super_key: (chr1, 223432, '-')
+    3utr.super_in[cell_line][compartment] = True/False?
+    """
+    super_3utr = {}
+
+    # 1) super cluster key: 'chr1-10518929', for example
+    # 2) the other datasets where this cluster appears (hela nucl etc)
+
+    for cell_line, comp_dict in dsets.items():
+        for comp, utr_dict in comp_dict.items():
+            for utr_id, utr in utr_dict.iteritems():
+
+                # a [super_coord][cell_line][comp] = covr dict
+                utr.super_cover = {}
+
+                # Create the super_key and store the super_cluster information
+                for cl in utr.clusters:
+
+                    # superkey for dset_2super
+                    superkey = cell_line+' '+comp + utr.chrm + utr.strand +\
+                            str(cl.polyA_coordinate)
+
+                    supr_covr = AutoVivification()
+
+                    # Add a in[cell_line][compartment] = covr
+                    for dset_name, cov in zip(*super_cluster[dset_2super[superkey]]):
+                        (cl_line, compart) = dset_name.split(' ')
+                        supr_covr[cl_line][compart] = cov
+
+                    utr.super_cover[dset_2super[superkey]] = supr_covr
+
+                # Add this 3UTR to the super-3utr dict
+                if utr_id not in super_3utr:
+                    super_3utr[utr_id] = utr
+
+                # if it's there, add any super-cluster: [cl][comp][covr] that aren't
+                # there already
+                else:
+                    for (s_key, covr_dict) in utr.super_cover.items():
+                        if s_key not in super_3utr[utr_id].super_cover:
+                            super_3utr[utr_id].super_cover[s_key] = covr_dict
+    return super_3utr
 
 def verify_access(f):
     """
@@ -1791,7 +1827,7 @@ def utr_length_diff(dsets):
     # a super-pie-dict for each cell_line
     super_pie = {}
 
-    for cell_line, comp_dict in dsets['cell lines'].items():
+    for cell_line, comp_dict in dsets.items():
 
         # Skip empty ones
         if comp_dict == {}:
@@ -1973,7 +2009,7 @@ def wc_is_n_plus_c(dsets):
     whole cell should often be between n or c. Is this true?
     """
     lengths = {}
-    for (cell_line, comp_dict) in dsets['cell lines'].items():
+    for (cell_line, comp_dict) in dsets.items():
         lengths[cell_line] = {}
         for (compartment, utrs) in comp_dict.items():
             for (utr_id, utr) in utrs.iteritems():
@@ -2344,9 +2380,9 @@ def rpkm_dependent_distance_from_end(dsets):
     order = ['length',  'eps_rel_size']
     # The output variables
 
-    # Go through all dsets and get the respective output variables for the
+    # Go through all dsetsand get the respective output variables for the
     # different RPKM clusters 
-    for (cell_line, compartment_dict) in dsets['cell lines'].items():
+    for (cell_line, compartment_dict) in dsets.items():
         for (compartment, utrs) in compartment_dict.items():
             dset_name = cell_line +' '+ compartment
             distances[dset_name] = dist_fromend(utrs, 'RPKM', rpkm_intervals,
@@ -2435,7 +2471,7 @@ def udstream_coverage_last_clusters(dsets):
     p = Plotter()
 
     #for dset in dsets:
-    for (cell_line, compartment_dict) in dsets['cell lines'].items():
+    for (cell_line, compartment_dict) in dsets.items():
 
         for (compartment, utrs) in compartment_dict.items():
 
@@ -2549,14 +2585,14 @@ def compare_cluster_evidence(dsets, super_clusters, dset_2super):
     p = Plotter()
 
     #for dset in dsets:
-    for (cell_line, compartment_dict) in dsets['cell lines'].items():
+    for (cell_line, compartment_dict) in dsets.items():
 
         for (compartment, utrs) in compartment_dict.items():
 
             all_read_counter = {} # cluster_size : read_count for all clusters
             svm_support = {} # for all clusters: do they have SVM support?
             annot_read_counter = {} # cluster_size : read_count for clusters w/annot
-            other_dsets = {} # cluster_size : read_count for clusters in other dsets
+            other_dsets= {} # cluster_size : read_count for clusters in other dsets
 
             dset_name = cell_line +' '+ compartment
 
@@ -2705,8 +2741,8 @@ def recovery_sensitivity(dsets):
     intervals = {'RPKM': [(0,1), (1,3), (3,6), (6,10), (10,20), (20,40), (40,80),
                                (80,120), (120,'inf')]}
 
-    # Go through all dsets and give 
-    for (cell_line, compartment_dict) in dsets['cell lines'].items():
+    # Go through all dsetsand give 
+    for (cell_line, compartment_dict) in dsets.items():
         for (compartment, utrs) in compartment_dict.items():
             dset_name = cell_line +' '+ compartment
 
@@ -2740,7 +2776,7 @@ def wc_compartment_reproducability(dsets, super_clusters, dset_2super):
     # make a co_occurence dict for all cell lines
     co_occurence = {}
     # Get all combinations of compartments of this cell line
-    for (cell_line, comp_dict) in dsets['cell lines'].items():
+    for (cell_line, comp_dict) in dsets.items():
         combs = []
         for cn in range(1, len(comp_dict)+1):
             all_combs = [p for p in combins([co for co in comp_dict.keys()], cn)]
@@ -2804,7 +2840,7 @@ def novel_polyAs(dsets, super_clusters, dset_2super):
     # prepare the novel_PA dict. It looks like this
     super_cluster_nr = 0
     novel_PA = {}
-    for (cell_line, comp_dict) in dsets['cell lines'].items():
+    for (cell_line, comp_dict) in dsets.items():
         novel_PA[cell_line] = {}
         for (compartment, utrs) in comp_dict.items():
             novel_PA[cell_line][compartment] = {}
@@ -2910,7 +2946,7 @@ def novel_polyAs(dsets, super_clusters, dset_2super):
 
     # Shit. You know, this information would have been better if you could
     # compare with all other dsets. Then you could add 1 if found in other
-    # dsets for example.
+    # dsetsfor example.
 
     #p.polydist_plot(polydist, annotdist, count, rel_usage)
     # RESULT the fact is that the 3'-most site is expressed the most. There is
@@ -3070,7 +3106,7 @@ def count_polyAs(novel_PA, dsets, minRPKM):
 
     polyAcounter = {}
     for (cell_line, utrs) in polyAcompare.items():
-        all_comps = dsets['cell lines'][cell_line].keys()
+        all_comps = dsets[cell_line].keys()
         all_comps.remove('Whole_Cell')
 
         # initialize dict for all compartments
@@ -3131,14 +3167,14 @@ def polyadenylation_comparison(dsets, super_clusters, dset_2super):
 
     #### Correlate the coverage counts of common polyadenylation sites between
     #### clusters
-    #correlate_polyA_coverage_counts(dsets, super_clusters) NOT DSETS READY
+    #correlate_polyA_coverage_counts(dsets, super_clusters) NOT dsetsREADY
 
     #### Get the change in coverage ratio of the 3 (or so) last polyadenylation
     #### sites from the 3 UTR
     #udstream_coverage_last_clusters(dsets)
 
     #### See the effects of excluding pA sites with 1, 2, 3, etc, coverage
-    #cluster_size_sensitivity(dsets) NOT DSETS READY
+    #cluster_size_sensitivity(dsets) NOT dsetsREADY
 
     pass
 
@@ -3289,7 +3325,7 @@ def classic_polyA_stats(settings, dsets):
         else:
             continue
 
-        # Update the datasets in dsets with 'other_strand' polyA information
+        # Update the datasets in dsetswith 'other_strand' polyA information
         # As well, get a list 'this_strands' which contains the polyA clusters
         # in the other strands.
         this_strands = get_reads_from_file(file_ds, dsets, finder, pAread_file,
@@ -3510,7 +3546,7 @@ def merge_clusters(dsets):
     tsdict = dict((chrm, {'+':[], '-':[]}) for chrm in chrms)
 
     # Put all the polyAclusters in a dict with cluster pos and dset.name
-    for (cell_line, compartment_dict) in dsets['cell lines'].items():
+    for (cell_line, compartment_dict) in dsets.items():
         for (compartment, utrs) in compartment_dict.items():
             dset_name = cell_line +' '+ compartment
             for (utr_id, utr) in utrs.iteritems():
@@ -3518,6 +3554,7 @@ def merge_clusters(dsets):
                     for cls in utr.clusters:
                         tsdict[cls.chrm][cls.strand].append((cls, dset_name))
 
+    # iterate through each strand for each chromosome and cluster pA-sites
     for (chrm, strand_dict) in tsdict.items():
         if strand_dict == {'+': [], '-': []}:
             continue
@@ -3566,7 +3603,7 @@ def merge_clusters(dsets):
                 # The information you're looking for. You can add more later if
                 # needed. If you need everything, you can add the whole object.
                 coverages = [clu.nr_support_reads for (clu, dn) in mega_cluster]
-                dsets = [dn for (clu, dn) in mega_cluster]
+                dsets= [dn for (clu, dn) in mega_cluster]
 
                 # add entry to the all clusters
                 all_clusters[key] = ((dsets, coverages))
@@ -3663,7 +3700,7 @@ def before_after_ratio(dsets):
     Give emipirical credence to the before/after ratios
     """
 
-    for (cell_line, compartment_dict) in dsets['cell lines'].items():
+    for (cell_line, compartment_dict) in dsets.items():
         for (compartment, utrs) in compartment_dict.items():
             for rpkm_lim in [0, 1, 5, 20]:
                 ratios = []
@@ -3740,12 +3777,12 @@ def rpkm_dist(dsets):
     each column is a compartment.
     """
     #thresh = 0
-    cl_max = len(dsets['cell lines'])
-    comp_max = len(dsets['compartments'])
+    cl_max = len(dsets)
+    comp_max = max([len(comps) for cl, comps in dsets.items()])
 
     (fig, axes) = plt.subplots(comp_max, cl_max, sharex=True, sharey=True)
 
-    for cl_nr, (cell_line, comp_dict) in enumerate(dsets['cell lines'].items()):
+    for cl_nr, (cell_line, comp_dict) in enumerate(dsets.items()):
         for comp_nr, (compartment, utrs) in enumerate(comp_dict.items()):
 
             rpkms_norm = []
@@ -3815,7 +3852,7 @@ def beyond_aTTS(dsets):
     # be genuinly longer. How to get them? They would slightly aid the diff-len
     # compartment data.
 
-    for (cell_line, comp_dict) in dsets['cell lines'].items():
+    for (cell_line, comp_dict) in dsets.items():
         for (compartment, utrs) in comp_dict.items():
             biggerthan = []
             not_bigger = 0
@@ -3884,11 +3921,10 @@ def main():
     #settings = Settings(os.path.join(here, 'OLD_ENCODE_SETTINGS'),
                         #savedir, outputdir, here)
 
-    # Get the dsets with utrs and their clusters from the length and polyA files
+    # Get the dsetswith utrs and their clusters from the length and polyA files
     # Optionally get SVM information as well
     #so that you will have the same 1000 3UTRs!
-    dsets = get_utrs(settings, speedrun=True, svm=True)
-    #dsets = get_utrs(settings, speedrun=False, svm=True)
+    dsets, super_3utr = get_utrs(settings, speedrun=True, svm=False)
 
     #### RPKM distribution
     #### What is the distribution of 3UTR RPKMS? run this function and find out!
@@ -3896,6 +3932,7 @@ def main():
 
     #### How does your WC = C + N model hold up? Plot relationships by RPMKM
     #wc_is_n_plus_c(dsets) # RESULT: max-min(WC,N,C)-dist: 30 +/- 66 nt
+    # However, this is only valid for the rpkm-limited ones...
 
     #### Extend beyond distribution and number
     #### How many 3UTRs extend significantly? beyond the aTTS
@@ -3905,7 +3942,7 @@ def main():
     #beyond_aTTS(dsets)
 
     ##### Write a bedfile with all the polyA sites confirmed by both annotation and
-    ##### 3UT poly(A) reads (For Sarah)
+    ##### 3UTR poly(A) reads (For Sarah)
     #write_verified_TTS(clusters) broken, clusters replaced with dsets
 
     ##### get the before/after coverage ratios for trusted epsilon ends
@@ -3928,11 +3965,6 @@ def main():
     # When you have done that -- the only thing that remains could be
     # investigating the 3UTRs that seeem to have longer length than in the
     # annotation. Would be fun if we found some variation here as well.
-
-    ##### Merge all clusters in datset in the dictionary super_cluster. Also
-    ##### return the dset_2super dict, which acts as a translator dict from the
-    ##### key of each individual cluster to its corresponding key in super_cluster
-    (super_cluster, dset_2super) = merge_clusters(dsets)
 
     #utr_length_comparison(settings, dsets)
 
@@ -3978,6 +4010,11 @@ if __name__ == '__main__':
 # of sequencing.
 # UPDATE: you have shown that you readily detect poly(A) clusters for high RPKM
 
+# UPDATE: you damn well need to do some more research on what exactly happens to
+# an mRNA as it crosses from the nucleus to the cytoplasm. You know that
+# polyadentlaytion and processing happens in the nucleus. In the cytoplasm the
+# mRNA is translated/degraded.
+
 # How reproducable are the polyA reads?
 # If for the same gene, for a similar before/after coverage, what is the
 # variation within the number of polyA reads?
@@ -3992,6 +4029,7 @@ if __name__ == '__main__':
 
 # Q: In the Whole Cell -- what percentage of sample is cytoplasm and what
 # percentage is nucleus? I suspect that there is more cytoplasm than whole cell.
+# A: Roderic confirmed. The 'Whole Cell' dataset resembles mostly the Cytoplasm.
 
 # TODO IDEA TO PROVE THE VERACITY OF THE EPSILON PARAMETER:
     # show the distribution FOR THOSE that fall within 100 nt of annotated
@@ -4017,4 +4055,4 @@ if __name__ == '__main__':
     # average-area to 100?
 
 # code snippet for generating colors; this way you don't have to know in advance
-# how many colors you need.
+# how many colors you need. Can you modify it to your needs?
