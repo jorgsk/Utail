@@ -665,6 +665,19 @@ def get_3utr_bed_all_exons(settings, outfile_path):
     # There is a problem where the wrong utr is being extended; and we have a
     # rare 'utr within a utr' problem, but this sholdn't be a big deal.
 
+    # TODO here you need to add a step that tries to extend all 3UTR ends by
+    # 1000 (or so) nt; intersects the extension with all exons; and finally
+    # trims the extensions so that no extension intersects into another genomic
+    # featuer. Save the extensions in a dict. When you save to file, include
+    # this extension and also save how much you extended by.
+    # You need to go carefully through the code after to check all downstream
+    # effects. For example, all "settings.extendby" must be modified to
+    # "utr.extendby", or something like that. Each 3UTR can now have its own
+    # 'extendby'. 
+    # How to keep the information about extensions? You output to a .bed-file
+    # and you are already using the value-field. Maybe use it for two tings?
+    # value_extendby?
+
     # Remove utrs that have CDS exons in them and write to outfile_path
     remove_intersects_and_extend(raw_path, outfile_path, all_transcripts,
                                  settings)

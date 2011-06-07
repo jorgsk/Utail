@@ -3926,6 +3926,11 @@ def main():
     #so that you will have the same 1000 3UTRs!
     dsets, super_3utr = get_utrs(settings, speedrun=True, svm=False)
 
+    # TODO you have gotten the super_3utr object now. how can it help you?
+    # However: the first thing you must do is read the literature much more
+    # carefully. if you're going to be the first author, you need to know what
+    # you're talking about. second, send the stuff to Simone.
+
     #### RPKM distribution
     #### What is the distribution of 3UTR RPKMS? run this function and find out!
     #rpkm_dist(dsets)
