@@ -869,7 +869,6 @@ class PolyAReads(object):
             for apoint in this_utr.a_polyA_sites:
                 if rpoint-40 < apoint < rpoint+40:
                     found = True
-                    found_point = apoint
                     if this_utr.strand == '+':
                         found_distance = rpoint-apoint + 1
                     else:
@@ -2605,6 +2604,8 @@ if __name__ == '__main__':
 # documentation  (see doc folder). You had a meeting with Roderic: see message
 # below.
 
+# TODO change order of final output to confer with BED format
+
 # TODO: the path to the gem-mapper index... if people are going to use this,
 # they need to provide the path in the SETTINGS file. If you do this yourself,
 # it will be easier to switch to an index file on your own hard disk, makign
@@ -2626,6 +2627,11 @@ if __name__ == '__main__':
 # TODO: Roderic conclusion:
     # next time he wants some basic statistics. The program seems ready, so it's
     # time to do some numbers on the output.
+
+# NOTES:
+    # Time for transcription < 10 minutes
+    # Time for diffusion in nucleoplasm before transport to cytoplasm ~10 min
+    # Half-life in cytoplasm: median 7h (average 12h?)
 
 # PAPER IDEAS:
     # 1) Reproduce everything they have done with ESTs. This shows that detailed
