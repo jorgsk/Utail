@@ -665,6 +665,9 @@ def get_3utr_bed_all_exons(settings, outfile_path):
     # There is a problem where the wrong utr is being extended; and we have a
     # rare 'utr within a utr' problem, but this sholdn't be a big deal.
 
+    # TODO one way: since you're doing this utr-by-utr, maybe you can intersect
+    # the extensions one by one? would take time but wtf is that now
+
     # TODO here you need to add a step that tries to extend all 3UTR ends by
     # 1000 (or so) nt; intersects the extension with all exons; and finally
     # trims the extensions so that no extension intersects into another genomic
@@ -686,25 +689,39 @@ def get_3utr_bed_all_exons(settings, outfile_path):
 def remove_intersects_and_extend(unfiltered_path, outfile_path, all_transcripts,
                                 settings):
     """Remove UTR intersections with CDS exons. Remove UTR intersections with
-    UTRs from other genes. If sequences should be extended, do just that."""
+    UTRs from other genes. If sequences should be extended, do just that.
 
-    temp_cds_path = os.path.join(os.path.dirname(outfile_path), 'temp_cds_exons.bed')
+    Check how far 3UTRs can be extended given the annotation. Extend that far.
+    """
 
-    temp_cds_handle = open(temp_cds_path, 'wb')
-    # Write all CDS exons
+    temp_exons_path = os.path.join(os.path.dirname(outfile_path), 'temp_exons.bed')
+    temp_extension_path = os.path.join(os.path.dirname(outfile_path),
+                                       'temp_extension.bed')
+
+    # Write non-3UTR exons
+    temp_exons = open(temp_exons_path, 'wb')
     for ts_id, ts_obj in all_transcripts.iteritems():
+
+        # Write all CDS exons
         if ts_obj.cds.exons != []:
             for cds in ts_obj.cds.exons:
-                temp_cds_handle.write('\t'.join([cds[0], str(cds[1]),
-                                                 str(cds[2]), cds[3]])+'\n')
-    temp_cds_handle.close()
+                temp_exons.write('\t'.join([cds[0], str(cds[1]), str(cds[2]),
+                                            cds[3]])+'\n')
+
+        # And write and 5UTR exons
+        if ts_obj.five_utr.exons != []:
+            for f_utr in ts_obj.five_utr.exons:
+                temp_exons.write('\t'.join([f_utr[0], str(f_utr[1]),
+                                            str(f_utr[2]), f_utr[3]])+'\n')
+
+    temp_exons.close()
 
     # Set of utrs to remove
     remove_these_utrs = set()
 
     # 1) Run intersect bed on bedfile with CDS exons and with itself
     # Ignore strandedness
-    cmd1 = ['intersectBed', '-wb', '-a', temp_cds_path, '-b', unfiltered_path]
+    cmd1 = ['intersectBed', '-wb', '-a', temp_exons_path, '-b', unfiltered_path]
     cmd2 = ['intersectBed', '-wo', '-a', unfiltered_path, '-b', unfiltered_path]
 
     # Run the above command and loop through output
@@ -724,6 +741,7 @@ def remove_intersects_and_extend(unfiltered_path, outfile_path, all_transcripts,
         (d,d,d, utr_id_1, d,d,d,d,d, utr_id_2, d,d,d) = line.split()
 
         # If intersection occurred on utrs from DIFFERENT GENES, remove them
+        # same-3utr intersection is accepted (because we choose the longest utr)
         if utr_id_1.split('_')[0] != utr_id_2.split('_')[0]:
             remove_these_utrs.add('_'.join(utr_id_1.split('_')[:2]))
             remove_these_utrs.add('_'.join(utr_id_2.split('_')[:2]))
@@ -731,9 +749,17 @@ def remove_intersects_and_extend(unfiltered_path, outfile_path, all_transcripts,
     # Create the output file
     outfile_handle = open(outfile_path, 'wb')
 
-    # 4) Loop through the original file and write to the 'filtered' file
     extendby = settings.extendby
 
+    # Get the maximum number of extensions you can get
+
+    # NOTE the 3utrs in extend_me are ONLY those that actually intersect with
+    # something. If they don't intersect, you can use the 1000 extension.
+    extend_me = maximum_extension(unfiltered_path, all_transcripts, extendby,
+                                  remove_these_utrs, temp_extension_path,
+                                  temp_exons_path)
+
+    # 4) Loop through the original file and write to the 'filtered' file
     with open(outfile_path, 'wb') as outfile_handle:
 
         if not extendby:
@@ -746,13 +772,22 @@ def remove_intersects_and_extend(unfiltered_path, outfile_path, all_transcripts,
         if extendby:
 
             for line in open(unfiltered_path, 'rb'):
-                utr_id = '_'.join(line.split()[3].split('_')[:2])
-                if utr_id not in remove_these_utrs:
+                utrId = '_'.join(line.split()[3].split('_')[:2])
+
+                # Only write the file if it's not marked for removal
+                if utrId not in remove_these_utrs:
+
                     (chrm, beg, end, utr_ex_id, val, strand) = line.split()
                     id_split = utr_ex_id.split('_')
 
                     # Extend the utrs for the final exon in the utr-batch
                     if len(id_split) == 4: # it has an EXTENDBY mark
+
+                        #only calculate when you do the extension. once is enough
+                        utr_id = '_'.join(id_split[:3])
+
+                        if  utr_id in extend_me:
+                            extendby = extend_me[utr_id]
 
                         if strand == '+':
                             end = str(int(end) + extendby)
@@ -760,13 +795,89 @@ def remove_intersects_and_extend(unfiltered_path, outfile_path, all_transcripts,
                         if strand == '-':
                             beg = str(int(beg) - extendby)
 
-                    utr_id = '_'.join(id_split[:3])
+                        # update val to also include information about extension
+                        val = val + '+{0}'.format(extendby)
 
                     # val = total Exons in UTR
                     # val = 3 means 3 exon in this UTR. See utr_id for which one
+                    # BUT if this is an extended exon, val = val
+                    # +extension_length
 
                     outfile_handle.write('\t'.join([chrm, beg, end, utr_id, val,
                                                    strand]) + '\n')
+
+def maximum_extension(unfiltered_path, all_transcripts, extendby,
+                      remove_these_utrs, temp_extension_path, temp_exons_path):
+
+    """ Should you do it in a redundant manner for all UTR_IDs, and then discard
+    those that don't make it? I say yes.
+
+    Extend all 3UTRs in raw_path that have 'extendby' for them. Intersect this
+    region
+    """
+    temp_ext = open(temp_extension_path, 'wb')
+
+    for line in open(unfiltered_path, 'rb'):
+        utrId = '_'.join(line.split()[3].split('_')[:2])
+
+        # Skip utr_ids to be removed
+        if utrId in remove_these_utrs:
+            continue
+
+        (chrm, beg, end, utr_ex_id, val, strand) = line.split()
+        id_split = utr_ex_id.split('_')
+
+        # Extend the utrs for the final exon in the utr-batch
+        if len(id_split) == 4: # it has an EXTENDBY mark
+
+            if strand == '+':
+                beg = str(int(end)+1)
+                end = str(int(beg) + extendby)
+
+            if strand == '-':
+                end = str(int(beg)-1)
+                beg = str(int(end) - extendby)
+
+            utr_id = '_'.join(id_split[:3])
+
+            # Write the extension of the 3UTR
+            temp_ext.write('\t'.join([chrm, beg, end, utr_id, val, strand]) +
+                           '\n')
+
+    temp_ext.close()
+
+    # run intersectBed on temp_exons_path and temp_extension
+    cmd1 = ['intersectBed', '-wb',
+           '-a', temp_exons_path,
+           '-b', temp_extension_path]
+
+    # with -wb, he will write FIRST the overlapping portion of A, and THEN the
+    # ORIGINAL B entry (the 1000nt extension's beg and ends)
+
+    # Run the above command and loop through output
+    f1 = Popen(cmd1, stdout=PIPE)
+
+    extend_me = {}
+
+    # Get the extension lenghts for CDS and 5prime exons
+    for line in f1.stdout:
+        (int_chrm, int_beg, int_end, int_strand) = line.split()[:4]
+        (o_chrm, o_beg, o_end, o_ID, o_val, o_strand) = line.split()[4:]
+
+        # Initialize with 1000 nt extension if o_ID is not found
+        if o_ID not in extend_me:
+            extend_me[o_ID] = 1000
+
+        if o_strand == '+':
+            max_extension = int(int_beg) - int(o_beg)
+
+        if o_strand == '-':
+            max_extension = int(o_end) - int(int_end)
+
+        # get the minimum intersection
+        extend_me[o_ID] = min(max_extension, extend_me[o_ID])
+
+    return extend_me
 
 
 def one_exon_cluster_write(one_exon_transcripts, all_transcripts, genes,
