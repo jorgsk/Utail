@@ -74,8 +74,8 @@ class Settings(object):
         debugging!
         """
 
-        self.chr1 = True
-        #self.chr1 = False
+        #self.chr1 = True
+        self.chr1 = False
         #self.read_limit = False
         self.read_limit = 100000
         self.max_cores = 3
@@ -2489,6 +2489,9 @@ def main():
     #DEBUGGING = True
     DEBUGGING = False
 
+    rerun_annotation_parser = False # you will have a conflict here...
+    rerun_annotation_parser = True # you will have a conflict here...
+
     # The path to the directory the script is located in
     here = os.path.dirname(os.path.realpath(__file__))
 
@@ -2524,7 +2527,8 @@ def main():
     annotation = Annotation(settings.annotation_path, settings.annotation_format)
 
     # Check if 3UTRfile has been made or provided; if not, get it from annotation
-    annotation.utrfile_path = get_utr_path(settings, beddir, rerun_annottion_parser)
+    annotation.utrfile_path = get_utr_path(settings, beddir,
+                                           rerun_annotation_parser)
 
     # Get dictionary with (chrm, beg, end, strand) values for each 3utr-exon key
     # NOTE: for the 3'terminal exons, the beg/end is the extended value. For
@@ -2542,12 +2546,13 @@ def main():
     print('Making data structures for annotated poly(A) sites ...\n')
     annotation.a_polyA_sites_dict = annotation.get_polyA_dict()
 
+    debug()
+
     ##################################################################
     if simulate:
         # For all 3UTR exons, get the genomic sequence. The sequence is needed
         # to look for PAS sites.
         tx = time.time() # time the operation
-        fasta_bed = os.path.join(tempdir, 'bed_for_fasta.bed')
         print('Fetching the sequences of the annotated 3UTRs ...')
         utr_seqs = genome.get_seqs(annotation.utr_exons, settings.hgfasta_path)
         print('\tTime to get sequences: {0}\n'.format(time.time() - tx))
@@ -2577,7 +2582,6 @@ def main():
         my_pool.close()
         my_pool.join()
 
-        dsets = settings.datasets.keys()
         # Get the paths from the final output
         outp = [result.get() for result in results]
 

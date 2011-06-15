@@ -448,15 +448,20 @@ def make_transcripts(annotation, file_format='GENCODE'):
     return (transcripts, genes)
 
 def skip_lines(file_path, nr):
-    handle = open(file_path, 'rb')
     """ Skip 'nr' lines in the file handle and return it. If before those 'nr' a
     'chr' is encountered, call function on itself, skipping only as far as
     needed """
+
+    handle = open(file_path, 'rb')
+
     for i in range(nr):
         line = handle.next()
+
         if line.startswith('chr'):
             handle.close()
+
             return skip_lines(file_path, i)
+
     return handle
 
 def write_beds(transcripts, bed_dir, chr_sizes, *opts):
@@ -1284,17 +1289,11 @@ def main():
 
     (transcripts, genes) = make_transcripts(annotation, an_frmt)
 
-    debug()
-
-    #new_transcripts = cluster_by_utrbeg(transcripts)
-
-    debug()
+    #debug()
 
 
     ### TESTING OVER
 
-    # Read annotation file to get exons and introns of 3utr, cds, and 5utr
-    (transcripts, genes) = make_transcripts(annotation)
 
     debug()
 

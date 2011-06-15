@@ -77,9 +77,10 @@ K562_Whole_Cell = %(carrie)s/001WC/genome/LID16627_FC61U30AAXX_2_2.gem.map.gz:%(
 # to use an annotation.
 # Supported annotation formats: GENCODE, ENSEMBL
 # annotation_path = false
-annotation_path = /users/rg/jskancke/phdproject/3UTR/gencode5/gencode5_annotation.gtf
-annotation_format = GENCODE
-# annotation = ENSEMBL
+# annotation_path = /users/rg/jskancke/phdproject/3UTR/gencode5/gencode5_annotation.gtf
+# annotation_format = GENCODE
+annotation_format = ENSEMBL
+annotation_path = /users/rg/jskancke/phdproject/3UTR/Annotations/Mus_musculus.NCBIM37.62.gtf 
 
 [CHROMOSOME1]
 # only_chr1 = true:
