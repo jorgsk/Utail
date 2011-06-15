@@ -42,13 +42,14 @@ class Settings(object):
     An instance of this class holds all the settings parameters obtained from
     the UTR_SETTINGS file. Useful for passing to downstream code.
     """
-    def __init__(self, datasets, annotation_path, utrfile_provided, read_limit,
-                 max_cores, chr1, hgfasta_path, polyA, min_utrlen, extendby,
-                 cumul_tuning, bigwig, bigwig_datasets, bigwig_savedir,
-                 bigwig_url, gem_index):
+    def __init__(self, datasets, annotation_path, annotation_format,
+                 utrfile_provided, read_limit, max_cores, chr1, hgfasta_path,
+                 polyA, min_utrlen, extendby, cumul_tuning, bigwig,
+                 bigwig_datasets, bigwig_savedir, bigwig_url, gem_index):
 
         self.datasets = datasets
         self.annotation_path = annotation_path
+        self.annotation_format = annotation_format
         self.utrfile_provided = utrfile_provided
         self.read_limit = read_limit
         self.max_cores = max_cores
@@ -73,18 +74,19 @@ class Settings(object):
         debugging!
         """
 
-        #self.chr1 = True
+        self.chr1 = True
         #self.chr1 = False
         #self.read_limit = False
-        #self.read_limit = 1000000
-        #self.max_cores = 1
+        self.read_limit = 100000
+        self.max_cores = 3
         #self.polyA = True
-        #self.polyA = False
+        self.polyA = False
         #self.polyA = '/users/rg/jskancke/phdproject/3UTR/the_project/temp_files'\
                 #'/polyA_reads_HeLa-S3_Nucleus_processed_mapped.bed'
         #self.bed_reads = '/users/rg/jskancke/phdproject/3UTR/the_project/temp_files'\
                 #'/reads_HeLa-S3_Nucleus.bed'
-        #self.bigwig = False
+        self.bigwig = False
+        #self.bigwig = True
 
 class Annotation(object):
     """
@@ -93,8 +95,9 @@ class Annotation(object):
     annotation.
     """
 
-    def __init__(self, annotation_path):
+    def __init__(self, annotation_path, annotation_format):
         self.path = annotation_path
+        self.ant_format = annotation_format
         self.utrfile_path = ''
         self.utr_exons = ''
         self.a_polyA_sites_path = ''
@@ -109,6 +112,9 @@ class Annotation(object):
         utr_dict = {}
         for line in open(self.utrfile_path, 'rb'):
             (chrm, beg, end, name, value, strand) = line.split()
+            if name in utr_dict:
+                print("Duplicate entry! WTF")
+                debug()
             utr_dict[name] = (chrm, int(beg), int(end), strand)
 
         return utr_dict
@@ -1296,10 +1302,11 @@ def read_settings(settings_file):
 
     # annotation
     try:
-        annotation = conf.getboolean('ANNOTATION', 'annotation')
+        annotation = conf.getboolean('ANNOTATION', 'annotation_path')
     except ValueError:
-        annotation = conf.get('ANNOTATION', 'annotation')
-        verify_access(annotation)
+        annotation_path = conf.get('ANNOTATION', 'annotation_path')
+        verify_access(annotation_path)
+        annotation_format = conf.get('ANNOTATION', 'annotation_format')
 
     # datasets
     datasets = dict((dset, files.split(':')) for dset, files in conf.items('DATASETS'))
@@ -1345,7 +1352,7 @@ def read_settings(settings_file):
 
     # If both 'annotation' and '3utr_bedfile' are false, your program isn't
     # going to go too far
-    if not annotation and not utr_bedfile_path:
+    if not annotation_path and not utr_bedfile_path:
         print('You must either use a GENCODE annotation or supply a bedfile'\
               ' yourself. Not both can be false.')
         sys.exit()
@@ -1393,9 +1400,10 @@ def read_settings(settings_file):
         print('To tune the cumulative value, you need to enable polyA reads')
         sys.exit()
 
-    return(datasets, annotation, utr_bedfile_path, read_limit, max_cores, chr1,
-          hg_fasta, polyA, min_utrlen, extendby, cuml_tuning, bigwig,
-           bigwig_datasets, bigwig_savedir, bigwig_url, gem_index)
+    return(datasets, annotation_path, annotation_format, utr_bedfile_path,
+           read_limit, max_cores, chr1, hg_fasta, polyA, min_utrlen, extendby,
+           cuml_tuning, bigwig, bigwig_datasets, bigwig_savedir, bigwig_url,
+           gem_index)
 
 def get_a_polyA_sites_path(settings, beddir):
     """
@@ -1440,7 +1448,7 @@ def get_a_polyA_sites_path(settings, beddir):
 
     return polyA_site_bed_path
 
-def get_utr_path(settings, beddir):
+def get_utr_path(settings, beddir, rerun_annotation_parser):
     """
     Get 3utr.bed-file path from annotation via annotation_parser module.
     """
@@ -2513,10 +2521,10 @@ def main():
     # The program reads a lot of information from the annotation. The annotation
     # object will hold this information (file-paths and datastructures).
     print('Reading settings ...\n')
-    annotation = Annotation(settings.annotation_path)
+    annotation = Annotation(settings.annotation_path, settings.annotation_format)
 
     # Check if 3UTRfile has been made or provided; if not, get it from annotation
-    annotation.utrfile_path = get_utr_path(settings, beddir)
+    annotation.utrfile_path = get_utr_path(settings, beddir, rerun_annottion_parser)
 
     # Get dictionary with (chrm, beg, end, strand) values for each 3utr-exon key
     # NOTE: for the 3'terminal exons, the beg/end is the extended value. For
