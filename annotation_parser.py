@@ -956,20 +956,23 @@ def remove_intersects_and_extend(unfiltered_path, outfile_path, all_transcripts,
             for line in open(unfiltered_path, 'rb'):
                 utrId = '_'.join(line.split()[3].split('_')[:2])
 
-                # Only write the file if it's not marked for removal
+                # Only write the 3utr to file if it's not marked for removal
                 if utrId not in remove_these_utrs:
 
                     (chrm, beg, end, utr_ex_id, val, strand) = line.split()
                     id_split = utr_ex_id.split('_')
 
+                    # the id by which you save the entry
+                    utr_id = '_'.join(id_split[:3])
+
                     # Extend the utrs for the final exon in the utr-batch
                     if len(id_split) == 4: # it has an EXTENDBY mark
 
-                        #only calculate when you do the extension. once is enough
-                        utr_id = '_'.join(id_split[:3])
-
-                        if  utr_id in extend_me:
+                        # Adjust the 'extendby' parameter if needed
+                        if utr_id in extend_me:
                             extendby = extend_me[utr_id]
+                        else:
+                            extendby = settings.extendby
 
                         if strand == '+':
                             end = str(int(end) + extendby)
@@ -979,6 +982,10 @@ def remove_intersects_and_extend(unfiltered_path, outfile_path, all_transcripts,
 
                         # update val to also include information about extension
                         val = val + '+{0}'.format(extendby)
+
+                    else:
+                        # Unless the exon is 3', mark it as un-extended
+                        val = val + '+0'
 
                     # val = total Exons in UTR
                     # val = 3 means 3 exon in this UTR. See utr_id for which one
@@ -1033,11 +1040,17 @@ def maximum_extension(unfiltered_path, all_transcripts, extendby,
            '-a', temp_exons_path,
            '-b', temp_extension_path]
 
+    cmd2 = ['intersectBed', '-wb',
+           '-f', '0.01',
+           '-a', unfiltered_path,
+           '-b', temp_extension_path]
+
     # with -wb, he will write FIRST the overlapping portion of A, and THEN the
     # ORIGINAL B entry (the 1000nt extension's beg and ends)
 
     # Run the above command and loop through output
     f1 = Popen(cmd1, stdout=PIPE)
+    f2 = Popen(cmd2, stdout=PIPE)
 
     extend_me = {}
 
@@ -1045,6 +1058,25 @@ def maximum_extension(unfiltered_path, all_transcripts, extendby,
     for line in f1.stdout:
         (int_chrm, int_beg, int_end, int_strand) = line.split()[:4]
         (o_chrm, o_beg, o_end, o_ID, o_val, o_strand) = line.split()[4:]
+
+        # Initialize with 1000 nt extension if o_ID is not found
+        if o_ID not in extend_me:
+            extend_me[o_ID] = 1000
+
+        if o_strand == '+':
+            max_extension = int(int_beg) - int(o_beg)
+
+        if o_strand == '-':
+            max_extension = int(o_end) - int(int_end)
+
+        # get the minimum intersection
+        extend_me[o_ID] = min(max_extension, extend_me[o_ID])
+
+    # Get the extension lenghts for 3UTR exons
+    # Hopefully this works out correctly after filtering
+    for line in f2.stdout:
+        (int_chrm, int_beg, int_end, int_ID, int_val, int_strand) = line.split()[:6]
+        (o_chrm, o_beg, o_end, o_ID, o_val, o_strand) = line.split()[6:]
 
         # Initialize with 1000 nt extension if o_ID is not found
         if o_ID not in extend_me:
