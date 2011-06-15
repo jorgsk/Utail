@@ -86,6 +86,11 @@ class Transcript(object):
         self.five_utr = Region('5UTR')
         self.exons = []
 
+        # the start_codon and stop_codon are only used for some annotation
+        # formats
+        self.start_codon = ''
+        self.stop_codon = ''
+
     def add_cds(self, cds):
         """
         Add CDS exons to the CDS list of exons.
@@ -139,6 +144,7 @@ class Transcript(object):
 
         if self.cds.exons == []:
             return
+
         self.cds.exons.sort(key=itemgetter(1))
         cds_beg = self.cds.exons[0][1]
         utr_beg = utr[1]
@@ -186,30 +192,16 @@ class Transcript(object):
         return "\nChrm\t{0}\nBeg\t{1}\nEnd\t{2}\nStrand\t{3}\n"\
                 .format(self.chrm, self.beg, self.end, self.strand)
 
+def gencode_reader(file_handle):
 
-def make_transcripts(annotation):
-    """
-    Loop through the GENCODE annotation file (the input), create instancees
-    of :class:`Transcript`, and save these in a dictionary. Also create a
-    dictionary, *genes*, with the transcript -> gene correspondence.
-
-    Since we go from GFF/GTF to .BED format, it's important to subtract 1 from
-    the beg-coordinate. 9 9 in GTF is 8 9 in BED.
-
-    :returns: transcripts, genes
-    """
-
-    # Skip first 4 lines of annotation (for gencode at least.......)
-    a_handle = skip_lines(annotation, 7)
-
-    # Initialize dictionaries
-    utr, cds, exons, transcripts, genes = (dict(), dict(), dict(), dict(),
+    (utr, cds, exons, transcripts, genes) = (dict(), dict(), dict(), dict(),
                                            dict())
 
     # Go though annotation and classify transcripts, genes, and utr + cds exons
-    for line in a_handle:
+    for line in file_handle:
         (chrm, source, feature, beg, end, d, strand, d, d, g_id, d, t_id, d, d,
         d, d, d, d, d, t_type) = line.split()[:20]
+
         beg = int(beg) - 1
         end = int(end)
 
@@ -249,15 +241,202 @@ def make_transcripts(annotation):
         for cds in cdses:
             transcripts[t_id].add_cds(cds)
 
-    # Add utrs to their transcripts, determine 3' or 5'
+    # Add utrs to their transcripts
     for (t_id, utrs) in utr.iteritems():
         for utr in utrs:
             transcripts[t_id].add_utr(utr)
 
-    # Add exons to their transcripts, determine 3' or 5'
+    # Add exons to their transcripts
     for (t_id, exons) in exons.iteritems():
         for exon in exons:
             transcripts[t_id].add_exon(exon)
+
+    return (transcripts, genes)
+
+def ensembl_reader(file_handle):
+    """
+    Different from GENCODE, ensembl doesn't have the 'transcript feature. You
+    have to assemble it yourself.'
+    """
+
+    (utr, cds, exons, transcripts, genes) = (dict(), dict(), dict(), dict(),
+                                           dict())
+
+    (start_codons, stop_codons) = (dict(), dict())
+
+    # Go though annotation and classify transcripts, genes, and utr + cds exons
+    for line in file_handle:
+
+        (chrm, t_type, feature, beg, end, d, strand,\
+         d, d, g_id, d, t_id) = line.split()[:12]
+
+        # skip the non-chromosome chrm entries (if len chrm > 3)
+        if len(chrm) > 2:
+            continue
+
+        # skip non-protein coding 3UTRs
+        t_type = t_type.rstrip(';').strip('"') #   remove some characters
+        if t_type != 'protein_coding':
+            continue
+
+        chrm = 'chr'+chrm
+        beg = int(beg) - 1
+        end = int(end)
+
+        t_id = t_id.rstrip(';').strip('"')
+        g_id = g_id.rstrip(';').strip('"')
+
+        # features: CDS, exon, stop_codon, start_codon
+
+        if t_id not in transcripts:
+            # initialize the transcript with the first featre you find
+            transcripts[t_id] = Transcript(t_id, g_id, t_type, chrm, beg, end, strand)
+
+            # The genes 
+            if g_id in genes:
+                genes[g_id].append(t_id)
+            else:
+                genes[g_id] = [t_id]
+
+        if feature == 'CDS':
+            if t_id in cds:
+                cds[t_id].append((chrm, beg, end, strand))
+            else:
+                cds[t_id] = [(chrm, beg, end, strand)]
+
+        if feature == 'exon':
+            if t_id in exons:
+                exons[t_id].append((chrm, beg, end, strand))
+            else:
+                exons[t_id] = [(chrm, beg, end, strand)]
+
+        if feature == 'start_codon':
+            if t_id in start_codons:
+                print('More than 1 start codon for 1 transxcript???!')
+                #debug()
+            else:
+                start_codons[t_id] = (chrm, beg, end, strand)
+
+        if feature == 'stop_codon':
+            if t_id in stop_codons:
+                print('More than 1 stop codon for 1 transxcript???!')
+                #debug()
+            else:
+                stop_codons[t_id] = (chrm, beg, end, strand)
+
+    # Add cdses to their transcripts
+    # NEEDS TO BE FIRST! :S
+    for (t_id, cdses) in cds.iteritems():
+        for cd in cdses:
+            transcripts[t_id].add_cds(cd)
+
+    # Add stop codons to their transcripts
+    for (t_id, stop_cdon) in stop_codons.iteritems():
+        transcripts[t_id].stop_codon = stop_cdon
+
+    # Add start codons to their transcripts
+    for (t_id, start_cdon) in start_codons.iteritems():
+        transcripts[t_id].start_codon = start_cdon
+
+    # Add exons to their transcripts
+    for (t_id, exns) in exons.iteritems():
+        for exon in exns:
+            transcripts[t_id].add_exon(exon)
+
+    # Add utrs to their transcripts, determine 3' or 5'
+    # For each exon, find out if it is before or after the start codon or stop
+    # codon
+
+    # Finally update the transcript beg/end from the utrs or exons
+    for (t_id, ts) in transcripts.iteritems():
+
+        # don't do anything if this transcript for some reason doesn'th ave
+        # exons
+        if ts.exons == []:
+            continue
+
+        # if not both start and stop codon are found, don't go further!
+        if ts.start_codon == '' or ts.stop_codon == '':
+            continue
+
+        ts.exons.sort(key=itemgetter(1))
+
+        ts.beg = ts.exons[0][1]
+        ts.end = ts.exons[-1][2]
+
+        if ts.strand == '+':
+            for exon in ts.exons:
+
+                # if exon is 5' to start codon
+                if exon[2] <= ts.start_codon[2]:
+                    ts.five_utr.exons.append(exon)
+
+                # if exon surrounds start codon, slice out the 5UTR-bit
+                if exon[1] < ts.start_codon[2] < exon[2]:
+                    utr = (exon[0], exon[1], ts.start_codon[2], exon[3])
+                    ts.five_utr.exons.append(utr)
+
+                # if exon is 3' to stop codon
+                if exon[1] >= ts.stop_codon[1]:
+                    ts.three_utr.exons.append(exon)
+
+                # if exon surrounds stop codon, slice out the 3UTR-bit
+                if exon[1] < ts.stop_codon[1] < exon[2]:
+                    utr = (exon[0], ts.stop_codon[1], exon[2], exon[3])
+                    ts.three_utr.exons.append(utr)
+
+        if ts.strand == '-':
+
+            for exon in ts.exons:
+
+                # if exon is 5' to start codon
+                if exon[1] >= ts.start_codon[1]:
+                    ts.five_utr.exons.append(exon)
+
+                # if exon surrounds start codon, slice out the 5UTR-bit
+                if exon[1] < ts.start_codon[1] < exon[2]:
+                    utr = (exon[0], ts.start_codon[1], exon[2], exon[3])
+                    ts.five_utr.exons.append(utr)
+
+                # if exon is 3' to stop codon
+                if exon[2] <= ts.stop_codon[2]:
+                    ts.three_utr.exons.append(exon)
+
+                # if exon surrounds stop codon, slice out the 3UTR-bit
+                if exon[1] < ts.stop_codon[2] < exon[2]:
+                    utr = (exon[0], exon[1], ts.stop_codon[2], exon[3])
+                    ts.three_utr.exons.append(utr)
+
+    return (transcripts, genes)
+
+def make_transcripts(annotation, file_format='GENCODE'):
+    """
+    Loop through the (GENCODE) annotation file (the input), create instancees
+    of :class:`Transcript`, and save these in a dictionary. Also create a
+    dictionary, *genes*, with the transcript -> gene correspondence.
+
+    Since we go from GFF/GTF to .BED format, it's important to subtract 1 from
+    the beg-coordinate. 9 9 in GTF is 8 9 in BED.
+
+    :returns: transcripts, genes
+    """
+
+    # Skip first 4 lines of annotation (for gencode at least.......)
+    a_handle = skip_lines(annotation, 7)
+
+    # Initialize dictionaries
+    utr, cds, exons, transcripts, genes = (dict(), dict(), dict(), dict(),
+                                           dict())
+
+    if file_format == 'GENCODE':
+        a_handle = skip_lines(annotation, 7)
+
+        (transcripts, genes) = gencode_reader(a_handle)
+
+    if file_format == 'ENSEMBL':
+        a_handle = open(annotation, 'rb')
+
+        (transcripts, genes) = ensembl_reader(a_handle)
 
     # Go through all the damn transcripts and their damn exons, utrs, and cds,
     # and sort them.
@@ -598,9 +777,11 @@ def get_3utr_bed_all_exons(settings, outfile_path):
 
     # Get transcripts and genes from annotation
     if settings.chr1:
-        (transcripts, genes) = make_transcripts(settings.annotation_path_chr1)
+        (transcripts, genes) = make_transcripts(settings.annotation_path_chr1,
+                                                settings.annotation_format)
     else:
-        (transcripts, genes) = make_transcripts(settings.annotation_path)
+        (transcripts, genes) = make_transcripts(settings.annotation_path,
+                                               settings.annotation_format)
 
     all_transcripts = transcripts
 
@@ -742,6 +923,7 @@ def remove_intersects_and_extend(unfiltered_path, outfile_path, all_transcripts,
 
         # If intersection occurred on utrs from DIFFERENT GENES, remove them
         # same-3utr intersection is accepted (because we choose the longest utr)
+        # Hey, sometimes this doesn't work. There is overlap within the 3UTR.
         if utr_id_1.split('_')[0] != utr_id_2.split('_')[0]:
             remove_these_utrs.add('_'.join(utr_id_1.split('_')[:2]))
             remove_these_utrs.add('_'.join(utr_id_2.split('_')[:2]))
@@ -1096,7 +1278,8 @@ def get_a_polyA_sites_bed(settings, outfile_path):
 
     out_handle = open(outfile_path, 'wb')
     # Get transcripts from annotation
-    (transcripts, genes) = make_transcripts(settings.annotation_path)
+    (transcripts, genes) = make_transcripts(settings.annotation_path,
+                                            settings.annotation_format)
 
     # Only get the longest of the 3UTRs when they overlap
     chrms = ['chr' + str(nr) for nr in range(1,23) + ['X','Y','M']]
@@ -1189,24 +1372,33 @@ def get_seqs(utr_dict, hgfasta):
 def main():
     t1 = time.time()
 
-    #chr1 = True
+    chr1 = True
 
-    chr1 = False
+    #chr1 = False
 
-    annotation = '/users/rg/jskancke/phdproject/3UTR/'\
-            'gencode5/gencode5_annotation.gtf'
+    #annotation = '/users/rg/jskancke/phdproject/3UTR/'\
+            #'gencode5/gencode5_annotation.gtf'
+    annotation = '/users/rg/jskancke/phdproject/3UTR/Annotations/'\
+            'Mus_musculus.NCBIM37.62.gtf'
     if chr1:
-        annotation = '/users/rg/jskancke/phdproject/3UTR/'\
-                'gencode5/gencode5_annotation_chr1.gtf'
+        #annotation = '/users/rg/jskancke/phdproject/3UTR/'\
+                #'gencode5/gencode5_annotation_chr1.gtf'
+        annotation = '/users/rg/jskancke/phdproject/3UTR/Annotations/'\
+                'Mus_musculus.NCBIM37.62_chr1.gtf'
 
-    algo = get_3utr_bed_all_exons(annotation, 'somewhere')
+    an_frmt = 'GENCODE'
+    an_frmt = 'ENSEMBL'
+
+    #algo = get_3utr_bed_all_exons(annotation, 'somewhere')
     ### TESTING START
 
-    #(transcripts, genes) = make_transcripts(annotation)
+    (transcripts, genes) = make_transcripts(annotation, an_frmt)
+
+    debug()
 
     #new_transcripts = cluster_by_utrbeg(transcripts)
 
-    #debug()
+    debug()
 
 
     ### TESTING OVER
