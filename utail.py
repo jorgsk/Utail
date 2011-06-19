@@ -74,10 +74,10 @@ class Settings(object):
         debugging!
         """
 
-        #self.chr1 = True
-        self.chr1 = False
+        self.chr1 = True
+        #self.chr1 = False
         #self.read_limit = False
-        self.read_limit = 100000
+        self.read_limit = 1000000
         self.max_cores = 3
         #self.polyA = True
         self.polyA = False
@@ -1475,8 +1475,14 @@ def get_utr_path(settings, beddir, rerun_annotation_parser):
     utr_filename = '3utrs' + chrm + ext + user_provided + '.bed'
     utr_bed_path = os.path.join(beddir, utr_filename)
 
-    if os.path.isfile(utr_bed_path):
-        return utr_bed_path
+    # if you're not rerunning the annotation, check if file's already there
+    if not rerun_annotation_parser:
+        if os.path.isfile(utr_bed_path):
+            return utr_bed_path
+
+    # Reload genome for any changes
+    if rerun_annotation_parser:
+        reload(genome)
 
     # If a utrfile is provided, never re-make from annotation, but shape it to
     # your needs? This is a bit unfinished.
@@ -1508,7 +1514,7 @@ def get_chr1_annotation(settings, beddir):
     filename = name + '_chr1' + suffix
     outpath = os.path.join(beddir, filename)
 
-    # If the file already exists, don't make it again
+     #If the file already exists, don't make it again
     if os.path.isfile(outpath):
         return outpath
 
@@ -1516,9 +1522,15 @@ def get_chr1_annotation(settings, beddir):
     print('Separating chr1 from the annotation ...')
     outhandle = open(outpath, 'wb')
 
-    for line in open(settings.annotation_path, 'rd'):
-        if line[:5] == 'chr1\t':
-            outhandle.write(line)
+    if settings.annotation_format == 'GENCODE':
+        for line in open(settings.annotation_path, 'rd'):
+            if line[:5] == 'chr1\t':
+                outhandle.write(line)
+
+    if settings.annotation_format == 'ENSEMBL':
+        for line in open(settings.annotation_path, 'rd'):
+            if line[:2] == '1\t':
+                outhandle.write(line)
 
     outhandle.close()
 
@@ -2490,7 +2502,7 @@ def main():
     DEBUGGING = False
 
     rerun_annotation_parser = False # you will have a conflict here...
-    rerun_annotation_parser = True # you will have a conflict here...
+    #rerun_annotation_parser = True # you will have a conflict here...
 
     # The path to the directory the script is located in
     here = os.path.dirname(os.path.realpath(__file__))
@@ -2546,8 +2558,6 @@ def main():
     print('Making data structures for annotated poly(A) sites ...\n')
     annotation.a_polyA_sites_dict = annotation.get_polyA_dict()
 
-    debug()
-
     ##################################################################
     if simulate:
         # For all 3UTR exons, get the genomic sequence. The sequence is needed
@@ -2572,12 +2582,13 @@ def main():
                          settings, annotation, DEBUGGING)
 
             #### FOR DEBUGGING #######
-            #akk = pipeline(*arguments)
+            akk = pipeline(*arguments)
             #########################
 
-            result = my_pool.apply_async(pipeline, arguments)
-            results.append(result)
+            #result = my_pool.apply_async(pipeline, arguments)
+            #results.append(result)
 
+        debug()
         # Wait for all procsses to finish
         my_pool.close()
         my_pool.join()

@@ -379,11 +379,13 @@ def ensembl_reader(file_handle):
                 # if exon is 3' to stop codon
                 if exon[1] >= ts.stop_codon[1]:
                     ts.three_utr.exons.append(exon)
+                    ts.three_utr.length = ts.three_utr.length + exon[2]-exon[1]
 
                 # if exon surrounds stop codon, slice out the 3UTR-bit
                 if exon[1] < ts.stop_codon[1] < exon[2]:
                     utr = (exon[0], ts.stop_codon[1], exon[2], exon[3])
                     ts.three_utr.exons.append(utr)
+                    ts.three_utr.length = ts.three_utr.length + utr[2]-utr[1]
 
         if ts.strand == '-':
 
@@ -401,11 +403,13 @@ def ensembl_reader(file_handle):
                 # if exon is 3' to stop codon
                 if exon[2] <= ts.stop_codon[2]:
                     ts.three_utr.exons.append(exon)
+                    ts.three_utr.length = ts.three_utr.length + exon[2]-exon[1]
 
                 # if exon surrounds stop codon, slice out the 3UTR-bit
                 if exon[1] < ts.stop_codon[2] < exon[2]:
                     utr = (exon[0], exon[1], ts.stop_codon[2], exon[3])
                     ts.three_utr.exons.append(utr)
+                    ts.three_utr.length = ts.three_utr.length + utr[2]-utr[1]
 
     return (transcripts, genes)
 
@@ -837,7 +841,6 @@ def get_3utr_bed_all_exons(settings, outfile_path):
                 # if it is long enough
                 if ts_obj.three_utr.length > settings.min_utrlen:
                     multi_exon_transcripts[ts_id] = ts_obj
-
 
     # Cluster and write single-exon utrs
     one_exon_cluster_write(one_exon_transcripts, all_transcripts,  genes,
@@ -1293,7 +1296,6 @@ def main():
 
 
     ### TESTING OVER
-
 
     debug()
 

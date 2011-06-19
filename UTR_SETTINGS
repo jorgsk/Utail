@@ -148,7 +148,7 @@ utr_bed_path = false
 # When investigating annotated 3UTRs, it is recommended to let the default
 # setting (1000) stay. If the genomic region is something else than 3'UTR,
 # extendby can be set to 0.
-extend_by = 1000
+extend_by = 100
 
 
 [HG_FASTA]
