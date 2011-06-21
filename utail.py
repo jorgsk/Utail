@@ -76,11 +76,11 @@ class Settings(object):
 
         self.chr1 = True
         #self.chr1 = False
-        #self.read_limit = False
-        self.read_limit = 100000
+        self.read_limit = False
+        #self.read_limit = 20000000
         self.max_cores = 3
-        #self.polyA = True
-        self.polyA = False
+        self.polyA = True
+        #self.polyA = False
         #self.polyA = '/users/rg/jskancke/phdproject/3UTR/the_project/temp_files'\
                 #'/polyA_reads_HeLa-S3_Nucleus_processed_mapped.bed'
         #self.bed_reads = '/users/rg/jskancke/phdproject/3UTR/the_project/temp_files'\
@@ -2578,8 +2578,8 @@ def main():
     #DEBUGGING = False
 
     # with this option, always remake the bedfiles
-    #rerun_annottion_parser = False
-    rerun_annottion_parser = True
+    rerun_annottion_parser = False
+    #rerun_annottion_parser = True
 
     # The path to the directory the script is located in
     here = os.path.dirname(os.path.realpath(__file__))
