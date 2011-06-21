@@ -3909,6 +3909,31 @@ def visualizedict(dictionary):
                         continue
                     print su4.keys()[:maxdepth]
 
+def get_pol2(dsets):
+    """ For K562 and GM1878, and for single-exon 3UTRs, get arrays of p-values
+    or similar for pol2 occupancy on the 3UTRs.
+    """
+
+    # prepare the pol2 hash table
+    pol2_hash = dict((cl, {}) for cl in dsets if cl in ('K562', 'GM12878'))
+
+    pol2dir = '/users/rg/jskancke/phdproject/3UTR/the_project/RNAPII'
+
+    for (cell_line, ts_dict) in pol2_hash.items():
+
+        # -1) unzip the pol2Reads for each cell line
+        # 0) get the unique (see script in RNAPII folder) and sort them
+
+        #1) Run the Chip-Seq programs on the resulting bedfiles
+        #2) Run IntersectBed on the program output with the 3UTRs with exon
+        # length 1. Save the p-value arrays or whatever it is for each
+        # transcript. Later use this in conjunction with the 3UTR instances you
+        # have.
+        # TODO: run the 100 ones with simone_bla, and
+        # make some slides with why you want to do the pol2 and chromatin
+        # correlations.
+        pass
+
 def main():
     # The path to the directory the script is located in
     here = os.path.dirname(os.path.realpath(__file__))
@@ -3974,6 +3999,8 @@ def main():
     #utr_length_comparison(settings, dsets)
 
     polyadenylation_comparison(dsets, super_cluster, dset_2super)
+
+    pol2_hash = get_pol2(dsets)
 
     ## The classic polyA variation distributions
     #classic_polyA_stats(settings, dsets)

@@ -77,10 +77,10 @@ class Settings(object):
         self.chr1 = True
         #self.chr1 = False
         #self.read_limit = False
-        self.read_limit = 1000000
+        self.read_limit = 20000000
         self.max_cores = 3
-        #self.polyA = True
-        self.polyA = False
+        self.polyA = True
+        #self.polyA = False
         #self.polyA = '/users/rg/jskancke/phdproject/3UTR/the_project/temp_files'\
                 #'/polyA_reads_HeLa-S3_Nucleus_processed_mapped.bed'
         #self.bed_reads = '/users/rg/jskancke/phdproject/3UTR/the_project/temp_files'\
@@ -2498,8 +2498,8 @@ def main():
     # function (called below). It also affects the 'temp' and 'output'
     # directories, respectively.
 
-    #DEBUGGING = True
-    DEBUGGING = False
+    DEBUGGING = True
+    #DEBUGGING = False
 
     rerun_annotation_parser = False # you will have a conflict here...
     #rerun_annotation_parser = True # you will have a conflict here...
@@ -2582,13 +2582,13 @@ def main():
                          settings, annotation, DEBUGGING)
 
             #### FOR DEBUGGING #######
-            akk = pipeline(*arguments)
+            #akk = pipeline(*arguments)
             #########################
 
-            #result = my_pool.apply_async(pipeline, arguments)
-            #results.append(result)
+            result = my_pool.apply_async(pipeline, arguments)
+            results.append(result)
 
-        debug()
+        #debug()
         # Wait for all procsses to finish
         my_pool.close()
         my_pool.join()
