@@ -350,7 +350,7 @@ def ensembl_reader(file_handle):
     # Finally update the transcript beg/end from the utrs or exons
     for (t_id, ts) in transcripts.iteritems():
 
-        # don't do anything if this transcript for some reason doesn'th ave
+        # don't do anything if this transcript for some reason doesn't have
         # exons
         if ts.exons == []:
             continue
@@ -860,9 +860,14 @@ def get_3utr_bed_all_exons(settings, outfile_path):
 def remove_intersects_and_extend(unfiltered_path, outfile_path, all_transcripts,
                                 settings):
     """Remove UTR intersections with CDS exons. Remove UTR intersections with
-    UTRs from other genes. If sequences should be extended, do just that."""
+    UTRs from other genes. If sequences should be extended, do just that.
+
+    Check how far 3UTRs can be extended given the annotation. Extend that far.
+    """
 
     temp_exons_path = os.path.join(os.path.dirname(outfile_path), 'temp_exons.bed')
+    temp_extension_path = os.path.join(os.path.dirname(outfile_path),
+                                       'temp_extension.bed')
 
     # Write non-3UTR exons
     temp_exons = open(temp_exons_path, 'wb')
@@ -906,16 +911,24 @@ def remove_intersects_and_extend(unfiltered_path, outfile_path, all_transcripts,
         (d,d,d, utr_id_1, d,d,d,d,d, utr_id_2, d,d,d) = line.split()
 
         # Only remove UTRs when there is not self-intersection
-        if utr_id_1.split('_') != utr_id_2.split('_'):
+        if utr_id_1 != utr_id_2:
             remove_these_utrs.add('_'.join(utr_id_1.split('_')[:2]))
             remove_these_utrs.add('_'.join(utr_id_2.split('_')[:2]))
 
     # Create the output file
     outfile_handle = open(outfile_path, 'wb')
 
-    # 4) Loop through the original file and write to the 'filtered' file
     extendby = settings.extendby
 
+    # Get the maximum number of extensions you can get
+
+    # NOTE the 3utrs in extend_me are ONLY those that actually intersect with
+    # something. If they don't intersect, you can use the 1000 extension.
+    extend_me = maximum_extension(unfiltered_path, all_transcripts, extendby,
+                                  remove_these_utrs, temp_extension_path,
+                                  temp_exons_path)
+
+    # 4) Loop through the original file and write to the 'filtered' file
     with open(outfile_path, 'wb') as outfile_handle:
 
         if not extendby:
@@ -928,13 +941,25 @@ def remove_intersects_and_extend(unfiltered_path, outfile_path, all_transcripts,
         if extendby:
 
             for line in open(unfiltered_path, 'rb'):
-                utr_id = '_'.join(line.split()[3].split('_')[:2])
-                if utr_id not in remove_these_utrs:
+                utrId = '_'.join(line.split()[3].split('_')[:2])
+
+                # Only write the 3utr to file if it's not marked for removal
+                if utrId not in remove_these_utrs:
+
                     (chrm, beg, end, utr_ex_id, val, strand) = line.split()
                     id_split = utr_ex_id.split('_')
 
+                    # the id by which you save the entry
+                    utr_id = '_'.join(id_split[:3])
+
                     # Extend the utrs for the final exon in the utr-batch
                     if len(id_split) == 4: # it has an EXTENDBY mark
+
+                        # Adjust the 'extendby' parameter if needed
+                        if utr_id in extend_me:
+                            extendby = extend_me[utr_id]
+                        else:
+                            extendby = settings.extendby
 
                         if strand == '+':
                             end = str(int(end) + extendby)
@@ -942,13 +967,118 @@ def remove_intersects_and_extend(unfiltered_path, outfile_path, all_transcripts,
                         if strand == '-':
                             beg = str(int(beg) - extendby)
 
-                    utr_id = '_'.join(id_split[:3])
+                        # update val to also include information about extension
+                        val = val + '+{0}'.format(extendby)
+
+                    else:
+                        # Unless the exon is 3', mark it as un-extended
+                        val = val + '+0'
 
                     # val = total Exons in UTR
                     # val = 3 means 3 exon in this UTR. See utr_id for which one
+                    # BUT if this is an extended exon, val = val
+                    # +extension_length
 
                     outfile_handle.write('\t'.join([chrm, beg, end, utr_id, val,
                                                    strand]) + '\n')
+
+def maximum_extension(unfiltered_path, all_transcripts, extendby,
+                      remove_these_utrs, temp_extension_path, temp_exons_path):
+
+    """ Should you do it in a redundant manner for all UTR_IDs, and then discard
+    those that don't make it? I say yes.
+
+    Extend all 3UTRs in raw_path that have 'extendby' for them. Intersect this
+    region
+    """
+    temp_ext = open(temp_extension_path, 'wb')
+
+    for line in open(unfiltered_path, 'rb'):
+        utrId = '_'.join(line.split()[3].split('_')[:2])
+
+        # Skip utr_ids to be removed
+        if utrId in remove_these_utrs:
+            continue
+
+        (chrm, beg, end, utr_ex_id, val, strand) = line.split()
+        id_split = utr_ex_id.split('_')
+
+        # Extend the utrs for the final exon in the utr-batch
+        if len(id_split) == 4: # it has an EXTENDBY mark
+
+            if strand == '+':
+                beg = str(int(end)+1)
+                end = str(int(beg) + extendby)
+
+            if strand == '-':
+                end = str(int(beg)-1)
+                beg = str(int(end) - extendby)
+
+            utr_id = '_'.join(id_split[:3])
+
+            # Write the extension of the 3UTR
+            temp_ext.write('\t'.join([chrm, beg, end, utr_id, val, strand]) +
+                           '\n')
+
+    temp_ext.close()
+
+    # run intersectBed on temp_exons_path and temp_extension
+    cmd1 = ['intersectBed', '-wb',
+           '-a', temp_exons_path,
+           '-b', temp_extension_path]
+
+    cmd2 = ['intersectBed', '-wb',
+           '-f', '0.01',
+           '-a', unfiltered_path,
+           '-b', temp_extension_path]
+
+    # with -wb, he will write FIRST the overlapping portion of A, and THEN the
+    # ORIGINAL B entry (the 1000nt extension's beg and ends)
+
+    # Run the above command and loop through output
+    f1 = Popen(cmd1, stdout=PIPE)
+    f2 = Popen(cmd2, stdout=PIPE)
+
+    extend_me = {}
+
+    # Get the extension lenghts for CDS and 5prime exons
+    for line in f1.stdout:
+        (int_chrm, int_beg, int_end, int_strand) = line.split()[:4]
+        (o_chrm, o_beg, o_end, o_ID, o_val, o_strand) = line.split()[4:]
+
+        # Initialize with 1000 nt extension if o_ID is not found
+        if o_ID not in extend_me:
+            extend_me[o_ID] = 1000
+
+        if o_strand == '+':
+            max_extension = int(int_beg) - int(o_beg)
+
+        if o_strand == '-':
+            max_extension = int(o_end) - int(int_end)
+
+        # get the minimum intersection
+        extend_me[o_ID] = min(max_extension, extend_me[o_ID])
+
+    # Get the extension lenghts for 3UTR exons
+    # Hopefully this works out correctly after filtering
+    for line in f2.stdout:
+        (int_chrm, int_beg, int_end, int_ID, int_val, int_strand) = line.split()[:6]
+        (o_chrm, o_beg, o_end, o_ID, o_val, o_strand) = line.split()[6:]
+
+        # Initialize with 1000 nt extension if o_ID is not found
+        if o_ID not in extend_me:
+            extend_me[o_ID] = 1000
+
+        if o_strand == '+':
+            max_extension = int(int_beg) - int(o_beg)
+
+        if o_strand == '-':
+            max_extension = int(o_end) - int(int_end)
+
+        # get the minimum intersection
+        extend_me[o_ID] = min(max_extension, extend_me[o_ID])
+
+    return extend_me
 
 
 def one_exon_cluster_write(one_exon_transcripts, all_transcripts, genes,
@@ -1289,7 +1419,7 @@ def main():
 
     (transcripts, genes) = make_transcripts(annotation, an_frmt)
 
-    #debug()
+    debug()
 
 
     ### TESTING OVER

@@ -178,11 +178,14 @@ class UTR(object):
         # ASSUME that the exon has been extended. This might not be the case. 
         self.beg_ext = int(beg)
         self.end_ext = int(end)
-        self.val = int(val)
+
+        # the total nr of exons and the extendby come in one bundle
+        sval, sextendby = val.split('+')
+        (self.val, self.extendby) = int(sval), int(sextendby)
+
         self.utr_ID = utr_ID
         self.strand = strand
         self.rpkm = rpkm
-        self.extendby = extendby # how far has this annotation been extended
         self.sequence = sequence
         self.polyA_reads = polyA_reads # the polyA reads
         self.a_polyA_sites = [int(site[1]) for site in a_polyA_sites] # annotated sites
@@ -222,13 +225,16 @@ class UTR(object):
         # If extended, update these values
         if extendby > 0:
 
-            # This UTR has only one exon
+            # Get different scenarios for this UTR; depending on which you do
+            # different things
+
+            # 1)This UTR has only one exon
             one_exon = (self.this_exnr == self.tot_exnr == 1)
 
-            # This is the 3' exon on the + strand
+            # 2)This is the 3' exon on the + strand
             fin_ex_plus = (strand == '+') and (self.this_exnr == self.tot_exnr > 1)
 
-            # This is the 3' exon on the - strand
+            # 3)This is the 3' exon on the - strand
             fin_ex_min = (strand=='-') and (self.tot_exnr>1) and (self.this_exnr==1)
 
             if one_exon:
@@ -261,7 +267,6 @@ class UTR(object):
     def __str__(self):
         return "\nChrm\t{0}\nBeg\t{1}\nEnd\t{2}\nStrand\t{3}\n"\
                 .format(self.chrm, self.beg_nonext, self.end_nonext, self.strand)
-
 
     def is_empty(self):
         """
@@ -373,12 +378,10 @@ class FullLength(object):
         self.has_PAS = 'NA'
         self.eps_dstream_coverage = 'NA'
         self.eps_ustream_coverage = 'NA'
-        self.annot_dstream_coverage = 'NA'
-        self.annot_ustream_coverage = 'NA'
         self.cuml_rel_size = 'NA'
         self.annotTTS_dist = 'NA'
 
-        self.epsilon = 0.999
+        self.epsilon = 0.995
 
         # How many nucleotides does this UTR possibly extend beyond the aTTS?
         self.epsilon_beyond = 0
@@ -401,10 +404,6 @@ class FullLength(object):
                     ('epsilon_downstream_covrg', frmt(self.eps_dstream_coverage)),
                     ('epsilon_upstream_covrg', frmt(self.eps_ustream_coverage)),
                     ('annotation_distance', frmt(self.annotTTS_dist)),
-                    ('annotation_downstream_covrg',
-                     frmt(self.annot_dstream_coverage)),
-                    ('annotation_upstream_covrg',
-                     frmt(self.annot_ustream_coverage)),
                     ('epsilon_PAS_type', self.has_PAS),
                     ('epsilon_PAS_distance', frmt(self.PAS_dist)),
                     ('epsilon_covrg_beyond_aTTS', frmt(self.epsilon_beyond)),
@@ -430,8 +429,6 @@ class FullLength(object):
         epsilon_downstream_covrg
         epsilon_upstream_covrg
         annotation_distance
-        annotation_downstream_covrg
-        annotation_upstream_covrg
         epsilon_PAS_type
         epsilon_PAS_distance
         epsilon_covrg_beyond_aTTS
@@ -479,36 +476,36 @@ class FullLength(object):
         # See if there is an annotated TTS end close to the length-defined end
         self.annotTTS_dist = self.annot_TTS_dist(this_utr)
 
-        # If the epsilon_rel_size is bigger or equal to epsilon, see how many
-        # nucleotides the 'true' rel_epsilon of the the coverage vector extends
-        # beyond the aTTS
-        if self.cuml_rel_size >= self.epsilon:
-            self.epsilon_beyond = self.beyond_aTTS(this_utr)
+        ## If the epsilon_rel_size is bigger or equal to epsilon, see how many
+        ## nucleotides the 'true' rel_epsilon of the the coverage vector extends
+        ## beyond the aTTS
+        #if self.cuml_rel_size >= self.epsilon:
+            #self.epsilon_beyond = self.beyond_aTTS(this_utr)
 
-    def beyond_aTTS(self, this_utr):
-        #"""
-        #Re-calculate the coverage, but now in terms of the extended one.
-        #"""
-        # If -, reverse coverage vector for the cumulative normalization
-        if this_utr.strand == '-':
-            cov = this_utr.covr_vector[::-1]
-        else:
-            cov = this_utr.covr_vector
+    #def beyond_aTTS(self, this_utr):
+        ##"""
+        ##Re-calculate the coverage, but now in terms of the extended one.
+        ##"""
+        ## If -, reverse coverage vector for the cumulative normalization
+        #if this_utr.strand == '-':
+            #cov = this_utr.covr_vector[::-1]
+        #else:
+            #cov = this_utr.covr_vector
 
-        tot_cov = sum(cov) #sum of coverage for normalization
-        # get cumulative and normalize it at the same time
-        norm_cum_cov = [sum(cov[:i+1])/tot_cov for i in range(len(cov))]
+        #tot_cov = sum(cov) #sum of coverage for normalization
+        ## get cumulative and normalize it at the same time
+        #norm_cum_cov = [sum(cov[:i+1])/tot_cov for i in range(len(cov))]
 
-        # Go through it again, and get the index from the end where eps is.
-        # Return how much this extends from the aTTS end.
-        for indx, val in enumerate(norm_cum_cov[::-1]):
-            if val < self.epsilon:
-                return this_utr.extendby - indx
+        ## Go through it again, and get the index from the end where eps is.
+        ## Return how much this extends from the aTTS end.
+        #for indx, val in enumerate(norm_cum_cov[::-1]):
+            #if val < self.epsilon:
+                #return this_utr.extendby - indx
 
     def annot_TTS_dist(self, this_utr):
-        #"""
-        #Check if the 3UTR length end has an annotated TTS nearby
-        #"""
+        """
+        Check if the 3UTR length end has an annotated TTS nearby
+        """
         eps_end = this_utr.epsilon_coord
         for apoint in this_utr.a_polyA_sites:
             if eps_end-50 < apoint < eps_end+50:
@@ -517,13 +514,15 @@ class FullLength(object):
         # If you make it here, a close-by aTTS site has not been found
         return 'NA'
 
+    def cumul_minus_old(self, this_utr):
+        """
+        Calculate the position of cumulative coverage (e.g 0.98) relative to the
+        length of the annotated 3UTR. This is refered to as the *epsilon*
+        position. Calculate the coverage on both sides of this position.
 
-    def cumul_minus(self, this_utr):
-        #"""
-        #Calculate the position of cumulative coverage (e.g 0.98) relative to the
-        #length of the annotated 3UTR. This is refered to as the *epsilon*
-        #position. Calculate the coverage on both sides of this position.
-        #"""
+        This is the old version, where I calculated the epsilon coverage only up
+        to the annotated point. Now I wish to do it up to the extension as well.
+        """
         covr_vector = this_utr.covr_vector
         extendby = this_utr.extendby
         cumul_covr = this_utr.cumul_covr
@@ -532,6 +531,7 @@ class FullLength(object):
         # get the cumulated coverage resulting from the extension
         ext_cumul = cumul_covr[extendby-1]
         # subtract this from extension
+
         if ext_cumul > 0:
             cumul_covr = [val-ext_cumul for val in cumul_covr[extendby:]]
         else:
@@ -569,15 +569,99 @@ class FullLength(object):
         self.eps_dstream_coverage = sum(covr_vector[er_pos-50:er_pos])/float(50)
         self.eps_ustream_coverage = sum(covr_vector[er_pos:er_pos+50])/float(50)
 
-        # Get the mean values 'extendby' around the annotated end too
-        self.annot_ustream_coverage = sum(covr_vector[extendby:2*extendby])/extendby
-        self.annot_dstream_coverage = sum(covr_vector[:extendby])/extendby
+    def cumul_minus(self, this_utr):
+        """
+        Calculate the position of cumulative coverage (e.g 0.98) relative to the
+        length of the annotated 3UTR. This is refered to as the *epsilon*
+        position. Calculate the coverage on both sides of this position.
 
+        This is the new version, where I calculate the epsilon coverage
+        including the extension.
+        """
+
+        covr_vector = this_utr.covr_vector
+        cumul_covr = this_utr.cumul_covr
+
+        # Get normalized cuml-coverage of non-extended 3UTR. save to this_utr
+        covr_sum = sum(covr_vector)
+        this_utr.norm_cuml = [1-val/covr_sum for val in cumul_covr]
+
+        # Test for a special case where only the last entry has coverage
+        if covr_sum == covr_vector[-1]:
+            rel_pos = 1
+            self.cuml_rel_size = rel_pos/float(this_utr.length_nonext)
+
+        # Get the extended-utr-relative position where 99.5% of the reads
+        # have landed
+        for ind, el in enumerate(this_utr.norm_cuml):
+            if el < self.epsilon:
+                rel_pos = ind
+                length_ext = this_utr.length_ext
+                self.cuml_rel_size = (length_ext-rel_pos)/this_utr.length_nonext
+                break
+
+        # Save relative cumulative position with the this utr for later usage
+        this_utr.rel_pos = rel_pos
+        #Note that rel_pos is relative to the EXTENDED 3UTR.
+
+        # Update the epsilon coordinate relative to the genome
+        this_utr.epsilon_coord = this_utr.beg_ext + this_utr.rel_pos
+
+        # Calculate the mean coverage on both sides of rel_pos
+        self.eps_dstream_coverage = sum(covr_vector[rel_pos-50:rel_pos])/50
+        self.eps_ustream_coverage = sum(covr_vector[rel_pos:rel_pos+50])/50
+
+        if rel_pos < 50 and rel_pos!= 0:
+            self.eps_dstream_coverage = sum(covr_vector[:rel_pos])/rel_pos
+
+        if rel_pos == 0:
+            self.eps_dstream_coverage = 0
 
     def cumul_plus(self, this_utr):
-        #"""
-        #See cumul_minus
-        #"""
+        """
+        See cumul_minus
+        """
+        covr_vector = this_utr.covr_vector
+        cumul_covr = this_utr.cumul_covr # extended cumul_covr
+
+        # Get normalized cuml-coverage of EXTENDED 3UTR
+        covr_sum = sum(covr_vector) # extended sum(covr_vector)
+        this_utr.norm_cuml = [val/covr_sum for val in cumul_covr]
+
+        # Test special case where only first entry has value
+        if covr_sum == covr_vector[0]:
+            rel_pos = 1
+            self.cuml_rel_size = rel_pos/float(this_utr.length_nonext)
+
+        # Get the point where epsilon percent of reads have landed (e.g. 99.5)
+        for ind, el in enumerate(reversed(this_utr.norm_cuml)):
+            if el < self.epsilon:
+                length_ext = this_utr.length_ext
+                rel_pos = length_ext - ind
+                self.cuml_rel_size = rel_pos/float(this_utr.length_nonext)
+                break
+
+        # Save relative position (relative to extended 3utr) with the object
+        this_utr.rel_pos = rel_pos
+
+        # Update the epsilon coordinate relative to the genome
+        this_utr.epsilon_coord = this_utr.beg_ext + this_utr.rel_pos
+
+        # Calculate the mean coverage on both sides of epsilon_pos.
+        self.eps_dstream_coverage = sum(covr_vector[rel_pos:rel_pos+50])/float(50)
+        self.eps_ustream_coverage = sum(covr_vector[rel_pos-50:rel_pos])/float(50)
+
+        # Check for the occasions when rel_pos -50 is less than 0
+        if rel_pos < 50 and rel_pos != 0:
+            self.eps_ustream_coverage = sum(covr_vector[:rel_pos])/float(rel_pos)
+
+        if rel_pos == 0:
+            self.eps_ustream_coverage = 0
+
+    def cumul_plus_old(self, this_utr):
+        """
+        See cumul_minus_old!
+        """
         covr_vector = this_utr.covr_vector
         extendby = this_utr.extendby
 
@@ -618,24 +702,18 @@ class FullLength(object):
         if rel_pos == 0:
             self.eps_ustream_coverage = 0
 
-        # Get the mean values extendby around the annotated end too
-        self.annot_dstream_coverage = sum(covr_vector[-2*extendby:-extendby])/extendby
-        self.annot_ustream_coverage = sum(covr_vector[-extendby:])/extendby
-
     def get_pas(self, pas_patterns, this_utr):
         #"""
         #Return all close-by PAS and their distances.
         #"""
 
-        utr_ID = this_utr.utr_ID
-
         if this_utr.strand == '+':
             rel_pos = this_utr.rel_pos
             # For negative strand, take the length of the sequence mins rel_pos.
-            # However, since the sequence has been extended, and rel_pos is from
-            # the non-extended sequence, subtract the extension.
+            # (because the sequence is in 5->3' direction
+
         if this_utr.strand == '-':
-            rel_pos = len(this_utr.sequence) - this_utr.extendby - this_utr.rel_pos
+            rel_pos = len(this_utr.sequence) - this_utr.rel_pos
 
         temp_PAS = []
         pas_seq = this_utr.sequence[rel_pos-40:rel_pos]
@@ -1157,7 +1235,6 @@ def output_writer(dset_id, coverage, annotation, utr_seqs, rpkm, extendby,
                 length_output.write_output(length_outfile, this_utr)
                 pAread_output.write_output(polyA_outfile, this_utr)
 
-
                 # If tuning, calculate the tuning variables and write to file
                 if settings.cumul_tuning:
                     calc_write_tuning(tuning_handle, length_output, this_utr)
@@ -1195,8 +1272,8 @@ def calc_write_tuning(tuning_handle, length_output, this_utr):
     if this_utr.is_empty():
         return
 
-    # Get the absolute end-position of the 99.5%, relative to the non-extended UTR
-    end_pos = this_utr.beg_nonext + this_utr.rel_pos
+    # Get the absolute end-position of the 99.5%, relative to the extended UTR
+    end_pos = this_utr.epsilon_coord
 
     # Get the cumulative coverage and +/- 50nt coverage of the closest pA site
     write_output = False
@@ -1208,8 +1285,9 @@ def calc_write_tuning(tuning_handle, length_output, this_utr):
             write_output = True
 
     if write_output:
-        # There could be 3 clusters within 50 nt of the end_pos. You need to
-        # choose the most downstream cluster.
+
+         #There could be 3 clusters within 50 nt of the end_pos. You need to
+         #choose the most downstream cluster.
         close_sites.sort()
         if this_utr.strand == '+':
             pAsite = close_sites[-1]
@@ -1219,23 +1297,29 @@ def calc_write_tuning(tuning_handle, length_output, this_utr):
         # Get the absolute distance from the polyA site
         pA_dist = pAsite-end_pos
 
-        # Get the relative-to-non-extended position of the polyA site 
-        rel_pA_pos = pAsite - this_utr.beg_nonext
+        # XXX now skipping the coverage on both sides of the polyA read. That
+        # isn't very informative.
 
-        covr_vec = this_utr.covr_vector
+        ## Get the relative-to-extended position of the polyA site 
+        ## HEY! you can't switch between genomic coordinates and covr_vector
+        ## coordinates. For multi-3UTRs it might not matter at all.
 
-        # Get the coverage 50 nt on both sides of the polyA site
-        # No worried about extension -- it is in the end.
-        if this_utr.strand == '+':
-            d_stream_covr = sum(covr_vec[rel_pA_pos-50:rel_pA_pos])/float(50)
-            u_stream_covr = sum(covr_vec[rel_pA_pos:rel_pA_pos+50])/float(50)
+        #rel_pA_pos = pAsite - this_utr.beg_ext
 
-        # if negative strand and extended, become relative to the extended one
-        if this_utr.strand == '-':
-            if this_utr.extendby:
-                rel_ex_pA_pos = rel_pA_pos + this_utr.extendby
-            d_stream_covr = sum(covr_vec[rel_ex_pA_pos:rel_ex_pA_pos+50])/float(50)
-            u_stream_covr = sum(covr_vec[rel_ex_pA_pos-50:rel_ex_pA_pos])/float(50)
+        #covr_vec = this_utr.covr_vector
+
+        ## Get the coverage 50 nt on both sides of the polyA site
+        ## No worried about extension -- it is in the end.
+        #if this_utr.strand == '+':
+            #d_stream_covr = sum(covr_vec[rel_pA_pos-50:rel_pA_pos])/float(50)
+            #u_stream_covr = sum(covr_vec[rel_pA_pos:rel_pA_pos+50])/float(50)
+
+        ## if negative strand and extended, become relative to the extended one
+        #if this_utr.strand == '-':
+            #if this_utr.extendby:
+                #rel_ex_pA_pos = rel_pA_pos + this_utr.extendby
+            #d_stream_covr = sum(covr_vec[rel_ex_pA_pos:rel_ex_pA_pos+50])/float(50)
+            #u_stream_covr = sum(covr_vec[rel_ex_pA_pos-50:rel_ex_pA_pos])/float(50)
 
         # Get the cumulative coverage of the polyA site
         # However, watch out for reads that land outside the non-extended
@@ -1243,27 +1327,32 @@ def calc_write_tuning(tuning_handle, length_output, this_utr):
         # For now I simply assign them to the last value of the region.. 
         # it's not satisfactory!
 
-        if (rel_pA_pos < 0) or (rel_pA_pos >= this_utr.length_nonext):
-            if this_utr.strand == '+':
-                cumul_pA = this_utr.norm_cuml[-1]
-            if this_utr.strand == '-':
-                cumul_pA = this_utr.norm_cuml[0]
-        else:
-            cumul_pA = this_utr.norm_cuml[rel_pA_pos]
+        #if (rel_pA_pos < 0) or (rel_pA_pos >= this_utr.length_nonext):
+            #if this_utr.strand == '+':
+                #cumul_pA = this_utr.norm_cuml[-1]
+            #if this_utr.strand == '-':
+                #cumul_pA = this_utr.norm_cuml[0]
+        #else:
+            #cumul_pA = this_utr.norm_cuml[rel_pA_pos]
 
-        d_stream_covr = str(d_stream_covr)
-        u_stream_covr = str(u_stream_covr)
+        #d_stream_covr = str(d_stream_covr)
+        #u_stream_covr = str(u_stream_covr)
+        #cumul_pA = str(cumul_pA)
+
         pA_dist = str(pA_dist)
-        cumul_pA = str(cumul_pA)
         rpkm = str(this_utr.rpkm)
         length = str(this_utr.length_nonext)
         default_pos = str(this_utr.rel_pos)
         strand = str(this_utr.strand)
+
         # Write To file
         tuning_handle.write('\t'.join([this_utr.utr_ID[:-2], default_pos,
-                                       pA_dist, cumul_pA, d_stream_covr,
-                                       u_stream_covr, rpkm, length, strand]) +
-                            '\n')
+                                       pA_dist, rpkm, length, strand]) + '\n')
+
+        #tuning_handle.write('\t'.join([this_utr.utr_ID[:-2], default_pos,
+                                       #pA_dist, cumul_pA, d_stream_covr,
+                                       #u_stream_covr, rpkm, length, strand]) +
+                            #'\n')
 
 def verify_access(f):
     """
@@ -1456,8 +1545,9 @@ def get_utr_path(settings, beddir, rerun_annotation_parser):
     # Put together the name of the output file. The name depends on the options
     # that were used to get it.
     # If options are not set, make them a 0-string
+
     if settings.extendby:
-        ext = '_extendby_'+str(settings.extendby)
+        ext = '_extendby_max_'+str(settings.extendby)
     else:
         ext = ''
 
@@ -1561,12 +1651,15 @@ def shape_provided_bed(utr_bed_path, settings):
         if end - beg < settings.utrlen:
             continue
 
-        # Extend by the nr of nucleotides specified
-        if settings.extendby:
-            if strand == '+':
-                end = end + settings.extendby
-            if strand == '-':
-                beg = beg - settings.extendby
+        # Don't extend them. If people want that, they can do it themselves.
+        ## Extend by the nr of nucleotides specified
+        ## TODO BUG!! Not all exons should be extended :S only the 3-prime ones!
+        ## If people provide bed-files, they can only be 1-exon 3UTRs.
+        #if settings.extendby:
+            #if strand == '+':
+                #end = end + settings.extendby
+            #if strand == '-':
+                #beg = beg - settings.extendby
 
         outfile.write('\t'.join([chrm, str(beg), str(end), name, val,
                                  strand])+'\n')
@@ -1597,6 +1690,7 @@ def get_rpkm(reads, utrfile_path, total_reads, utrs, extendby, dset_id):
     # Length of UTR
     # # of reads landing in the UTR.
     rpkm = {}
+
     # If the bed-file has been extended, we need to unextend it. HOWEVER, we
     # should ONLY un-extend the 3' exons of the UTR. Internal exons have not
     # been extended and should not be touched.
@@ -1609,27 +1703,15 @@ def get_rpkm(reads, utrfile_path, total_reads, utrs, extendby, dset_id):
             (chrm, beg, end, utr_id, val, strand) = line.split()
 
             # Reverse the extensions so you get correct RPKM!
-            # Only extend those that were extended in the first place!
-            #ENSG00000078369_1_2	2	-
-            # This means UTR number 1 from this gene, exon number 2 from this
-            # UTR, and there are 2 utrs in total.
+            # Those that are extended have a val= 1+1000 to show that they are
+            # extended. Those that are nto extened have a 1+0
 
-            this_ex_nr = int(utr_id.split('_')[-1])
-            tot_exnr = int(val)
+            extended_by = int(val.split('+')[1])
 
-            if this_ex_nr == tot_exnr == 1:
-                if strand == '+':
-                    end = int(end) - extendby
-                if strand == '-':
-                    beg = int(beg) + extendby
-
-            if this_ex_nr == tot_exnr > 1:
-                if strand == '+':
-                    end = int(end) - extendby
-
-            if (tot_exnr > 1) and (this_ex_nr == 1):
-                if strand == '-':
-                    beg = int(beg) + extendby
+            if strand == '+':
+                end = int(end) - extended_by
+            if strand == '-':
+                beg = int(beg) + extended_by
 
             temp_handle.write('\t'.join([chrm, str(beg), str(end), utr_id, val,
                                          strand]) + '\n')
@@ -2004,7 +2086,7 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs, settings,
         # Get a dictionary for each utr_id with its overlapping polyA reads
         utr_polyAs = get_polyA_utr(polyA_bed_path, utrfile_path)
 
-    # If polyA is True, trim the extracte polyA reads, remap them, and save the
+    # If polyA is True, trim the extracted polyA reads, remap them, and save the
     # uniquely mappign ones to bed format
     elif polyA == True:
         # PolyA pipeline: remove low-quality reads, remap, and -> .bed-format:
@@ -2501,8 +2583,9 @@ def main():
     DEBUGGING = True
     #DEBUGGING = False
 
-    #rerun_annotation_parser = False # you will have a conflict here...
-    rerun_annotation_parser = True # you will have a conflict here...
+    # with this option, always remake the bedfiles
+    rerun_annottion_parser = False
+    #rerun_annottion_parser = True
 
     # The path to the directory the script is located in
     here = os.path.dirname(os.path.realpath(__file__))
@@ -2539,8 +2622,7 @@ def main():
     annotation = Annotation(settings.annotation_path, settings.annotation_format)
 
     # Check if 3UTRfile has been made or provided; if not, get it from annotation
-    annotation.utrfile_path = get_utr_path(settings, beddir,
-                                           rerun_annotation_parser)
+    annotation.utrfile_path = get_utr_path(settings, beddir, rerun_annotation_parser)
 
     # Get dictionary with (chrm, beg, end, strand) values for each 3utr-exon key
     # NOTE: for the 3'terminal exons, the beg/end is the extended value. For
@@ -2550,7 +2632,7 @@ def main():
 
     # You extract all annotated polyA sites into a bedfile: a_polyA_sites_path
     annotation.a_polyA_sites_path = get_a_polyA_sites_path(settings, beddir)
-    # TODO this step is not annotation-independent. What happens if the
+    # TODO this step is annotation-dependent. What happens if the
     # genome-region bedfile does not intersect a single annotated 3UTR?
 
     # You intersect the annotated polyA files with the 3UTR bedfile you got from
@@ -2581,9 +2663,9 @@ def main():
             arguments = (dset_id, dset_reads, tempdir, output_dir, utr_seqs,
                          settings, annotation, DEBUGGING)
 
-            #### FOR DEBUGGING #######
+            ##### FOR DEBUGGING #######
             #akk = pipeline(*arguments)
-            #########################
+            ##########################
 
             result = my_pool.apply_async(pipeline, arguments)
             results.append(result)
@@ -2629,12 +2711,7 @@ if __name__ == '__main__':
 
 # TODO change order of final output to confer with BED format
 
-# TODO: the path to the gem-mapper index... if people are going to use this,
-# they need to provide the path in the SETTINGS file. If you do this yourself,
-# it will be easier to switch to an index file on your own hard disk, makign
-# loading the index into memory much faster.
 # TODO: go through the entire program and improve documentation.
-# TODO: write external documentation file for the program
 # TODO: the two below should be part of the final analysis script; one button!
 # TODO: make a function that returns all regions (5UTR, intron, CDS)
 # unoverlapping other regions.

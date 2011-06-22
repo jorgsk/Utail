@@ -146,7 +146,7 @@ utr_bed_path = false
 # for discovering those 3UTRs that are longer than what is reported in the
 # annotation.
 # When investigating annotated 3UTRs, it is recommended to let the default
-# setting (1000) stay. If the genomic region is something else than 3'UTR,
+# setting (500) stay. If the genomic region is something else than 3'UTR,
 # extendby can be set to 0.
 extend_by = 100
 
