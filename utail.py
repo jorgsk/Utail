@@ -77,10 +77,10 @@ class Settings(object):
         self.chr1 = True
         #self.chr1 = False
         #self.read_limit = False
-        self.read_limit = 20000000
+        self.read_limit = 200000
         self.max_cores = 3
-        self.polyA = True
-        #self.polyA = False
+        #self.polyA = True
+        self.polyA = False
         #self.polyA = '/users/rg/jskancke/phdproject/3UTR/the_project/temp_files'\
                 #'/polyA_reads_HeLa-S3_Nucleus_processed_mapped.bed'
         #self.bed_reads = '/users/rg/jskancke/phdproject/3UTR/the_project/temp_files'\
@@ -2501,8 +2501,8 @@ def main():
     DEBUGGING = True
     #DEBUGGING = False
 
-    rerun_annotation_parser = False # you will have a conflict here...
-    #rerun_annotation_parser = True # you will have a conflict here...
+    #rerun_annotation_parser = False # you will have a conflict here...
+    rerun_annotation_parser = True # you will have a conflict here...
 
     # The path to the directory the script is located in
     here = os.path.dirname(os.path.realpath(__file__))
