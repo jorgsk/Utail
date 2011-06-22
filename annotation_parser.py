@@ -842,62 +842,51 @@ def get_3utr_bed_all_exons(settings, outfile_path):
                 if ts_obj.three_utr.length > settings.min_utrlen:
                     multi_exon_transcripts[ts_id] = ts_obj
 
-    # Cluster and write single-exon utrs. Return the ts ID's of the 3UTRs that
-    # you discard. These can are need later when removing overlapping exons.
-    discarded_single = one_exon_cluster_write(one_exon_transcripts,
-                                              all_transcripts,  genes, extendby,
-                                              raw_handle)
+    # Cluster and write single-exon utrs.
+    one_exon_cluster_write(one_exon_transcripts, all_transcripts,  genes,
+                           extendby, raw_handle)
 
     # Cluster and write the multi-exon utrs to file.
-    discarded_multi = cluster_by_utrbeg_multi_exon(multi_exon_transcripts,
-                                                   all_transcripts, genes,
-                                                   extendby, raw_handle)
+    cluster_by_utrbeg_multi_exon(multi_exon_transcripts, all_transcripts, genes,
+                                 extendby, raw_handle)
 
     raw_handle.close()
-    # There is a problem where the wrong utr is being extended; and we have a
-    # rare 'utr within a utr' problem, but this sholdn't be a big deal.
 
-    # TODO here you need to add a step that tries to extend all 3UTR ends by
-    # 1000 (or so) nt; intersects the extension with all exons; and finally
-    # trims the extensions so that no extension intersects into another genomic
-    # featuer. Save the extensions in a dict. When you save to file, include
-    # this extension and also save how much you extended by.
-    # You need to go carefully through the code after to check all downstream
-    # effects. For example, all "settings.extendby" must be modified to
-    # "utr.extendby", or something like that. Each 3UTR can now have its own
-    # 'extendby'. 
-    # How to keep the information about extensions? You output to a .bed-file
-    # and you are already using the value-field. Maybe use it for two tings?
-    # value_extendby?
-
-    discards = set.union(discarded_single, discarded_multi)
-    # Remove utrs that have CDS exons in them and write to outfile_path
+    # Remove utrs that overlap with other exons in them and write to outfile_path
     remove_intersects_and_extend(raw_path, outfile_path, all_transcripts,
-                                 settings, discards)
+                                 settings)
 
 
 def remove_intersects_and_extend(unfiltered_path, outfile_path, all_transcripts,
-                                settings, discards):
+                                settings):
     """Remove UTR intersections with CDS exons. Remove UTR intersections with
     UTRs from other genes. If sequences should be extended, do just that."""
 
-    temp_cds_path = os.path.join(os.path.dirname(outfile_path), 'temp_cds_exons.bed')
+    temp_exons_path = os.path.join(os.path.dirname(outfile_path), 'temp_exons.bed')
 
-    temp_cds_handle = open(temp_cds_path, 'wb')
-    # Write all CDS exons
+    # Write non-3UTR exons
+    temp_exons = open(temp_exons_path, 'wb')
     for ts_id, ts_obj in all_transcripts.iteritems():
+
+        # Write all CDS exons
         if ts_obj.cds.exons != []:
             for cds in ts_obj.cds.exons:
-                temp_cds_handle.write('\t'.join([cds[0], str(cds[1]),
-                                                 str(cds[2]), cds[3]])+'\n')
-    temp_cds_handle.close()
+                temp_exons.write('\t'.join([cds[0], str(cds[1]), str(cds[2]),
+                                            cds[3]])+'\n')
+
+        # And write and 5UTR exons
+        if ts_obj.five_utr.exons != []:
+            for f_utr in ts_obj.five_utr.exons:
+                temp_exons.write('\t'.join([f_utr[0], str(f_utr[1]),
+                                            str(f_utr[2]), f_utr[3]])+'\n')
+    temp_exons.close()
 
     # Set of utrs to remove
     remove_these_utrs = set()
 
-    # 1) Run intersect bed on bedfile with CDS exons and with itself
+    # 1) Run intersect bed on bedfile with exons and with itself
     # Ignore strandedness
-    cmd1 = ['intersectBed', '-wb', '-a', temp_cds_path, '-b', unfiltered_path]
+    cmd1 = ['intersectBed', '-wb', '-a', temp_exons_path, '-b', unfiltered_path]
     cmd2 = ['intersectBed', '-wo', '-a', unfiltered_path, '-b', unfiltered_path]
 
     # Run the above command and loop through output
@@ -913,23 +902,11 @@ def remove_intersects_and_extend(unfiltered_path, outfile_path, all_transcripts,
 
     # 3) Add utrs to-be-removed from the self intersection
     for line in f2.stdout:
-        # Get the IDs of the intersecting utrs (most will be self-intersect)
+        # Get the IDs of the intersecting utrs
         (d,d,d, utr_id_1, d,d,d,d,d, utr_id_2, d,d,d) = line.split()
 
-        # If intersection occurred on utrs from DIFFERENT GENES, remove them
-        # same-3utr intersection is accepted (because we choose the longest utr)
-        # Hey, sometimes this doesn't work. There is overlap within the 3UTR.
-        # How to solve this problem????????????
-        # Before you can give any 'true' estimates for elongated 3UTRs, you must
-        # solve this. TODO fix this somehow. This is your last false positive.
-        # Preferentially fix it in the master branch.
-        # The simplest way is to remove the 'short' 3UTR versions from
-        # 'unfiltered_path' and intersect. Thus, from each 3UTR cluster, write
-        # only the longest one.
-
-        debug()
-        if utr_id_1.split('_')[0] != utr_id_2.split('_')[0]:
-            debug()
+        # Only remove UTRs when there is not self-intersection
+        if utr_id_1.split('_') != utr_id_2.split('_'):
             remove_these_utrs.add('_'.join(utr_id_1.split('_')[:2]))
             remove_these_utrs.add('_'.join(utr_id_2.split('_')[:2]))
 
@@ -978,8 +955,8 @@ def one_exon_cluster_write(one_exon_transcripts, all_transcripts, genes,
                            extendby, out_handle):
     """Takes a set of Transcript objects whose genes should only have UTRs with
     one exon. Clusters the UTRs of the transcripts together by their
-    UTR start sites. Removes or trims UTRs that overlap CDS exons for that
-    gene."""
+    UTR start sites.
+    """
 
     chrms = ['chr'+str(nr) for nr in range(1,23) + ['X','Y','M']]
     tsdict = dict((chrm, {'+':[], '-':[]}) for chrm in chrms)
@@ -997,9 +974,6 @@ def one_exon_cluster_write(one_exon_transcripts, all_transcripts, genes,
 
     # you will need this to count how many times the gene has been used
     gene_utrcount = dict((gene_id, 0) for gene_id in genes)
-
-    # Set of 3UTRs discarded because they are short in a cluster
-    discards = set([])
 
     # Cluster the 3UTRs as you go through them; when leaving a cluster check
     # for rouge overlapping CDS exons; then write the cluster to disc
@@ -1042,8 +1016,11 @@ def one_exon_cluster_write(one_exon_transcripts, all_transcripts, genes,
                         utr_list.append(this_utr)
 
                     gene_id = one_exon_transcripts[this_cluster_ids[0]].gene_id
+
                     # The the longest of the utrs in the cluster
                     print_utr = longest_utr(utr_list)
+                    #debug()
+
                     # Count how many times you have printed from this gene
                     gene_utrcount[gene_id] += 1
 
@@ -1061,7 +1038,6 @@ def one_exon_cluster_write(one_exon_transcripts, all_transcripts, genes,
                     clustcount = 1
                     this_cluster_begs = [val]
                     this_cluster_ids = [this_id]
-    return discards
 
 
 def cluster_by_utrbeg_multi_exon(multi_exon_transcripts, all_transcripts,
@@ -1087,7 +1063,7 @@ def cluster_by_utrbeg_multi_exon(multi_exon_transcripts, all_transcripts,
     # given gene
     gene_utrcount = dict((gene_id, 0) for gene_id in genes)
 
-    discards = set([])
+    discards = {}
 
     # go through the annotated 3UTR starts and cluster them
     for chrm, strand_dict in tsdict.iteritems():
@@ -1157,6 +1133,8 @@ def cluster_by_utrbeg_multi_exon(multi_exon_transcripts, all_transcripts,
                             if (nr == 0) and (strand == '-'):
                                 e_nr += '_EXTENDME'
 
+                        # add the cluster-ignored 3utrs to the 3UTR id in a
+                        # dictionary so you can screen for them at a later point
                         out_handle.write('\t'.join([chrm, beg, end, gene_id +
                                                     '_' + e_nr, str(exon_nr) ,
                                                     strand])+'\n')

@@ -27,3 +27,21 @@ possible.
 We made Utail because we wanted a to characterize the 3UTR of transcripts from
 any kind of RNA-seq experiment.
 
+
+Getting 3UTRs from annotation
+=============================
+When providing an annotation, UTail tries to construct a set of 3UTRs for each
+gene. A given gene may have 1 or several annotated 3UTRs. The selection of
+3UTRs is strict -- if a 3UTR overlaps other genomic features, it is discarded.
+This will remove the number of false positives in the RNA-seq data.
+
+Specifically, UTail first clusters the 3UTRs for each gene. A gene may be
+annotated with several UTRs that start at the same genomic coordinate, but have
+different lengths, as a result of differential usage of polyadenylation sites.
+From a given cluster, only the longest 3UTR is selected. The rest are
+discarded. If that longest 3UTR overlaps another genomic feature (another exon
+of some sort, such as the 5' or 3' of the next gene), it is also discarded.
+
+3UTRs with multiple exons are supported. However, often these 3UTRs overlap
+other genomic regions are are discarded by the program. Also for multiple-exon
+3UTRs, the longest (in number of base-pairs) is chosen.
