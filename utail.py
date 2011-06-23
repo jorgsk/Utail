@@ -515,61 +515,6 @@ class FullLength(object):
         # If you make it here, a close-by aTTS site has not been found
         return 'NA'
 
-    def cumul_minus_old(self, this_utr):
-        """
-        Calculate the position of cumulative coverage (e.g 0.98) relative to the
-        length of the annotated 3UTR. This is refered to as the *epsilon*
-        position. Calculate the coverage on both sides of this position.
-
-        This is the old version, where I calculated the epsilon coverage only up
-        to the annotated point. Now I wish to do it up to the extension as well.
-        """
-        covr_vector = this_utr.covr_vector
-        extendby = this_utr.extendby
-        cumul_covr = this_utr.cumul_covr
-        # NOTE the coverage arrays are in terms of the non-extended one
-
-        # get the cumulated coverage resulting from the extension
-        ext_cumul = cumul_covr[extendby-1]
-        # subtract this from extension
-
-        if ext_cumul > 0:
-            cumul_covr = [val-ext_cumul for val in cumul_covr[extendby:]]
-        else:
-            cumul_covr = cumul_covr[extendby:]
-
-        # Get normalized cuml-coverage of non-extended 3UTR. save to this_utr
-        covr_sum = sum(covr_vector[extendby:])
-        this_utr.norm_cuml = [1-val/covr_sum for val in cumul_covr]
-
-        # Test for a special case where only the last entry has coverage
-        if covr_sum == covr_vector[-1]:
-            rel_pos = 1
-            self.cuml_rel_size = rel_pos/float(this_utr.length_nonext)
-
-        # Get the non_extended utr-relative position where 99.5% of the reads
-        # have landed
-        for ind, el in enumerate(this_utr.norm_cuml):
-            if el < self.epsilon:
-                rel_pos = ind
-                length_nonext = this_utr.length_nonext
-                self.cuml_rel_size = (length_nonext-rel_pos)/length_nonext
-                break
-
-        # Save relative cumulative position with the this utr for later usage
-        this_utr.rel_pos = rel_pos
-        #Note that rel_pos is relative to the un-extended 3UTR.
-
-        # Update the epsilon coordinate relative to the genome
-        this_utr.epsilon_coord = this_utr.beg_nonext + this_utr.rel_pos
-
-        # rel_pos according to extended 3utr
-        er_pos = rel_pos + extendby
-
-        # Calculate the mean coverage on both sides of rel_pos
-        self.eps_dstream_coverage = sum(covr_vector[er_pos-50:er_pos])/float(50)
-        self.eps_ustream_coverage = sum(covr_vector[er_pos:er_pos+50])/float(50)
-
     def cumul_minus(self, this_utr):
         """
         Calculate the position of cumulative coverage (e.g 0.98) relative to the
@@ -588,6 +533,9 @@ class FullLength(object):
         this_utr.norm_cuml = [1-val/covr_sum for val in cumul_covr]
 
         # Test for a special case where only the last entry has coverage
+        # TODO you need a better check for if rel_pos has been assigned
+        # This is not the special case you should be testing for. The special
+        # case is the case when the if-test below doesn't 
         if covr_sum == covr_vector[-1]:
             rel_pos = 1
             self.cuml_rel_size = rel_pos/float(this_utr.length_nonext)
@@ -595,6 +543,7 @@ class FullLength(object):
         # Get the extended-utr-relative position where 99.5% of the reads
         # have landed
         for ind, el in enumerate(this_utr.norm_cuml):
+            # What if el is never < than self.epsilon?
             if el < self.epsilon:
                 rel_pos = ind
                 length_ext = this_utr.length_ext
@@ -602,7 +551,13 @@ class FullLength(object):
                 break
 
         # Save relative cumulative position with the this utr for later usage
-        this_utr.rel_pos = rel_pos
+        try:
+            this_utr.rel_pos = rel_pos
+        except:
+            print('Rel_pos not defined')
+            print this_utr.norm_cuml
+            print this_utr.strand
+            debug()
         #Note that rel_pos is relative to the EXTENDED 3UTR.
 
         # Update the epsilon coordinate relative to the genome
@@ -643,7 +598,12 @@ class FullLength(object):
                 break
 
         # Save relative position (relative to extended 3utr) with the object
-        this_utr.rel_pos = rel_pos
+        try:
+            this_utr.rel_pos = rel_pos
+        except:
+            print('Rel_pos not defined')
+            print this_utr.norm_cuml
+            print this_utr.strand
 
         # Update the epsilon coordinate relative to the genome
         this_utr.epsilon_coord = this_utr.beg_ext + this_utr.rel_pos
@@ -659,49 +619,6 @@ class FullLength(object):
         if rel_pos == 0:
             self.eps_ustream_coverage = 0
 
-    def cumul_plus_old(self, this_utr):
-        """
-        See cumul_minus_old!
-        """
-        covr_vector = this_utr.covr_vector
-        extendby = this_utr.extendby
-
-        # Get normalized cuml-coverage of UN-extended 3UTR
-        cumul_covr = this_utr.cumul_covr[:-extendby] # non-extended cumul_covr
-        covr_sum = sum(covr_vector[:-extendby]) # non-extended sum(covr_vector)
-        this_utr.norm_cuml = [val/covr_sum for val in cumul_covr]
-
-        # Test special case where only first entry has value
-        if covr_sum == covr_vector[0]:
-            rel_pos = 1
-            self.cuml_rel_size = rel_pos/float((this_utr.length_nonext))
-
-        # Get the point where epsilon percent of reads have landed (e.g. 99.5)
-        for ind, el in enumerate(reversed(this_utr.norm_cuml)):
-            if el < self.epsilon:
-                length_nonext = this_utr.length_nonext
-                rel_pos = length_nonext - ind
-                self.cuml_rel_size = rel_pos/float(length_nonext)
-                break
-
-        # Save relative position (relative to extended 3utr) with the object
-        this_utr.rel_pos = rel_pos
-
-        # Update the epsilon coordinate relative to the genome
-        this_utr.epsilon_coord = this_utr.beg_nonext + this_utr.rel_pos
-
-        # Calculate the mean coverage on both sides of this.
-        # Note for ext_mean_99: ext_rel_pos + extendby = rel_pos
-        # ext_mean_99 -> upstream_coverage
-        self.eps_dstream_coverage = sum(covr_vector[rel_pos:rel_pos+50])/float(50)
-        self.eps_ustream_coverage = sum(covr_vector[rel_pos-50:rel_pos])/float(50)
-
-        # Check for the occasions when rel_pos -50 is less than 0
-        if rel_pos < 50 and rel_pos != 0:
-            self.eps_ustream_coverage = sum(covr_vector[:rel_pos])/float(rel_pos)
-
-        if rel_pos == 0:
-            self.eps_ustream_coverage = 0
 
     def get_pas(self, pas_patterns, this_utr):
         #"""
@@ -2651,8 +2568,8 @@ def main():
         print('\tTime to get sequences: {0}\n'.format(time.time() - tx))
 
         # Create a pool of processes; one dataset will take up one process.
-        #my_pool = Pool(processes = settings.max_cores)
-        #results = []
+        my_pool = Pool(processes = settings.max_cores)
+        results = []
 
         # Apply all datasets to the pool
         t1 = time.time()
@@ -2665,19 +2582,19 @@ def main():
                          settings, annotation, DEBUGGING)
 
             ##### FOR DEBUGGING #######
-            akk = pipeline(*arguments)
+            #akk = pipeline(*arguments)
             ##########################
 
-            #result = my_pool.apply_async(pipeline, arguments)
-            #results.append(result)
+            result = my_pool.apply_async(pipeline, arguments)
+            results.append(result)
 
-        debug()
-        ## Wait for all procsses to finish
-        #my_pool.close()
-        #my_pool.join()
+        #debug()
+        # Wait for all procsses to finish
+        my_pool.close()
+        my_pool.join()
 
-        # Get the paths from the final output
-        #outp = [result.get() for result in results]
+         #Get the paths from the final output
+        outp = [result.get() for result in results]
 
         # Print the total elapsed time
         print('Total elapsed time: {0}\n'.format(time.time()-t1))
