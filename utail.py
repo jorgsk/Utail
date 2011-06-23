@@ -23,6 +23,7 @@ def run_from_ipython():
         return True
     except NameError:
         return False
+
 if run_from_ipython():
     from IPython.Debugger import Tracer
     debug = Tracer()
@@ -2580,12 +2581,12 @@ def main():
     # function (called below). It also affects the 'temp' and 'output'
     # directories, respectively.
 
-    DEBUGGING = True
-    #DEBUGGING = False
+    #DEBUGGING = True
+    DEBUGGING = False
 
     # with this option, always remake the bedfiles
-    rerun_annottion_parser = False
-    #rerun_annottion_parser = True
+    rerun_annotation_parser = False
+    #rerun_annotation_parser = True
 
     # The path to the directory the script is located in
     here = os.path.dirname(os.path.realpath(__file__))
@@ -2650,8 +2651,8 @@ def main():
         print('\tTime to get sequences: {0}\n'.format(time.time() - tx))
 
         # Create a pool of processes; one dataset will take up one process.
-        my_pool = Pool(processes = settings.max_cores)
-        results = []
+        #my_pool = Pool(processes = settings.max_cores)
+        #results = []
 
         # Apply all datasets to the pool
         t1 = time.time()
@@ -2664,19 +2665,19 @@ def main():
                          settings, annotation, DEBUGGING)
 
             ##### FOR DEBUGGING #######
-            #akk = pipeline(*arguments)
+            akk = pipeline(*arguments)
             ##########################
 
-            result = my_pool.apply_async(pipeline, arguments)
-            results.append(result)
+            #result = my_pool.apply_async(pipeline, arguments)
+            #results.append(result)
 
-        #debug()
-        # Wait for all procsses to finish
-        my_pool.close()
-        my_pool.join()
+        debug()
+        ## Wait for all procsses to finish
+        #my_pool.close()
+        #my_pool.join()
 
         # Get the paths from the final output
-        outp = [result.get() for result in results]
+        #outp = [result.get() for result in results]
 
         # Print the total elapsed time
         print('Total elapsed time: {0}\n'.format(time.time()-t1))

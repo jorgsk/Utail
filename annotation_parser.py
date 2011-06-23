@@ -313,14 +313,12 @@ def ensembl_reader(file_handle):
         if feature == 'start_codon':
             if t_id in start_codons:
                 print('More than 1 start codon for 1 transxcript???!')
-                #debug()
             else:
                 start_codons[t_id] = (chrm, beg, end, strand)
 
         if feature == 'stop_codon':
             if t_id in stop_codons:
                 print('More than 1 stop codon for 1 transxcript???!')
-                #debug()
             else:
                 stop_codons[t_id] = (chrm, beg, end, strand)
 
@@ -1149,7 +1147,6 @@ def one_exon_cluster_write(one_exon_transcripts, all_transcripts, genes,
 
                     # The the longest of the utrs in the cluster
                     print_utr = longest_utr(utr_list)
-                    #debug()
 
                     # Count how many times you have printed from this gene
                     gene_utrcount[gene_id] += 1

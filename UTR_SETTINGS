@@ -91,7 +91,7 @@ annotation_format = GENCODE
 #
 # only_chr1 = false:
 # run with all chromosomes
-only_chr1 = false
+only_chr1 = true
 
 
 [MIN_3UTR_LENGTH]
@@ -101,8 +101,8 @@ min3utrlen = 200
 
 
 [POLYA_READS]
-polya = true
-# polya = true:
+# polya = true
+polya = false
 # the program will attempt to get poly(A) reads from the gem-mapped-reads. Only
 # use this option if your gem-mapped reads have not been trimmed.
 #
@@ -148,7 +148,7 @@ utr_bed_path = false
 # When investigating annotated 3UTRs, it is recommended to let the default
 # setting (500) stay. If the genomic region is something else than 3'UTR,
 # extendby can be set to 0.
-extend_by = 100
+extend_by = 500
 
 
 [HG_FASTA]
@@ -211,8 +211,8 @@ url = http://genome.crg.es/~jskancke/bigWigs
 #
 # From this information distributions and distances can be generated for tuning
 # the 99.5% value.
-tuning = true
-# tuning = false
+# tuning = true
+tuning = false
 
 
 [PLOTTING]
