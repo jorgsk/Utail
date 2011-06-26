@@ -384,9 +384,6 @@ class FullLength(object):
 
         self.epsilon = 0.995
 
-        # How many nucleotides does this UTR possibly extend beyond the aTTS?
-        self.epsilon_beyond = 0
-
     def header_dict(self, this_utr):
         """
         Return a dictionary that maps header-entries to the UTR or FullLength
@@ -407,7 +404,6 @@ class FullLength(object):
                     ('annotation_distance', frmt(self.annotTTS_dist)),
                     ('epsilon_PAS_type', self.has_PAS),
                     ('epsilon_PAS_distance', frmt(self.PAS_dist)),
-                    ('epsilon_covrg_beyond_aTTS', frmt(self.epsilon_beyond)),
                     ('3utr_RPKM', frmt(this_utr.rpkm)),
                     ('3utr_average_coverage', frmt(this_utr.avrg_coverage))
                      ))
@@ -432,7 +428,6 @@ class FullLength(object):
         annotation_distance
         epsilon_PAS_type
         epsilon_PAS_distance
-        epsilon_covrg_beyond_aTTS
         3utr_RPKM
         3utr_average_coverage
         """.split()
@@ -532,16 +527,12 @@ class FullLength(object):
         covr_sum = sum(covr_vector)
         this_utr.norm_cuml = [1-val/covr_sum for val in cumul_covr]
 
-        # Test for a special case where only the last entry has coverage
-        # TODO you need a better check for if rel_pos has been assigned
-        # This is not the special case you should be testing for. The special
-        # case is the case when the if-test below doesn't 
-        if covr_sum == covr_vector[-1]:
-            rel_pos = 1
-            self.cuml_rel_size = rel_pos/float(this_utr.length_nonext)
-
         # Get the extended-utr-relative position where 99.5% of the reads
         # have landed
+
+        # Assume rel_pos is 0 and then update it
+        rel_pos = 0
+
         for ind, el in enumerate(this_utr.norm_cuml):
             # What if el is never < than self.epsilon?
             if el < self.epsilon:
@@ -551,14 +542,7 @@ class FullLength(object):
                 break
 
         # Save relative cumulative position with the this utr for later usage
-        try:
-            this_utr.rel_pos = rel_pos
-        except:
-            print('Rel_pos not defined')
-            print this_utr.norm_cuml
-            print this_utr.strand
-            debug()
-        #Note that rel_pos is relative to the EXTENDED 3UTR.
+        this_utr.rel_pos = rel_pos
 
         # Update the epsilon coordinate relative to the genome
         this_utr.epsilon_coord = this_utr.beg_ext + this_utr.rel_pos
@@ -584,10 +568,8 @@ class FullLength(object):
         covr_sum = sum(covr_vector) # extended sum(covr_vector)
         this_utr.norm_cuml = [val/covr_sum for val in cumul_covr]
 
-        # Test special case where only first entry has value
-        if covr_sum == covr_vector[0]:
-            rel_pos = 1
-            self.cuml_rel_size = rel_pos/float(this_utr.length_nonext)
+        # Assume rel_pos is 0 and then update it
+        rel_pos = 0
 
         # Get the point where epsilon percent of reads have landed (e.g. 99.5)
         for ind, el in enumerate(reversed(this_utr.norm_cuml)):
@@ -598,12 +580,7 @@ class FullLength(object):
                 break
 
         # Save relative position (relative to extended 3utr) with the object
-        try:
-            this_utr.rel_pos = rel_pos
-        except:
-            print('Rel_pos not defined')
-            print this_utr.norm_cuml
-            print this_utr.strand
+        this_utr.rel_pos = rel_pos
 
         # Update the epsilon coordinate relative to the genome
         this_utr.epsilon_coord = this_utr.beg_ext + this_utr.rel_pos
@@ -1000,7 +977,7 @@ def strip_tailT(seq, lead_T, non_T):
 
     return seq
 
-def coverage_wrapper(dset_id, filtered_reads, utrfile_path, options):
+def coverage_wrapper(dset_id, filtered_reads, utrfile_path):
     """
     Wrapper around coverageBed. Calcuates coverage of the reads over the
     3UTR-regions, or whatever region was sent in to the program. If the region
@@ -1012,7 +989,7 @@ def coverage_wrapper(dset_id, filtered_reads, utrfile_path, options):
     out_path = os.path.join(dirpath, 'covered_'+dset_id)
     outfile = open(out_path, 'wb')
 
-    cmd = ['coverageBed', options, '-a', filtered_reads, '-b', utrfile_path]
+    cmd = ['coverageBed', '-d', '-a', filtered_reads, '-b', utrfile_path]
 
     f = Popen(cmd, stdout=outfile)
     f.wait()
@@ -2032,8 +2009,7 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs, settings,
 
     # Cover the 3UTRs with the reads
     print('Getting read-coverage for the 3UTRs for {0} ...\n'.format(dset_id))
-    options = '-d'
-    coverage_path = coverage_wrapper(dset_id, bed_reads, utrfile_path, options)
+    coverage_path = coverage_wrapper(dset_id, bed_reads, utrfile_path)
 
     # Collect read coverage for each 3UTR exon, join the multi-exon 3UTRs, and
     # write to file the parameters you calculate
@@ -2581,7 +2557,7 @@ def main():
             arguments = (dset_id, dset_reads, tempdir, output_dir, utr_seqs,
                          settings, annotation, DEBUGGING)
 
-            ##### FOR DEBUGGING #######
+            #### FOR DEBUGGING #######
             #akk = pipeline(*arguments)
             ##########################
 
@@ -2589,7 +2565,6 @@ def main():
             results.append(result)
 
         #debug()
-        # Wait for all procsses to finish
         my_pool.close()
         my_pool.join()
 

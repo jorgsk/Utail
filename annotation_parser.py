@@ -972,10 +972,9 @@ def remove_intersects_and_extend(unfiltered_path, outfile_path, all_transcripts,
                         # Unless the exon is 3', mark it as un-extended
                         val = val + '+0'
 
-                    # val = total Exons in UTR
-                    # val = 3 means 3 exon in this UTR. See utr_id for which one
-                    # BUT if this is an extended exon, val = val
-                    # +extension_length
+                    # val = "total Exons in UTR" + "extension"
+                    # val = 3+100 means 3 exon in this UTR. See utr_id for which
+                    # one. Also it's extended by 100 nt.
 
                     outfile_handle.write('\t'.join([chrm, beg, end, utr_id, val,
                                                    strand]) + '\n')

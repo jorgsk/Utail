@@ -8,8 +8,10 @@ import ConfigParser
 import sys
 from itertools import combinations as combins
 
+from subprocess import Popen, PIPE
+
 import matplotlib.pyplot as plt
-import matplotlib.cm as cm
+#import matplotlib.cm as cm
 from matplotlib import lines
 
 plt.ion() # turn on the interactive mode so you can play with plots
@@ -130,9 +132,8 @@ class UTR(object):
         # Read all the parameters from line
         (chrm, beg, end, utr_extended_by, strand, ID, epsilon_coord,
          epsilon_rel_size, epsilon_downstream_covrg, epsilon_upstream_covrg,
-         annotTTS_dist, annot_downstream_covrg, annot_upstream_covrg,
-         epsilon_PAS_type, epsilon_PAS_distance, epsilon_beyond, RPKM,
-         avrg_covrg) = input_line.split('\t')
+         annotTTS_dist, epsilon_PAS_type, epsilon_PAS_distance, epsilon_beyond,
+         RPKM, avrg_covrg) = input_line.split('\t')
 
         self.chrm = chrm
         self.beg = str_to_intfloat(beg)
@@ -155,8 +156,6 @@ class UTR(object):
         #
         self.eps_downstream_covrg = str_to_intfloat(epsilon_downstream_covrg)
         self.eps_upstream_covrg = str_to_intfloat(epsilon_upstream_covrg)
-        self.annot_downstream_covrg = str_to_intfloat(annot_downstream_covrg)
-        self.annot_upstream_covrg = str_to_intfloat(annot_upstream_covrg)
         self.annotTTS_dist = annotTTS_dist
 
         # PAS type and PAS distance are space-delimited
@@ -1583,8 +1582,8 @@ def get_clusters(settings):
     for dset_name in settings.datasets:
 
         clusterfile = open(cluster_files[dset_name], 'rb')
-        # Get headers
-        c_header = clusterfile.next()
+        # Skip headers
+        clusterfile.next()
 
         dset_clusters = []
 
@@ -1614,7 +1613,6 @@ def get_utrs(settings,speedrun=False, svm=False):
     """
     # parse the datasets to get the cell lines and compartments in this dataset
     cell_lines = list(set([ds.split('_')[0] for ds in settings.datasets]))
-    compartments = list(set(['_'.join(ds.split('_')[1:]) for ds in settings.datasets]))
 
     # Initialize the dsets
     dsets = dict((cln, {}) for cln in cell_lines)
@@ -1630,9 +1628,9 @@ def get_utrs(settings,speedrun=False, svm=False):
     # Check if all length files exist or that you have access
     [verify_access(f) for f in length_files.values()]
 
-    #
+    # limit the nr of reads from each dset if you want to be fast
     if speedrun:
-        maxreads = 1000
+        maxlines = 1000
 
     linenr = 0
     for dset_name in settings.datasets:
@@ -1640,9 +1638,9 @@ def get_utrs(settings,speedrun=False, svm=False):
         lengthfile = open(length_files[dset_name], 'rb')
         clusterfile = open(cluster_files[dset_name], 'rb')
 
-        # Get headers
-        l_header = lengthfile.next()
-        c_header = clusterfile.next()
+        # Skip headers
+        lengthfile.next()
+        clusterfile.next()
 
         # Create the utr objects from the length file
         utr_dict = {}
@@ -1650,7 +1648,7 @@ def get_utrs(settings,speedrun=False, svm=False):
         for (linenr, line) in enumerate(lengthfile):
             # If a speedrun, limit the nr of 3UTRs to read.
             if speedrun:
-                if linenr > maxreads:
+                if linenr > maxlines:
                     break
             # key = utr_ID, value = UTR instance
             utr_dict[line.split()[5]] = UTR(line)
@@ -3289,7 +3287,7 @@ def classic_polyA_stats(settings, dsets):
     # 1) Try to call rna_analyser methods to re-intersecting and
     # re-clustering the polyA reads
 
-    import utr_finder as finder
+    import utail as finder
 
     finder_settings = finder.Settings\
             (*finder.read_settings(settings.settings_file))
@@ -3301,7 +3299,7 @@ def classic_polyA_stats(settings, dsets):
 
     # Get the bedfile with 3UTR exons
     beddir = os.path.join(settings.here, 'source_bedfiles')
-    utr_bed = finder.get_utr_path(finder_settings, beddir)
+    utr_bed = finder.get_utr_path(finder_settings, beddir, False)
     polyA_dir = settings.polyAread_dir
 
     # Get the annotation class from utr_finder.py
@@ -3909,30 +3907,68 @@ def visualizedict(dictionary):
                         continue
                     print su4.keys()[:maxdepth]
 
-def get_pol2(dsets):
-    """ For K562 and GM1878, and for single-exon 3UTRs, get arrays of p-values
-    or similar for pol2 occupancy on the 3UTRs.
+def pipeline_utrpath(settings, chr1=False):
+    """
+    Return the path of the 3UTR bed file that was used for simulating the
+pipeline
     """
 
-    # prepare the pol2 hash table
-    pol2_hash = dict((cl, {}) for cl in dsets if cl in ('K562', 'GM12878'))
+    import utail as finder
 
-    pol2dir = '/users/rg/jskancke/phdproject/3UTR/the_project/RNAPII'
+    finder_settings = finder.Settings\
+            (*finder.read_settings(settings.settings_file))
 
-    for (cell_line, ts_dict) in pol2_hash.items():
+    if chr1:
+        finder_settings.chr1 = True
 
-        # -1) unzip the pol2Reads for each cell line
-        # 0) get the unique (see script in RNAPII folder) and sort them
+    beddir = os.path.join(settings.here, 'source_bedfiles')
 
-        #1) Run the Chip-Seq programs on the resulting bedfiles
-        #2) Run IntersectBed on the program output with the 3UTRs with exon
-        # length 1. Save the p-value arrays or whatever it is for each
-        # transcript. Later use this in conjunction with the 3UTR instances you
-        # have.
-        # TODO: run the 100 ones with simone_bla, and
-        # make some slides with why you want to do the pol2 and chromatin
-        # correlations.
-        pass
+    return finder.get_utr_path(finder_settings, beddir, False)
+
+def nucsec(dsets, super3UTR, settings, here):
+    """ Get the sequences of all the 3UTR objects (a few hundred megabytes of
+    memory?). Then intersect the 3UTR regions with the nucleosome bedGraph
+    files. TODO your chromatin runs are done. Read them (fast) and start reading
+    sequences and other stuffs.
+
+    IDEA: for each extra dataset, how many new (high quality) poly(A) sites are
+    found? Can we draw a nice curve to saturation? :) To do this properly, you
+    should add each 'lane' file for both biological replictates of one of the
+    cell lines. Maybe even add cytosolic samples too. This can be done easily!
+    Just define datasets: 1lane, 2lanes, 3lanes, 4lanes etc! Then also output
+    the number of reads in each (alternatively you get get this later with wc -l
+    on the raw reads file in the temp-dirs.)
+
+    Another idea: a measure for sensitivity: how many of the datasets have a
+    1-read poly(A) site that is supported by >2 in other datasets?
+
+    """
+    # 1) Get the path of the 3UTR-bedfile used in the pipeline
+    # 2) Get the path of the nucleosomal reads
+    nuclpaths = [os.path.join(here, 'nucleosomes', dset,
+                 'nucl_'+dset+'_sample.bed') for dset in dsets]
+
+    utr_path = pipeline_utrpath(settings, chr1=True)
+
+    # 3) run bed-intersect on these two files
+
+    for nupath in nuclpaths:
+        cmd = ['coverageBed', '-d', '-a', nupath, '-b', utr_path]
+
+        p = Popen(cmd, stdout=PIPE)
+        # 4) Loop through the output and create a nucleosome coverage 
+        for line in p.stdout:
+            (chrm, be, en, utr_id, val, strand, index, coverage) = line.split()
+            # OK, there's something you need to know about UTR_ID
+            # UTR_ID = emsembID + _UTRnr + _EXONnr in this utr
+            local_utrID = '_'.join(utr_id.split('_')[:-1])
+            (tot_exons, extendby) = val.split('+')
+
+            # For now, ignore the 3UTRs with more than 1 exon
+            if int(tot_exons) != 1:
+                continue
+
+            debug()
 
 def main():
     # The path to the directory the script is located in
@@ -3951,10 +3987,8 @@ def main():
     #so that you will have the same 1000 3UTRs!
     dsets, super_3utr = get_utrs(settings, speedrun=True, svm=False)
 
-    # TODO you have gotten the super_3utr object now. how can it help you?
-    # However: the first thing you must do is read the literature much more
-    # carefully. if you're going to be the first author, you need to know what
-    # you're talking about. second, send the stuff to Simone.
+    #### Nucleosomes (and sequences) ####
+    nucsec(dsets, super_3utr, settings, here)
 
     #### RPKM distribution
     #### What is the distribution of 3UTR RPKMS? run this function and find out!
@@ -3998,9 +4032,9 @@ def main():
 
     #utr_length_comparison(settings, dsets)
 
-    polyadenylation_comparison(dsets, super_cluster, dset_2super)
-
-    pol2_hash = get_pol2(dsets)
+    # TODO the methods in this functions must be updated to use super3utr. It
+    # should be a huge hustle.
+    #polyadenylation_comparison(dsets, super_cluster, dset_2super)
 
     ## The classic polyA variation distributions
     #classic_polyA_stats(settings, dsets)
