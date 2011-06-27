@@ -293,18 +293,17 @@ class UTR(object):
         written to file.
         """
 
+        # Update lengths
+        self.length_nonext += new_exon.length_nonext
+        self.length_ext += new_exon.length_ext
+
         # Update RPKM with weights on the lenghts of the two exons You need to
         # recover the number of reads falling over the UTRS 
         R_self = (self.rpkm)*(total_nr_reads)*(self.length_nonext)/(10**9)
         R_new = (new_exon.rpkm)*(total_nr_reads)*(new_exon.length_nonext)/(10**9)
 
-        newlength = self.length_nonext + new_exon.length_nonext
         # Update rpkm with these two values and the new length
-        self.rpkm = ((10**9)*(R_self + R_new))/(total_nr_reads*newlength)
-
-        # Update lengths
-        self.length_nonext += new_exon.length_nonext
-        self.length_ext += new_exon.length_ext
+        self.rpkm = ((10**9)*(R_self+R_new))/(total_nr_reads*self.length_nonext)
 
         # Update begends lists to know where all exons begin and end
         self.begends_ext.append((new_exon.beg_ext, new_exon.end_ext))
@@ -389,11 +388,13 @@ class FullLength(object):
         Return a dictionary that maps header-entries to the UTR or FullLength
         instances that are being written to file. This ensures that each column
         contains the data that corresponds to the colum header.
+
+        Note that you are writing the beg/end of the extended 3UTRs.
         """
         return dict((
                     ('chrm', this_utr.chrm),
-                    ('beg', frmt(this_utr.beg_nonext)),
-                    ('end', frmt(this_utr.end_nonext)),
+                    ('beg', frmt(this_utr.beg_ext)),
+                    ('end', frmt(this_utr.end_ext)),
                     ('utr_ID', frmt(this_utr.utr_ID[:-2])),
                     ('strand', this_utr.strand),
                     ('3utr_extended_by', frmt(this_utr.extendby)),
@@ -672,8 +673,8 @@ class PolyAReads(object):
 
         return dict((
                     ('chrm', this_utr.chrm),
-                    ('beg', frmt(this_utr.beg_nonext)),
-                    ('end', frmt(this_utr.end_nonext)),
+                    ('beg', frmt(this_utr.beg_ext)),
+                    ('end', frmt(this_utr.end_ext)),
                     ('utr_ID', this_utr.utr_ID[:-2]),
                     ('polyA_number', frmt(polA_nr)),
                     ('strand', this_utr.strand),
@@ -1014,8 +1015,8 @@ def join_multiexon_utr(multi_exon_utr, total_nr_reads):
 
     return main_utr
 
-def output_writer(dset_id, coverage, annotation, utr_seqs, rpkm, extendby,
-                 polyA_reads, settings, total_nr_reads, output_dir):
+def output_writer(dset_id, coverage, annotation, utr_seqs, rpkm, polyA_reads,
+                  settings, total_nr_reads, output_dir):
     """
     Putting together all the info on the 3UTRs and writing to files. Write
     one file mainly about the length of the 3UTR, and write another file about
@@ -1053,8 +1054,8 @@ def output_writer(dset_id, coverage, annotation, utr_seqs, rpkm, extendby,
     (chrm, beg, end, utr_ID, val, strand, rel_pos, covr) = line1.split()
 
     # Create a UTR-instance
-    this_utr = UTR(chrm, beg, end, strand, val, utr_ID, rpkm[utr_ID], extendby,
-                   covr, utr_seqs[utr_ID], polyA_reads[utr_ID]['other_strand'],
+    this_utr = UTR(chrm, beg, end, strand, val, utr_ID, rpkm[utr_ID], covr,
+                   utr_seqs[utr_ID], polyA_reads[utr_ID]['other_strand'],
                    a_polyA_sites_dict[utr_ID])
 
     # Create instances for writing to two output files
@@ -1136,7 +1137,7 @@ def output_writer(dset_id, coverage, annotation, utr_seqs, rpkm, extendby,
 
             # Update to the new utr and start the loop from scratch
             this_utr = UTR(chrm, beg, end, strand, val, utr_ID, rpkm[utr_ID],
-                           extendby, covr, utr_seqs[utr_ID],
+                           covr, utr_seqs[utr_ID],
                            polyA_reads[utr_ID]['other_strand'],
                            a_polyA_sites_dict[utr_ID])
 
@@ -2015,8 +2016,8 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs, settings,
     # write to file the parameters you calculate
     print('Writing output files... {0} ...\n'.format(dset_id))
     output_files = output_writer(dset_id, coverage_path, annotation, utr_seqs,
-                                 rpkm, extendby, polyA_reads, settings,
-                                 total_nr_reads, output_dir)
+                                 rpkm, polyA_reads, settings, total_nr_reads,
+                                 output_dir)
 
     print('Total time for {0}: {1}\n'.format(dset_id, time.time() - t0))
 
@@ -2492,10 +2493,10 @@ def main():
     # Location of settings file
     settings_file = os.path.join(here, 'UTR_SETTINGS')
 
-    ########################XXX###################################
+    ########################XXX###############################
     ###### TESTING Pedro's old annotation settings
     #settings_file = os.path.join(here, 'OLD_ENCODE_SETTINGS')
-    ########################XXX###################################
+    ########################XXX###############################
 
     # Create the settings object from the settings file
     settings = Settings(*read_settings(settings_file))
