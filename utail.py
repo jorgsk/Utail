@@ -78,10 +78,10 @@ class Settings(object):
         self.chr1 = True
         #self.chr1 = False
         #self.read_limit = False
-        self.read_limit = 200000
+        self.read_limit = 2000000
         self.max_cores = 3
-        #self.polyA = True
-        self.polyA = False
+        self.polyA = True
+        #self.polyA = False
         #self.polyA = '/users/rg/jskancke/phdproject/3UTR/the_project/temp_files'\
                 #'/polyA_reads_HeLa-S3_Nucleus_processed_mapped.bed'
         #self.bed_reads = '/users/rg/jskancke/phdproject/3UTR/the_project/temp_files'\
@@ -170,8 +170,8 @@ class UTR(object):
     attributes have the same value.
     """
 
-    def __init__(self, chrm, beg, end, strand, val, utr_ID, rpkm, extendby,
-                 first_covr, sequence, polyA_reads, a_polyA_sites):
+    def __init__(self, chrm, beg, end, strand, val, utr_ID, rpkm, first_covr,
+                 sequence, polyA_reads, a_polyA_sites):
 
         # variables you have to initialize
         self.chrm = chrm
@@ -183,6 +183,7 @@ class UTR(object):
         # the total nr of exons and the extendby come in one bundle
         sval, sextendby = val.split('+')
         (self.val, self.extendby) = int(sval), int(sextendby)
+        extendby = self.extendby
 
         self.utr_ID = utr_ID
         self.strand = strand
@@ -259,8 +260,7 @@ class UTR(object):
         # utrs
         if self.multi_exon:
             self.begends_ext = [(self.beg_ext, self.end_ext)]
-            if extendby > 0:
-                self.begends_nonext = [(self.beg_nonext, self.end_nonext)]
+            self.begends_nonext = [(self.beg_nonext, self.end_nonext)]
 
     def __repr__(self):
         return self.utr_ID[-8:]

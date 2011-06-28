@@ -1,0 +1,84 @@
+.. _annotation_parser_manual:
+
+The point of this module is to read a GENCODE annotation file and convert the
+transcripts in the annotation into objects of the **Transcript** class. These
+objects can then be acted upon in any way to produce output from the
+annotation. It's like having a kind of database.
+
+The main class is the **Transcript** class.
+
+The Transcript class
+--------------------
+
+The transcript class is a representation of transcripts as they occur in a
+GENCODE annotation file.
+
+Instances of the transcript class are initialized with the input:
+
+- transcript_id (EST...)
+- gene_id (ESG...)
+- transcript type (HAVANA/ENSELBM)
+- chromosome
+- beg
+- end
+- strand
+
+Further, it initializes by itself four attributes that will be filled as the
+annotation file is parsed
+
+- three_utr (holds the 3UTR exons and methods to act on them)
+- cds (as for 3UTR)
+- five_utr (as for 3UTR)
+- exons (to hold all exons associated with this transcript)
+
+The methods associated with this class add incoming exons to the 5/3UTR or
+CDS. In terms of 5/3UTR this must be determined by if the UTR object is
+upstream or downstream the CDS objects, since the annotation only provides the
+'UTR' flag.
+
+make_transcripts(annotation)
+----------------------------
+This is a key method: it loops through an input file (GENODE) and creates
+Transcript instaces from them.
+
+get_3utr_bed_all_exons(settings, outfile_path)
+----------------------------------------------
+Briefly:
+input: an annotation (given as an attribute to *settings* as 'settings.annotation')
+output: extended, nonoverlapping, clustered 3UTRs from that annotation in
+.bed format
+
+More in detail:
+
+This key method does the following
+1) gets transcript and gene objects from **make_transcripts**
+2) divides transcripts depending on if they are single-exon or multi-exon 3UTRs
+3) clusters together the 3UTRs of transcripts to avoid duplication
+4) removes 3UTRs that intersect with other GENCODE exons
+5) writes the remaining clustered 3UTRs to a bedfile
+6) can extend those 3UTR by the number of nucleotides in the *extendby*
+   parameter
+
+get_a_polyA_sites_bed(settings, outfile_path)
+---------------------------------------------
+Given a GENCODe annotation file (in 'settigns'), this method clusters all
+annotated polyadenylation sites in the annotation. It does this simply by using
+the 'transcript' objects generated from 'make_transcripts' and taking the end
+coordinate of the 3'-most exon in each transcript and adding this to a list.
+Then it sorts this list and returns the poly(A) site clusters.
+
+get_seqs
+--------
+Use the pyfasta module to get sequences from a dictionary with {ts_id: (chrm,
+beg, end, strand) information} structure. These sequences are used for looking
+for PAS elements (AATAAA etc). The pyfasta dict uses fseek for getting the
+sequences from an indexed fasta file of the human genome. The first time it
+runs it takes forever, because it must index the 3G fasta file. After that it
+runs very fast, especially if the sequences are cached.
+
+
+The rest
+--------
+The rest of the methods are a lot of helper methods for the transcript
+elements. Some are in use, some are not not in use. For example, one method
+writes out bed-files for all the possible regions (5UTR, CDS, 3UTR).
