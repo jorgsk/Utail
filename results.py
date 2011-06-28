@@ -132,8 +132,8 @@ class UTR(object):
         # Read all the parameters from line
         (chrm, beg, end, utr_extended_by, strand, ID, epsilon_coord,
          epsilon_rel_size, epsilon_downstream_covrg, epsilon_upstream_covrg,
-         annotTTS_dist, epsilon_PAS_type, epsilon_PAS_distance, epsilon_beyond,
-         RPKM, avrg_covrg) = input_line.split('\t')
+         annotTTS_dist, epsilon_PAS_type, epsilon_PAS_distance, RPKM,
+         avrg_covrg) = input_line.split('\t')
 
         self.chrm = chrm
         self.beg = str_to_intfloat(beg)
@@ -144,7 +144,6 @@ class UTR(object):
         self.ID = ID
         self.eps_coord = str_to_intfloat(epsilon_coord)
         self.eps_rel_size = str_to_intfloat(epsilon_rel_size)
-        self.epsilon_beyond_aTTS = str_to_intfloat(epsilon_beyond)
         # Get the _absoulte_ epsilong length and the distance from annotanted
         # end
         if self.eps_rel_size != 'NA':
@@ -175,6 +174,10 @@ class UTR(object):
 
         # SVM info might be added
         self.svm_coordinates = []
+
+        # Array of nucleosome coverage
+        self.nucl_covr = np.zeros(self.length)
+        self.has_nucl = False #if you add coverage to the above array
 
     def __repr__(self):
         return self.ID[-8:]
@@ -233,7 +236,8 @@ class Settings(object):
     Convenience class.One instance is created from this class: it the pertinent
     settings parameters obtained from the UTR_SETTINGS file.
     """
-    def __init__(self, settings_file, savedir, outputdir, here):
+    def __init__(self, settings_file, savedir, outputdir, here, chr1):
+
 
         conf = ConfigParser.ConfigParser()
         conf.optionxform = str
@@ -244,10 +248,48 @@ class Settings(object):
         self.outputdir = outputdir
         self.here = here
 
+        self.chr1 = chr1
+
         self.settings_file = settings_file
 
         # A bit ad-hoc: dicrectory of polyA read files
         self.polyAread_dir = os.path.join(here, 'polyA_files')
+
+        self.annot_polyA_path = self.get_annot_polyas()
+        self.polyA_DB_path = os.path.join(self.here, 'polyADB', 'polyA_db')
+
+        # the 3UTRs in use
+        self.utr_exons_path = self.get_utr_exons()
+
+        # The hg19 genome
+        self.hg19_path = os.path.join(self.here, 'ext_files', 'hg19')
+
+    def get_utr_exons(self):
+
+        import utail as utail
+
+        utail_settings = utail.Settings\
+                (*utail.read_settings(self.settings_file))
+
+        if self.chr1:
+            utail_settings.chr1 = True
+
+        beddir = os.path.join(self.here, 'source_bedfiles')
+
+        return utail.get_utr_path(utail_settings, beddir, False)
+
+    def get_annot_polyas(self):
+        """
+        Simply return the annotated poly(A) sites
+        """
+        beddir = os.path.join(self.here, 'source_bedfiles')
+
+        import utail as utail
+
+        utail_settings = utail.Settings\
+                (*utail.read_settings(self.settings_file))
+
+        return utail.get_a_polyA_sites_path(utail_settings, beddir)
 
     # Return the paths of the length files
     def length_files(self):
@@ -2954,7 +2996,6 @@ def novel_polyAs(dsets, super_clusters, dset_2super):
     # poly(A) site, but they are more expressed than the ratio of
     # annotated/non-annotated would hint.
 
-    # TODO HELLO WHEN YOU COME BACK. I HOPE U ARE WELL.
     # What you you need to start doing:
     # 1) Using novel_PA, Print a small table of the novel poly(A) sites you
     # find. First print for all compartments; then merge compartments and print
@@ -3142,14 +3183,142 @@ def count_polyAs(novel_PA, dsets, minRPKM):
 
     return polyAcounter
 
-def polyadenylation_comparison(dsets, super_clusters, dset_2super):
+def novel_polyAs_2(dsets, super_3utr, settings):
+    """
+    1) How many total annotated poly(A) sites
+    wc -l on the annot poly(A) file
+
+    2) How many annotated poly(A) sites in "my" 3UTRs
+    wc -l on the same file after intersection with "my" 3UTRs
+
+    3) How many novel poly(A) sites in "my" 3UTRs
+    loop through super_3utr, and get those with 2> reads
+
+    4) How many of these have been detected with ESTs/cDNA?
+    expand the polyA_db.bed-file and unique-intersect with a bedfile you write
+    of all your poly(A) sites
+    """
+
+    my_novel_polyAs = []
+
+    print('\n'+'-'*70+'\n')
+    ## 1) How many total annotated poly(A) sites (and tian tb sites)
+    #cmd1 = ['slopBed', '-b', '200', '-i', settings.annot_polyA_path, '-g',
+           #settings.hg19_path]
+
+    #f1 = Popen(cmd1, stdout=PIPE, bufsize=-1)
+
+    #cmd2 = ['mergeBed', '-s', '-i', 'stdin'] # read from stdin
+
+    #f2 = Popen(cmd2, stdin=f1.stdout, stdout=PIPE, bufsize=-1)
+
+    all_annot_polyA = sum(1 for i in open(settings.annot_polyA_path))
+    tian_db = sum(1 for i in open(settings.polyA_DB_path))
+
+    print('Number of GENCODE annotated poly(A) sites: '\
+          '{0}\n'.format(all_annot_polyA))
+    print('Number of poly(A) sites in polyA_db: '\
+          '{0}\n'.format(tian_db))
+
+    # 2) How many annotated poly(A) sites in "my" 3UTRs. How many of these do I
+    # recover? How many new do I find?
+    cmd = ['intersectBed', '-u', '-a', settings.annot_polyA_path, '-b',
+           settings.utr_exons_path]
+
+    f = Popen(cmd, stdout=PIPE)
+    # The number of annotated poly(A) sites in YOUR 3utrs
+    my_annot = sum(1 for i in f.stdout)
+    print('Number of GENCODE annotated poly(A) sites in "our" 3UTRS: '\
+          '{0}\n'.format(my_annot))
+
+    # 3)
+    # The number of annotated pol(A) sites that I recover
+    my_recover = 0
+    # The number of novel poly(A) sites in 'my' 3UTRs
+    my_novel = 0
+    for utr_id, utr in super_3utr.iteritems():
+        for super_polyA, cell_dict in utr.super_cover.items():
+            has_annot = False
+            enough_covrg = False
+            # Trust if you find pA in more than 1 cell line
+            if len(cell_dict) > 1:
+                enough_covrg = True
+            for c_line, comp_dict in cell_dict.items():
+                # Trust if you find pA in more than 1 compartment
+                if len(comp_dict) > 1:
+                    enough_covrg = True
+                for comp, polyA in comp_dict.items():
+                    if polyA.annotated_polyA_distance != 'NA':
+                        has_annot = True
+                    #  Trust if you find pA with more than 1 read
+                    if polyA.nr_support_reads > 1:
+                        enough_covrg = True
+
+            if has_annot:
+                my_recover += 1
+            if enough_covrg:
+                my_novel += 1
+
+                # Save the novel polyA sites to a list
+                if len(super_polyA.split('+')) == 2:
+                    my_novel_polyAs.append(tuple(super_polyA.split('+') + ['+']))
+                else:
+                    my_novel_polyAs.append(tuple(super_polyA.split('-') + ['-']))
+
+    print('Number of "our" poly(A) sites that are also in the GENCODe annotation: '\
+          '{0}\n'.format(my_recover))
+    print('Number of "our" poly(A) sites that are new to GENCODE: '\
+          '{0}\n'.format(my_novel))
+
+    #4) How many of these have been detected with ESTs/cDNA?
+    #expand the polyA_db.bed-file and unique-intersect with a bedfile you write
+    #of all your poly(A) sites
+    # i) write these novel polyAs to bedfile
+    out_dir = os.path.dirname(settings.annot_polyA_path)
+    temp_path = os.path.join(out_dir, 'novel_polyA.bed')
+    temp_handle = open(temp_path, 'wb')
+
+    for nov in my_novel_polyAs:
+        out = '\t'.join([nov[0], nov[1], str(int(nov[1])+1), nov[2]]) + '\n'
+        temp_handle.write(out)
+
+    temp_handle.close()
+
+    # ii) Expand all entries in annotated polyAs with 2 nt, merge these entries,
+    # and feed this into an overlapper with novel_polyA.bed; count the number of
+    # overlaps
+    cmd1 = ['slopBed', '-b', '20', '-i', settings.polyA_DB_path, '-g',
+           settings.hg19_path]
+
+    f1 = Popen(cmd1, stdout=PIPE, bufsize=-1)
+
+    cmd2 = ['mergeBed', '-s', '-i', 'stdin'] # read from stdin
+
+    f2 = Popen(cmd2, stdin=f1.stdout, stdout=PIPE, bufsize=-1)
+
+    cmd3 = ['intersectBed', '-a', temp_path, '-b', 'stdin']
+
+    f3 = Popen(cmd3, stdin=f2.stdout, stdout=PIPE, bufsize=-1)
+
+    # the number of my novel poly(A) sites that are in Tian's database
+    in_tian = sum(1 for i in f3.stdout)
+
+    print('Number of "our" novel poly(A) sites that are also in polyA_db: '\
+          '{0}\n'.format(in_tian))
+
+    print('-'*70+'\n')
+
+
+def polyadenylation_comparison(dsets, super_3utr, settings):
     """
     * compare 3UTR polyadenylation in general
     * compare 3UTR polyadenylation UTR-to-UTR
     """
 
     #### Novel polyA sites in annotated 3UTRS
-    novel_polyAs(dsets, super_clusters, dset_2super)
+    #novel_polyAs(dsets, super_clusters, dset_2super)
+    # The new version that makes stuff easy
+    #novel_polyAs_2(dsets, super_3utr, settings)
 
     #### Compare the compartments; how many annotated do we find? etc.
     #compare_cluster_evidence(dsets, super_clusters, dset_2super)
@@ -3600,7 +3769,9 @@ def merge_clusters(dsets):
 
                 # The information you're looking for. You can add more later if
                 # needed. If you need everything, you can add the whole object.
-                coverages = [clu.nr_support_reads for (clu, dn) in mega_cluster]
+                #coverages = [clu.nr_support_reads for (clu, dn) in mega_cluster]
+                # NOTE: adding whole object!
+                coverages = [clu for (clu, dn) in mega_cluster]
                 dsets= [dn for (clu, dn) in mega_cluster]
 
                 # add entry to the all clusters
@@ -3952,23 +4123,134 @@ def nucsec(dsets, super3UTR, settings, here):
 
     # 3) run bed-intersect on these two files
 
+    # HEY! you are not getting the coverages 'out' of the file. The coverages
+    # are in the 'val' lane -- this is lost. I think you want intersectBed!
+    # Either that, or you need  to run coverageBed on the ORIGINAL raw reads.
     for nupath in nuclpaths:
-        cmd = ['coverageBed', '-d', '-a', nupath, '-b', utr_path]
+        cmd = ['intersectBed', '-wa', '-wb', '-a', nupath, '-b', utr_path]
 
         p = Popen(cmd, stdout=PIPE)
         # 4) Loop through the output and create a nucleosome coverage 
         for line in p.stdout:
-            (chrm, be, en, utr_id, val, strand, index, coverage) = line.split()
-            # OK, there's something you need to know about UTR_ID
-            # UTR_ID = emsembID + _UTRnr + _EXONnr in this utr
-            local_utrID = '_'.join(utr_id.split('_')[:-1])
+            (chrmP, beP, enP, covr, chrmU, beU, enU, utr_id, val,
+             strand) = line.split()
             (tot_exons, extendby) = val.split('+')
 
             # For now, ignore the 3UTRs with more than 1 exon
             if int(tot_exons) != 1:
                 continue
 
-            debug()
+            # OK, there's something you need to know about UTR_ID
+            # UTR_ID = emsembID + _UTRnr + _EXONnr in this utr
+            local_utrID = '_'.join(utr_id.split('_')[:-1])
+
+            # DEBUGGING XXX
+            if local_utrID not in super3UTR:
+                continue
+            # XXX DEBUGGING
+            # XXX what does it mean that an utr_ID is not in super3UTR? maybe
+            # because you only get the first 1000 lines from each file!
+
+            # Get the slice of intersection and fill this slice in the coverage
+            # vector
+            vec_beg = max(int(beP), int(beU)) - int(beU)
+            vec_end = min(int(enP), int(enU)) - int(beU)
+
+            # Check if 
+            super3UTR[local_utrID].has_nucl = True
+            super3UTR[local_utrID].nucl_covr[vec_beg:vec_end] = int(covr)
+
+    # OK, now you are covering the 3UTRs with their nucleosomes. Now you just
+    # need to do some correlation.
+
+    # How to do that exactly? First: plot. Compute the average of all nucl_covr
+    # vector +/- 400 nt around each poly(A) site
+
+    # 1) Go through each poly(A) site. If there is 400 on 'both sides' of it,
+    # and if has_nucl-coverage, and if there is at least 500 nt to the next
+    # poly(A) site, add this coverage vector to a coverage matrix
+    coverages = []
+    for utr_id, utr in super3UTR.iteritems():
+        # Skip those without nucleosome coverage
+        if not utr.has_nucl:
+            continue
+        # Skip those that don't have any poly(A) clusters
+        if utr.super_cover == {}:
+            continue
+        debug()
+
+    # XXX Do the below with 1000-extended 3UTRs using biological replicates.
+
+    # TODO the below! Now you are turning to making "Roderic's table ... "
+    # NOTE this is just basics. What you really should do is go through
+    # super_3UTR and classify poly(A) sites in different ways. Then you simply
+    # write out as many bedfiles as you have classifications with +/- 1000 nt
+    # extensions. Then you intersect those extensions with the genome-covered
+    # file. Then you make graphs based on those extensions. That's more or less
+    # what Hagen did. When you do the above, also get controls: 1) non-expressed
+    # transcripts' poly(A) sites, 2) random AATAAA sites in 5'utr and cds
+    # (intergenic regions in molecular Cell paper).
+
+    debug()
+
+def minusstats(dsets, super_3utr):
+    """ Show that the polyA minus are fishy
+
+    1) Number of total polyA sites
+    2) Number and % of polyA sites in annotation
+    3) Number and % of polyA sites with PAS
+    4) Total number of poly(A) reads
+
+    """
+    minus = AutoVivification()
+
+    for cl, cl_dict in dsets.items():
+        for comp, comp_dict in cl_dict.items():
+
+            minus[comp] = {'Tot pA':0, 'Annot pA':0, 'PAS pA':0, 'read_nr':0}
+
+            for utr_id, utr in comp_dict.iteritems():
+                if utr.clusters != []:
+                    for cls in utr.clusters:
+                        minus[comp]['Tot pA'] += 1
+                        minus[comp]['read_nr'] += cls.nr_support_reads
+
+                        if cls.annotated_polyA_distance != 'NA':
+                            minus[comp]['Annot pA'] += 1
+
+                        if cls.nearby_PAS != ['NA']:
+                            minus[comp]['PAS pA'] += 1
+
+
+    for (comp, count_dict) in minus.items():
+        total = count_dict['Tot pA']
+
+        annot = count_dict['Annot pA']
+        annot_frac = annot/total
+
+        pas = count_dict['PAS pA']
+        pas_frac = pas/total
+
+        read_nr = count_dict['read_nr']
+        read_per_site = read_nr/total
+
+        print comp
+        print("Total poly(A) sites: {0} ".format(total))
+        print("Total poly(A) reads (per site): {0} ({1}) ".format(read_nr,
+                                                                  read_per_site))
+        print("Annotated poly(A) sites: {0} ({1}%)".format(annot, annot_frac))
+        print("poly(A) sites with PAS: {0} ({1}%)".format(pas, pas_frac))
+        print("")
+
+    total_unique = 0
+    for utr_id, utr in super_3utr.iteritems():
+        total_unique += len(utr.super_cover)
+
+    print("Total unique poly(A) sites for all sets: {0}".format(total_unique))
+        #for cls in utr.super
+
+    debug()
+
 
 def main():
     # The path to the directory the script is located in
@@ -3977,17 +4259,27 @@ def main():
     # Directory paths for figures and where the output lies
     (savedir, outputdir) = [os.path.join(here, d) for d in ('figures', 'output')]
 
+    # Speedruns with chr1
+    chr1 = False
+
     # Read UTR_SETTINGS (there are two -- for two different annotations!)
-    settings = Settings(os.path.join(here, 'UTR_SETTINGS'), savedir, outputdir, here)
+    settings = Settings(os.path.join(here, 'UTR_SETTINGS'), savedir, outputdir,
+                        here, chr1)
+
     #settings = Settings(os.path.join(here, 'OLD_ENCODE_SETTINGS'),
-                        #savedir, outputdir, here)
+                        #savedir, outputdir, here, chr1)
 
     # Get the dsetswith utrs and their clusters from the length and polyA files
     # Optionally get SVM information as well
     #so that you will have the same 1000 3UTRs!
     dsets, super_3utr = get_utrs(settings, speedrun=True, svm=False)
+    #dsets, super_3utr = get_utrs(settings, speedrun=False, svm=False)
+
+    # EMERGENCY CODE! GINGERAS STATS FOR MINUS
+    #minusstats(dsets, super_3utr)
 
     #### Nucleosomes (and sequences) ####
+    # TODO continue with this: you're abount to make nucleotide coverage arrays!
     nucsec(dsets, super_3utr, settings, here)
 
     #### RPKM distribution
@@ -4034,12 +4326,10 @@ def main():
 
     # TODO the methods in this functions must be updated to use super3utr. It
     # should be a huge hustle.
-    #polyadenylation_comparison(dsets, super_cluster, dset_2super)
+    #polyadenylation_comparison(dsets, super_3utr, settings)
 
     ## The classic polyA variation distributions
     #classic_polyA_stats(settings, dsets)
-
-    debug()
 
     #reads(settings)
 
@@ -4050,6 +4340,7 @@ def main():
     #other_methods_comparison(settings)
 
     #rouge_polyA_sites(settings)
+    debug()
 
 if __name__ == '__main__':
     main()
