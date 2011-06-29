@@ -46,8 +46,10 @@ class Settings(object):
     def __init__(self, datasets, annotation_path, annotation_format,
                  utrfile_provided, read_limit, max_cores, chr1, hgfasta_path,
                  polyA, min_utrlen, extendby, cumul_tuning, bigwig,
-                 bigwig_datasets, bigwig_savedir, bigwig_url, gem_index):
+                 bigwig_datasets, bigwig_savedir, bigwig_url, gem_index,
+                 length):
 
+        self.get_lengths = length
         self.datasets = datasets
         self.annotation_path = annotation_path
         self.annotation_format = annotation_format
@@ -88,6 +90,9 @@ class Settings(object):
                 #'/reads_HeLa-S3_Nucleus.bed'
         self.bigwig = False
         #self.bigwig = True
+
+        if not self.polyA and not self.get_length:
+            print('Dude! The program does nothing! Use polyA or length or both!')
 
 class Annotation(object):
     """
@@ -863,7 +868,7 @@ class PolyAReads(object):
 
         return supp
 
-def zcat_wrapper(bed_reads, read_limit, out_path, polyA, polyA_path):
+def zcat_wrapper(bed_reads, read_limit, out_path, polyA, polyA_path, get_reads):
     """
     Wrapper around zcat. Call on gem-mapped reads. Write uniquely mapped
     reads (up to 2 mismatches) to .bed file.
@@ -907,7 +912,7 @@ def zcat_wrapper(bed_reads, read_limit, out_path, polyA, polyA_path):
                 break
 
         # Acceptable and poly(A) reads are mutually exclusive.
-        if mapinfo in acceptable:
+        if mapinfo in acceptable and get_reads == True:
             # Get chromosome
             chrom, rest = position.split(':')
             # Get the strand
@@ -1028,10 +1033,13 @@ def output_writer(dset_id, coverage, annotation, utr_seqs, rpkm, polyA_reads,
 
     (dirpath, basename) = os.path.split(coverage)
 
-    # Paths and file objecutr for the two output files (length and one polyA)
+    # Paths and file object for the two output files (length and one polyA)
+
+    # Open the respective files if set in the settings
     length_outpath = os.path.join(dirpath, 'length_'+dset_id)
-    polyA_outpath = os.path.join(dirpath, 'polyA_'+dset_id)
     length_outfile = open(length_outpath, 'wb')
+
+    polyA_outpath = os.path.join(dirpath, 'polyA_'+dset_id)
     polyA_outfile = open(polyA_outpath, 'wb')
 
     # list of PAS hexamers
@@ -1287,11 +1295,14 @@ def read_settings(settings_file):
 
     # annotation
     try:
-        annotation = conf.getboolean('ANNOTATION', 'annotation_path')
+        annotation_path = conf.getboolean('ANNOTATION', 'annotation_path')
     except ValueError:
         annotation_path = conf.get('ANNOTATION', 'annotation_path')
         verify_access(annotation_path)
         annotation_format = conf.get('ANNOTATION', 'annotation_format')
+
+    # length yes or no
+    length = conf.getboolean('GET_LENGTH', 'length')
 
     # datasets
     datasets = dict((dset, files.split(':')) for dset, files in conf.items('DATASETS'))
@@ -1371,6 +1382,10 @@ def read_settings(settings_file):
         polyA = conf.get('POLYA_READS', 'polya')
         verify_access(polyA) # Check if is a file
 
+    if not polyA and not length:
+        print('You must have either "length" or "polya" (or both) as true ...)')
+        sys.exit()
+
     # Get the gem_index_file
     gem_index = conf.get('POLYA_READS', 'gem_mapper_index')
     # If poly(A) reads == True, you need the index file for the gem-mapper
@@ -1388,7 +1403,7 @@ def read_settings(settings_file):
     return(datasets, annotation_path, annotation_format, utr_bedfile_path,
            read_limit, max_cores, chr1, hg_fasta, polyA, min_utrlen, extendby,
            cuml_tuning, bigwig, bigwig_datasets, bigwig_savedir, bigwig_url,
-           gem_index)
+           gem_index, length)
 
 def get_a_polyA_sites_path(settings, beddir):
     """
@@ -1723,7 +1738,7 @@ def map_reads(processed_reads, avrg_read_len, settings):
 
     return polybed_path
 
-def get_bed_reads(dset_reads, dset_id, read_limit, tempdir, polyA):
+def get_bed_reads(dset_reads, dset_id, read_limit, tempdir, polyA, get_length):
     """
     Get reads from file. Determine file-type. If gem, extract from gem and
     convert to bed. If .bed, concatenate the bedfiles and convert them to the
@@ -1742,7 +1757,6 @@ def get_bed_reads(dset_reads, dset_id, read_limit, tempdir, polyA):
     # [bed.gz]
     ok_sufx = ['gem', 'map', 'gz', 'bed']
 
-    nr_files = len(dset_reads)
     # Building a suffix: Start with a '.' separated list of
     # the file name. Proceed backwards, adding to reverese_suffix if the entry
     # is in the allowed group.
@@ -1756,7 +1770,7 @@ def get_bed_reads(dset_reads, dset_id, read_limit, tempdir, polyA):
         print('Obtaining reads from mapping for {0} ...\n'.format(dset_id))
         # Get only the uniquely mapped reads (up to 2 mismatches)
         total_reads = zcat_wrapper(dset_reads, read_limit, out_path, polyA,
-                                   polyA_path)
+                                   polyA_path, get_length)
 
     # If in bed-format, also run zcat -f on all the files to make one big
     # bedfile. How to restrict reads in this case?? No restriction?
@@ -1956,12 +1970,12 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs, settings,
     extendby = settings.extendby
     read_limit = settings.read_limit
     polyA = settings.polyA
+    get_length = settings.get_length
     # Define utr_polyAs in case polyA is false
     utr_polyAs = {}
 
     t0 = time.time()
 
-    # IF DEBUGGING AND READS IN BED FORMAT ARE SUPPLIED
     # If both the bedfiles of the reads and the bedfiles of the polyA files are
     # submitted for debugging purposes, don't get reads anew
     if DEBUGGING and (type(settings.bed_reads) == str) and (type(polyA) == str):
@@ -1969,12 +1983,16 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs, settings,
         total_nr_reads = sum(1 for line in open(bed_reads, 'rb'))
         p_polyA_bed = polyA
 
-    # Get the normal reads (in bed format). Get the polyA reads if this option is set.
-    # As well get the total number of reads for calculating the RPKM later.
-    # p_polyA_bed stands for putative polyA reads
+    # Get the normal reads (in bed format), if this option is set. Get the polyA
+    # reads if this option is set. As well get the total number of reads for
+    # calculating the RPKM later. p_polyA_bed stands for putative polyA reads
+    # If length is false: don't get normal reads.
     else:
-        (bed_reads, p_polyA_bed, total_nr_reads) = get_bed_reads(dset_reads, dset_id,
-                                                          read_limit, tempdir, polyA)
+        all_reads = get_bed_reads(dset_reads, dset_id, read_limit, tempdir,
+                                  polyA, get_length)
+
+        # Extract from all_reads
+        (bed_reads, p_polyA_bed, total_nr_reads) = all_reads
 
     # If polyA is a string, it is a path of a bedfile with to polyA sequences
     if type(polyA) == str:
@@ -1983,7 +2001,7 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs, settings,
         utr_polyAs = get_polyA_utr(polyA_bed_path, utrfile_path)
 
     # If polyA is True, trim the extracted polyA reads, remap them, and save the
-    # uniquely mappign ones to bed format
+    # uniquely mapping ones to bed format
     elif polyA == True:
         # PolyA pipeline: remove low-quality reads, remap, and -> .bed-format:
 
@@ -2003,21 +2021,27 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs, settings,
     # exist in downstream code.
     polyA_reads = cluster_polyAs(utr_polyAs, annotation.utr_exons, polyA)
 
-    # Get the RPKM
-    print('Obtaining RPKM for {0} ...\n'.format(dset_id))
-    rpkm = get_rpkm(bed_reads, utrfile_path, total_nr_reads, annotation.utr_exons,
-                    extendby, dset_id)
+    if get_length:
+        # Get the RPKM, if you get lengths
+        print('Obtaining RPKM for {0} ...\n'.format(dset_id))
+        rpkm = get_rpkm(bed_reads, utrfile_path, total_nr_reads,
+                        annotation.utr_exons, extendby, dset_id)
 
-    # Cover the 3UTRs with the reads
-    print('Getting read-coverage for the 3UTRs for {0} ...\n'.format(dset_id))
-    coverage_path = coverage_wrapper(dset_id, bed_reads, utrfile_path)
+        # Cover the 3UTRs with the reads, if you get lengths
+        print('Getting read-coverage for the 3UTRs for {0} ...\n'.format(dset_id))
+        coverage_path = coverage_wrapper(dset_id, bed_reads, utrfile_path)
 
-    # Collect read coverage for each 3UTR exon, join the multi-exon 3UTRs, and
-    # write to file the parameters you calculate
-    print('Writing output files... {0} ...\n'.format(dset_id))
-    output_files = output_writer(dset_id, coverage_path, annotation, utr_seqs,
-                                 rpkm, polyA_reads, settings, total_nr_reads,
-                                 output_dir)
+        # Collect read coverage for each 3UTR exon, join the multi-exon 3UTRs,
+        # and write to file the parameters you calculate
+        print('Writing output files... {0} ...\n'.format(dset_id))
+        output_files = output_writer(dset_id, coverage_path, annotation,
+                                     utr_seqs, rpkm, polyA_reads, settings,
+                                     total_nr_reads, output_dir)
+    else:
+        only_polyA_writer(dset_id, annotation, utr_seqs, polyA_reads, settings,
+                          total_nr_reads, output_dir)
+        # Just get the poly(A) output
+        # 
 
     print('Total time for {0}: {1}\n'.format(dset_id, time.time() - t0))
 
@@ -2027,6 +2051,12 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs, settings,
     # Return a dictionary with the file paths of the output files
     return {dset_id: {'coverage': coverage_path, 'length': length_output,
                       'polyA':polyA_output}}
+
+def only_polyA_writer(dset_id, annotation, utr_seqs, polyA_reads, settings,
+                      total_nr_reads, output_dir):
+    """ If only poly(A) is asked for, skip the footprint-heavy "output_writer"
+    and use this special method for just writing poly(A) output.
+    """
 
 def make_directories(here, dirnames, DEBUGGING):
     """

@@ -88,6 +88,13 @@ only_chr1 = false
 # value. Setting should never be below 100 nt.
 min3utrlen = 200
 
+[GET_LENGTH]
+# length = true
+length = false
+# if you don't care about the length of the 3UTRs, but only want their poly(A)
+# sites, set 'length = false'. If you do this, you must have polya = true,
+# otherwise Utail will do very little indeed ...
+
 
 [POLYA_READS]
 polya = true
