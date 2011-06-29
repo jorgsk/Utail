@@ -24,7 +24,7 @@
 carrie = /users/rg/projects/NGS/Projects/ENCODE/hg19main/GingerasCarrie
 
 #### POLYA MINUS CONTROLS
-K562_CytoplasmMinus = %(carrie)s/001CMinus/genome/LID18545_FC62JRWAAXX_6_1.gem.map.gz:%(carrie)s/001CMinus/genome/LID18545_FC62JRWAAXX_6_2.gem.map.gz:%(carrie)s/001CMinus/genome/LID18545_FC62JRWAAXX_7_1.gem.map.gz:%(carrie)s/001CMinus/genome/LID18545_FC62JRWAAXX_7_2.gem.map.gz:%(carrie)s/001CMinus/genome/LID18545_FC62JRWAAXX_8_1.gem.map.gz:%(carrie)s/001CMinus/genome/LID18545_FC62JRWAAXX_8_2.gem.map.gz
+# K562_CytoplasmMinus = %(carrie)s/001CMinus/genome/LID18545_FC62JRWAAXX_6_1.gem.map.gz:%(carrie)s/001CMinus/genome/LID18545_FC62JRWAAXX_6_2.gem.map.gz:%(carrie)s/001CMinus/genome/LID18545_FC62JRWAAXX_7_1.gem.map.gz:%(carrie)s/001CMinus/genome/LID18545_FC62JRWAAXX_7_2.gem.map.gz:%(carrie)s/001CMinus/genome/LID18545_FC62JRWAAXX_8_1.gem.map.gz:%(carrie)s/001CMinus/genome/LID18545_FC62JRWAAXX_8_2.gem.map.gz
 
 # K562_NucleusMinus = %(carrie)s/001NMinus/genome/LID9195_FC625PLAAXX_6_1.gem.map.gz:%(carrie)s/001NMinus/genome/LID9195_FC625PLAAXX_6_2.gem.map.gz:%(carrie)s/001NMinus/genome/LID9195_FC625PLAAXX_7_1.gem.map.gz:%(carrie)s/001NMinus/genome/LID9195_FC625PLAAXX_7_2.gem.map.gz:%(carrie)s/001NMinus/genome/LID9195_FC625PLAAXX_8_1.gem.map.gz:%(carrie)s/001NMinus/genome/LID9195_FC625PLAAXX_8_2.gem.map.gz
 
@@ -40,6 +40,12 @@ K562_CytoplasmMinus = %(carrie)s/001CMinus/genome/LID18545_FC62JRWAAXX_6_1.gem.m
 # K562_Nucleoplasm = %(carrie)s/025NPtotal/genome/LID9189_FC61WW5AAXX_5_1.gem.map.gz:%(carrie)s/025NPtotal/genome/LID9189_FC61WW5AAXX_5_2.gem.map.gz:%(carrie)s/025NPtotal/genome/LID9189_FC61WW5AAXX_6_1.gem.map.gz:%(carrie)s/025NPtotal/genome/LID9189_FC61WW5AAXX_6_2.gem.map.gz:%(carrie)s/025NPtotal/genome/LID9189_FC61WW5AAXX_7_1.gem.map.gz:%(carrie)s/025NPtotal/genome/LID9189_FC61WW5AAXX_7_2.gem.map.gz
 
 # K562_Chromatin = %(carrie)s/025CH/genome/LID9185_FC61RV8AAXX_1_1.gem.map.gz:%(carrie)s/025CH/genome/LID9185_FC61RV8AAXX_1_2.gem.map.gz:%(carrie)s/025CH/genome/LID9185_FC61RV8AAXX_2_1.gem.map.gz:%(carrie)s/025CH/genome/LID9185_FC61RV8AAXX_2_2.gem.map.gz:%(carrie)s/025CH/genome/LID9185_FC61RV8AAXX_3_1.gem.map.gz:%(carrie)s/025CH/genome/LID9185_FC61RV8AAXX_3_2.gem.map.gz
+
+knplm2 = %(carrie)s/026NPtotal/genome
+K562_Nucleoplasm2 = %(knplm2)s/LID9190_FC61WU1AAXX_1_1.gem.map.gz:%(knplm2)s/LID9190_FC61WU1AAXX_1_2.gem.map.gz:%(knplm2)s/LID9190_FC61WU1AAXX_2_1.gem.map.gz:%(knplm2)s/LID9190_FC61WU1AAXX_2_2.gem.map.gz:%(knplm2)s/LID9190_FC61WW5AAXX_8_1.gem.map.gz:%(knplm2)s/LID9190_FC61WW5AAXX_8_2.gem.map.gz
+
+kch2 = %(carrie)s/026CH/genome
+K562_Chromatin2 = %(kch2)s/LID9186_FC61RV8AAXX_4_1.gem.map.gz:%(kch2)s/LID9186_FC61RV8AAXX_4_2.gem.map.gz:%(kch2)s/LID9186_FC61RV8AAXX_5_1.gem.map.gz:%(kch2)s/LID9186_FC61RV8AAXX_5_2.gem.map.gz:%(kch2)s/LID9186_FC61RV8AAXX_6_1.gem.map.gz:%(kch2)s/LID9186_FC61RV8AAXX_6_2.gem.map.gz
 
 # HeLa-S3_Cytoplasm = %(carrie)s/011C/genome/LID8469_FC61AHAAAXX_1_2.gem.map.gz:%(carrie)s/011C/genome/LID8469_FC61AHAAAXX_3_2.gem.map.gz:%(carrie)s/011C/genome/LID8469_FC61AHAAAXX_3_1.gem.map.gz:%(carrie)s/011C/genome/LID8469_FC61AHAAAXX_2_2.gem.map.gz:%(carrie)s/011C/genome/LID8469_FC61AHAAAXX_2_1.gem.map.gz:%(carrie)s/011C/genome/LID8469_FC61AHAAAXX_1_1.gem.map.gz
 
@@ -210,5 +216,6 @@ tuning = false
 # datasets = GM12878_Cytoplasm:GM12878_Whole_Cell:GM12878_Nucleus:K562_Cytoplasm:K562_Whole_Cell:K562_Nucleus
 # datasets = GM12878_Cytoplasm:GM12878_Whole_Cell:GM12878_Nucleus
 # datasets = K562_Cytoplasm:K562_Whole_Cell:K562_Nucleus:K562_Nucleoplasm:K562_Chromatin
-datasets = K562_CytoplasmMinus:K562_Whole_CellMinus:K562_NucleusMinus:K562_Cytoplasm:K562_Whole_Cell:K562_Nucleus
-# datasets = HeLa-S3_Cytoplasm:K562_Nucleus
+# datasets = K562_CytoplasmMinus:K562_Whole_CellMinus:K562_NucleusMinus:K562_Cytoplasm:K562_Whole_Cell:K562_Nucleus:K562_Nucleoplasm:K562_Chromatin
+# datasets = K562_Cytoplasm:K562_Nucleus:K562_Nucleoplasm:K562_Chromatin:K562_Whole_Cell
+datasets = K562_Nucleus:K562_Nucleoplasm2:K562_Chromatin2:K562_Nucleoplasm:K562_Chromatin

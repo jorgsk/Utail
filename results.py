@@ -3318,7 +3318,7 @@ def polyadenylation_comparison(dsets, super_3utr, settings):
     #### Novel polyA sites in annotated 3UTRS
     #novel_polyAs(dsets, super_clusters, dset_2super)
     # The new version that makes stuff easy
-    #novel_polyAs_2(dsets, super_3utr, settings)
+    novel_polyAs_2(dsets, super_3utr, settings)
 
     #### Compare the compartments; how many annotated do we find? etc.
     #compare_cluster_evidence(dsets, super_clusters, dset_2super)
@@ -4207,7 +4207,8 @@ def minusstats(dsets, super_3utr):
     for cl, cl_dict in dsets.items():
         for comp, comp_dict in cl_dict.items():
 
-            minus[comp] = {'Tot pA':0, 'Annot pA':0, 'PAS pA':0, 'read_nr':0}
+            minus[comp] = {'Tot pA':0, 'Annot pA':0, 'PAS pA':0, 'read_nr':0,
+                           'both_an_and_PAS':0}
 
             for utr_id, utr in comp_dict.iteritems():
                 if utr.clusters != []:
@@ -4220,6 +4221,10 @@ def minusstats(dsets, super_3utr):
 
                         if cls.nearby_PAS != ['NA']:
                             minus[comp]['PAS pA'] += 1
+
+                        if (cls.annotated_polyA_distance != 'NA') \
+                           and (cls.nearby_PAS != ['NA']):
+                            minus[comp]['both_an_and_PAS'] += 1
 
 
     for (comp, count_dict) in minus.items():
@@ -4234,12 +4239,17 @@ def minusstats(dsets, super_3utr):
         read_nr = count_dict['read_nr']
         read_per_site = read_nr/total
 
+        anYpas = count_dict['both_an_and_PAS']
+        anYpas_rate = anYpas/annot
+
         print comp
         print("Total poly(A) sites: {0} ".format(total))
         print("Total poly(A) reads (per site): {0} ({1}) ".format(read_nr,
                                                                   read_per_site))
         print("Annotated poly(A) sites: {0} ({1}%)".format(annot, annot_frac))
         print("poly(A) sites with PAS: {0} ({1}%)".format(pas, pas_frac))
+        print("Annotated poly(A) sites with PAS: {0} ({1}%)".format(anYpas,
+                                                                    anYpas_rate))
         print("")
 
     total_unique = 0
@@ -4248,9 +4258,6 @@ def minusstats(dsets, super_3utr):
 
     print("Total unique poly(A) sites for all sets: {0}".format(total_unique))
         #for cls in utr.super
-
-    debug()
-
 
 def main():
     # The path to the directory the script is located in
@@ -4272,15 +4279,16 @@ def main():
     # Get the dsetswith utrs and their clusters from the length and polyA files
     # Optionally get SVM information as well
     #so that you will have the same 1000 3UTRs!
-    dsets, super_3utr = get_utrs(settings, speedrun=True, svm=False)
-    #dsets, super_3utr = get_utrs(settings, speedrun=False, svm=False)
+    #dsets, super_3utr = get_utrs(settings, speedrun=True, svm=False)
+    dsets, super_3utr = get_utrs(settings, speedrun=False, svm=False)
 
     # EMERGENCY CODE! GINGERAS STATS FOR MINUS
-    #minusstats(dsets, super_3utr)
+    minusstats(dsets, super_3utr)
 
     #### Nucleosomes (and sequences) ####
     # TODO continue with this: you're abount to make nucleotide coverage arrays!
-    nucsec(dsets, super_3utr, settings, here)
+    # XXX seems you're using too much ram smartypants ...
+    #nucsec(dsets, super_3utr, settings, here)
 
     #### RPKM distribution
     #### What is the distribution of 3UTR RPKMS? run this function and find out!
@@ -4300,6 +4308,10 @@ def main():
     ##### Write a bedfile with all the polyA sites confirmed by both annotation and
     ##### 3UTR poly(A) reads (For Sarah)
     #write_verified_TTS(clusters) broken, clusters replaced with dsets
+
+    # TODO the methods in this functions must be updated to use super3utr. It
+    # should be a huge hustle.
+    #polyadenylation_comparison(dsets, super_3utr, settings)
 
     ##### get the before/after coverage ratios for trusted epsilon ends
     #before_after_ratio(dsets)
@@ -4323,10 +4335,6 @@ def main():
     # annotation. Would be fun if we found some variation here as well.
 
     #utr_length_comparison(settings, dsets)
-
-    # TODO the methods in this functions must be updated to use super3utr. It
-    # should be a huge hustle.
-    #polyadenylation_comparison(dsets, super_3utr, settings)
 
     ## The classic polyA variation distributions
     #classic_polyA_stats(settings, dsets)
