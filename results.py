@@ -4278,8 +4278,8 @@ def main():
 
     # Get the dsetswith utrs and their clusters from the length and polyA files
     # Optionally get SVM information as well
-    #so that you will have the same 1000 3UTRs!
-    #dsets, super_3utr = get_utrs(settings, speedrun=True, svm=False)
+    # so that you will have the same 1000 3UTRs!
+    # dsets, super_3utr = get_utrs(settings, speedrun=True, svm=False)
     dsets, super_3utr = get_utrs(settings, speedrun=False, svm=False)
 
     # EMERGENCY CODE! GINGERAS STATS FOR MINUS
