@@ -83,12 +83,13 @@ class Settings(object):
         self.read_limit = 100
         self.max_cores = 3
         self.get_length = False
+        self.extendby = 100
         #self.polyA = True
         #self.polyA = False
         #self.polyA = '/users/rg/jskancke/phdproject/3UTR/the_project/polyA_files'\
                 #'/polyA_reads_K562_Whole_Cell_processed_mapped.bed'
         self.polyA = '/users/rg/jskancke/phdproject/3UTR/the_project/polyA_files'\
-                '/polyA_reads_K562_Whole_Cell_processed_mapped.bed'
+                '/polyA_reads_K562_Cytoplasm_processed_mapped.bed'
         #self.bed_reads = '/users/rg/jskancke/phdproject/3UTR/the_project/temp_files'\
                 #'/reads_HeLa-S3_Nucleus.bed'
         self.bigwig = False
@@ -1024,7 +1025,7 @@ def join_multiexon_utr(multi_exon_utr, total_nr_reads):
     return main_utr
 
 def output_writer(dset_id, coverage, annotation, utr_seqs, rpkm, polyA_reads,
-                  settings, total_nr_reads, output_dir):
+                  settings, total_nr_reads, output_dir, polyA):
     """
     Putting together all the info on the 3UTRs and writing to files. Write
     one file mainly about the length of the 3UTR, and write another file about
@@ -1042,8 +1043,10 @@ def output_writer(dset_id, coverage, annotation, utr_seqs, rpkm, polyA_reads,
     length_outpath = os.path.join(dirpath, 'length_'+dset_id)
     length_outfile = open(length_outpath, 'wb')
 
-    polyA_outpath = os.path.join(dirpath, 'polyA_'+dset_id)
-    polyA_outfile = open(polyA_outpath, 'wb')
+    # Only make a poly(A) file if you're going to write to it
+    if polyA:
+        polyA_outpath = os.path.join(dirpath, 'polyA_'+dset_id)
+        polyA_outfile = open(polyA_outpath, 'wb')
 
     # list of PAS hexamers
     PAS_sites = ['AATAAA', 'ATTAAA', 'TATAAA', 'AGTAAA', 'AAGAAA', 'AATATA',
@@ -1917,7 +1920,7 @@ def cluster_loop(ends):
     # Return the clusters and their average
     return (averages_cluster, clusters)
 
-def cluster_polyAs(utr_polyAs, utrs, polyA):
+def cluster_polyAs(utr_polyAs, utrs, polyA, moving):
     """
     For each UTR, save the clustered poly(A)-reads from both strands. For
     double-stranded reads, it is known that the poly(A) reads map to the
@@ -1935,11 +1938,7 @@ def cluster_polyAs(utr_polyAs, utrs, polyA):
         return polyA_reads
 
     polyA_reads = {}
-
-    this_strand_count = 0
-    other_strand_count = 0
-
-    both_strands_count = 0
+    polyA_statistics = {}
 
     for utr_id, polyAs in utr_polyAs.iteritems():
         utr_info = utrs[utr_id]
@@ -1953,42 +1952,45 @@ def cluster_polyAs(utr_polyAs, utrs, polyA):
             other_strand_ends = sorted([tup[1] for tup in polyAs if tup[5] == '+'])
             this_strand_ends = sorted([tup[2] for tup in polyAs if tup[5] == '-'])
 
-        # Getting the actual clusters
+        # Save post-moving reads and clusters to a polyA_stats-dictionary that
+        # will be used to output basic statistics about the poly(A) reads.
+        polyA_statistics[utr_id] = {'this_strand': cluster_loop(this_strand_ends),
+                                    'other_strand': cluster_loop(other_strand_ends)}
+
+        # If moving: add the few false negatives that are there
+        if moving:
+            if this_strand_ends != [] and other_strand_ends != []:
+                other_clusters = polyA_statistics[utr_id]['other_strand'][0]
+                movers = set()
+                for thi_end in this_strand_ends:
+                    for oth_cls in other_clusters:
+                        if int(oth_cls)-15 < int(thi_end) < int(oth_cls)+15:
+                            movers.add(thi_end)
+
+                # move the movers from this_strand to other_strand!
+                for end in movers:
+                    other_strand_ends.append(end)
+                    this_strand_ends.remove(end)
+
+                # re-sort
+                other_strand_ends.sort()
+                this_strand_ends.sort()
+
         polyA_reads[utr_id] = {'this_strand': cluster_loop(this_strand_ends),
                                'other_strand': cluster_loop(other_strand_ends)}
-
-        # NOTE you can do all these statistics more downstream as well! Maybe
-        # right before you output to file? You can write a small polyA
-        # statistics summary file :)
-
-        # Count the number of poly(A) reads on each strand
-        this_strand_count += len(this_strand_ends)
-        other_strand_count += len(other_strand_ends)
-
-        if this_strand_ends != [] and other_strand_ends != []:
-            for thi_end in this_strand_ends:
-                for oth_end in other_strand_ends:
-                    if int(oth_end)-10 < int(thi_end) < int(oth_end)+10:
-                        both_strands_count += 1
 
     # For those utr_id that don't have a cluster, give them an empty list; ad hoc
     for utr_id in utrs:
         if utr_id not in polyA_reads:
-            polyA_reads[utr_id] = {'this_strand':[[],[]], 'other_strand':[[],[]]}
+            polyA_reads[utr_id] = {'this_strand': [[],[]], 'other_strand': [[],[]]}
+            polyA_statistics[utr_id] = {'this_strand': [[],[]],
+                                        'other_strand': [[],[]]}
 
-    # get the "this strand" to "other strand" ratio -- it's a measure of
-    # correctness :) # this will be great to have in the table of different
-    # regions!!!!!!!!! You can quantify how likely it is that these poly(A)
-    # sites are genuine :) Long live paired-ended reads!
-    this_other = this_strand_count/other_strand_count
-    print "This-strand to other-strand ratio: {0}".format(this_other, '.5f')
-    debug()
-
-    return polyA_reads, this_other
+    return polyA_reads, polyA_statistics
 
 
 def pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs, settings,
-             annotation, DEBUGGING):
+             annotation, DEBUGGING, moving):
     """
     Get reads, get polyA reads, cluster polyA reads, get coverage, combine it in
     a 3UTr object, do calculations on the object attributes, write calculation
@@ -2001,6 +2003,7 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs, settings,
     read_limit = settings.read_limit
     polyA = settings.polyA
     get_length = settings.get_length
+    utr_exons = annotation.utr_exons
     # Define utr_polyAs in case polyA is false
     utr_polyAs = {}
 
@@ -2049,15 +2052,21 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs, settings,
     # Cluster the poly(A) reads for each utr_id. If polyA is false or no polyA
     # reads were found, return a placeholder, since this variable is assumed to
     # exist in downstream code.
-    polyA_reads = cluster_polyAs(utr_polyAs, annotation.utr_exons, polyA)
+    polyA_reads, polyA_statistics = cluster_polyAs(utr_polyAs, utr_exons, polyA,
+                                                   moving)
+    # If polyA is true, write the polyA-statistics file!
+    if polyA:
+        output_path = os.path.join(output_dir, dset_id+'_polyA_statistics')
+        write_polyA_stats(polyA_reads, polyA_statistics, utr_exons, output_path)
 
+    debug()
     if get_length:
         # Get RPKM, coverage, and write to file
 
         # Get the RPKM, if you get lengths
         print('Obtaining RPKM for {0} ...\n'.format(dset_id))
-        rpkm = get_rpkm(bed_reads, utrfile_path, total_nr_reads,
-                        annotation.utr_exons, extendby, dset_id)
+        rpkm = get_rpkm(bed_reads, utrfile_path, total_nr_reads, utr_exons,
+                        extendby, dset_id)
 
         # Cover the 3UTRs with the reads, if you get lengths
         print('Getting read-coverage for the 3UTRs for {0} ...\n'.format(dset_id))
@@ -2068,7 +2077,7 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs, settings,
         print('Writing output files... {0} ...\n'.format(dset_id))
         output_files = output_writer(dset_id, coverage_path, annotation,
                                      utr_seqs, rpkm, polyA_reads, settings,
-                                     total_nr_reads, output_dir)
+                                     total_nr_reads, output_dir, polyA)
     else:
         # Just get the poly(A) output
         only_polyA_writer(dset_id, annotation, utr_seqs, polyA_reads, settings,
@@ -2082,6 +2091,181 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs, settings,
     # Return a dictionary with the file paths of the output files
     return {dset_id: {'coverage': coverage_path, 'length': length_output,
                       'polyA':polyA_output}}
+
+def write_polyA_stats(polyA_reads, polyA_statistics, utr_exons, output_path):
+    """
+    File for outputting basic polyA statistics. These statistics make most sense
+    in 3UTR regions, because we know the orientation of the transcripts. In
+    other regions, they don't make sense at all, because you don't know the
+    direction of the transcripts. However, if in some region you find that the
+    ratio is enriched for one strand, it is likely that this region has true
+    poly(A) sites.
+
+    1) Estimated false-positive rate (this_strand/other_strand)
+
+    2) Estimated false-negative rate (common to both strands) (but these are
+    actually added to the poly(A)-read pool)
+
+    3) PAS/annotation rate of the so called false-negatives? Is it the same as
+    for the others?
+
+    4) distribution of ratio of unique_reads/total_reads for each cluster site
+
+    5) distribution of standard deviations about the cluster mean.
+
+    6) distribution of the number of unique reads for each cluster
+
+    7) number of 3UTRs with poly(A) reads detected. useful for comparing to the
+    number which have read coverage ... an estimate of how many of the 3UTRs you
+    manage to reach. Number should improve by using both biological replicates.
+
+    8) Distribution of reads from the other strand -- do they arrive in
+    clusters? How does this look compared to other_strand?
+
+    IDEA: get the distribution of the unique reads about the center. This should
+    reflect the cleavage process.
+    """
+
+    this_strand_count = 0
+    other_strand_count = 0
+    both_strand_count = 0
+
+    both_by_chance = 0
+
+    # Lists of unique vs. total reads for each utr for each strand
+    distributions = {'this_strand': {'unique_reads': [], 'total_reads': [],
+                                  'spread': []},
+                     'other_strand': {'unique_reads': [], 'total_reads': [],
+                                   'spread': []}}
+
+    # Get the data for the false positive and negative from the
+    # polyA_statistics, which does not have any moving from one strand to the
+    # other
+    for utr, strand_stats in polyA_statistics.items():
+        # Skip those without poly(A) reads
+        if strand_stats == {'other_strand': [[], []], 'this_strand': [[], []]}:
+            continue
+
+        this_strand_reads = sum(strand_stats['this_strand'][1], [])
+        other_strand_reads = sum(strand_stats['other_strand'][1], [])
+
+        other_strand_clstrs = strand_stats['other_strand'][0]
+
+        this_strand_count += len(this_strand_reads)
+        other_strand_count += len(other_strand_reads)
+
+        movers = 0
+
+        # Getting those that are in both strands. Method: see if any of the
+        # this_reads are close to cluster_centers
+        if this_strand_reads != [] and other_strand_reads != []:
+            for thi_end in this_strand_reads:
+                for oth_cls in other_strand_clstrs:
+                    if int(oth_cls)-15 < int(thi_end) < int(oth_cls)+15:
+                        both_strand_count += 1
+                        movers += 1
+
+            # Estimating the chance of moving strands by chance
+
+            # length of this exon
+            exon_len = utr_exons[utr][2]-utr_exons[utr][1]
+
+            # Number of clustersClusters in 
+            cls_nr = len(other_strand_clstrs)
+
+            # size of +/- 15 about those clusters
+            target_size = cls_nr*30
+
+            # probl of one of the movers hitting the target size
+            # prob of landing in target size for 1 mover
+            targ_land = target_size/exon_len
+
+            # prob for all movers, assuming independence
+            both_by_chance += targ_land*movers
+
+    handle = open(output_path, 'wb')
+
+    #0) The numbers themselves
+    handle.write('This_strand_count\t{0}\n'.format(this_strand_count))
+    handle.write('Other_strand_count\t{0}\n'.format(other_strand_count))
+    handle.write('Both_strands_count\t{0}\n'.format(both_strand_count))
+    handle.write('Both strands by chance\t{0}\n'.format(both_by_chance))
+
+    #1) Estimated false-positive rate (this_strand/other_strand)
+    fals_pos = this_strand_count/other_strand_count
+    # I call it false positive because you can assume that the same rate of
+    # reads will land in 
+    explanation = 'Reads in opposite strand divided by reads in this strand'
+    handle.write('"False positive"-rate\t{0}\n'.format(fals_pos, '.4f'))
+
+    #2) Estimated false-negative rate (common to both strands) (but these are
+    # actually added to the poly(A)-read pool!)
+    fals_neg = both_strand_count/other_strand_count
+    explanation = 'Reads common to both strands divided by reads in other strand'
+    handle.write('"False negative"-rate\t{0}\n'.format(fals_neg, '.4f'))
+
+    # Get distributions of the poly(A) reads you actually use
+    for utr, strand_stats in polyA_reads.items():
+        for keyw in ['this_strand', 'other_strand']:
+            # Add total and unique reads for the clusters
+            (cls_centers, cls_all_reads) = strand_stats[keyw]
+            for cls_center, cls_reads in zip(cls_centers, cls_all_reads):
+                distributions[keyw]['total_reads'].append(len(cls_reads))
+                distributions[keyw]['unique_reads'].append(len(set(cls_reads)))
+                std = math.sqrt(sum([(cls_center-cls_pos)**2 for cls_pos in
+                           cls_reads])/len(cls_reads))
+                distributions[keyw]['spread'].append(std)
+
+    # Calculate key statistics from the this_strand and other_strand variables
+    for strand_way, dist in distributions.items():
+
+        ## 1) average and std of the spread
+        #spread_mean = sum(dist['spread'])/len(dist['spread'])
+        #spread_std = math.sqrt(sum([(spread_mean-spread)**2 for spread in
+                          #dist['spread']])/(len(dist['spread'])))
+        #handle.write('Mean cluster spread in nt {0}\t{1}\n'.format(strand_way,
+                                                                   #spread_mean))
+        #handle.write('Std cluster spread in nt {0}\t{1}\n'.format(strand_way,
+                                                                  #spread_std))
+
+        # 2) average, std, and sum of total reads
+        total_sum = sum(dist['total_reads'])
+        total_mean = total_sum/len(dist['total_reads'])
+        total_std = math.sqrt(sum([(tot-total_mean)**2 for tot in
+                                   dist['total_reads']])/len(dist['total_reads']))
+        #handle.write('Sum total number of reads {0}\t{1}\n'.format(strand_way,
+                                                             #total_sum))
+        handle.write('{0} Average total reads in clusters\t{1}\n'\
+                     .format(strand_way, total_mean))
+        handle.write('{0} Std total reads in clusters\t{1}\n'.format(strand_way,
+                                                             total_std))
+
+        # 3) average, std, sum of unique reads
+        unique_sum = sum(dist['unique_reads'])
+        unique_mean = unique_sum/len(dist['unique_reads'])
+        unique_std = math.sqrt(sum([(tot-unique_mean)**2 for tot in
+                                   dist['unique_reads']])/len(dist['unique_reads']))
+
+        handle.write('{0} Sum unique reads\t{1}\n'.format(strand_way,
+                                                             unique_sum))
+        handle.write('{0} Average unique reads in clusters\t{1}\n'.format(strand_way,
+                                                             unique_mean))
+        handle.write('{0} Std uniuqe reads in clusters\t{1}\n'.format(strand_way,
+                                                                  unique_std))
+        # 4) average, std, and sum of unique/total ratio reads
+        #utot = []
+        #for ind, tot in enumerate(dist['total_reads']):
+            #utot.append(dist['unique_reads'][ind]/tot)
+
+        #utot_mean = sum(utot)/len(utot)
+        #utot_std = math.sqrt(sum([(ut-utot_mean)**2 for ut in utot])/len(utot))
+
+        #handle.write('Average unique/total number of reads {0}\t{1}\n'\
+                     #.format(strand_way, utot_mean))
+        #handle.write('Std uniuqe/total number of reads {0}\t{1}\n'.\
+                     #format(strand_way, utot_std))
+
+    handle.close()
 
 def only_polyA_writer(dset_id, annotation, utr_seqs, polyA_reads, settings,
                       total_nr_reads, output_dir):
@@ -2624,6 +2808,11 @@ def main():
     print('Making data structures for annotated poly(A) sites ...\n')
     annotation.a_polyA_sites_dict = annotation.get_polyA_dict()
 
+    # Should you move the false-negatives from this-strand to other-strand? This
+    # should be dataset dependent. For 3UTR, I say yes. For the other datasets,
+    # I'm not so sure.
+    moving = True # CHANGE THIS FOR NON-3UTR DATASETS!
+
     ##################################################################
     if simulate:
         # For all 3UTR exons, get the genomic sequence. The sequence is needed
@@ -2645,7 +2834,7 @@ def main():
 
             # The arguments needed for the pipeline
             arguments = (dset_id, dset_reads, tempdir, output_dir, utr_seqs,
-                         settings, annotation, DEBUGGING)
+                         settings, annotation, DEBUGGING, moving)
 
             ### FOR DEBUGGING #######
             akk = pipeline(*arguments)
