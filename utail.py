@@ -80,12 +80,15 @@ class Settings(object):
         self.chr1 = True
         #self.chr1 = False
         #self.read_limit = False
-        self.read_limit = 2000000
+        self.read_limit = 100
         self.max_cores = 3
-        self.polyA = True
+        self.get_length = False
+        #self.polyA = True
         #self.polyA = False
-        #self.polyA = '/users/rg/jskancke/phdproject/3UTR/the_project/temp_files'\
-                #'/polyA_reads_HeLa-S3_Nucleus_processed_mapped.bed'
+        #self.polyA = '/users/rg/jskancke/phdproject/3UTR/the_project/polyA_files'\
+                #'/polyA_reads_K562_Whole_Cell_processed_mapped.bed'
+        self.polyA = '/users/rg/jskancke/phdproject/3UTR/the_project/polyA_files'\
+                '/polyA_reads_K562_Whole_Cell_processed_mapped.bed'
         #self.bed_reads = '/users/rg/jskancke/phdproject/3UTR/the_project/temp_files'\
                 #'/reads_HeLa-S3_Nucleus.bed'
         self.bigwig = False
@@ -1283,7 +1286,7 @@ def read_settings(settings_file):
     expected_fields = ['DATASETS', 'ANNOTATION', 'CPU_CORES', 'RESTRICT_READS',
                        'CHROMOSOME1', 'SUPPLIED_3UTR_BEDFILE', 'HG_FASTA',
                        'POLYA_READS', 'MIN_3UTR_LENGTH', 'EXTEND', 'PLOTTING',
-                       'UTR_LENGTH_TUNING', 'BIGWIG']
+                       'UTR_LENGTH_TUNING', 'BIGWIG', 'GET_LENGTH']
 
     missing = set(conf.sections()) - set(expected_fields)
 
@@ -1918,8 +1921,11 @@ def cluster_polyAs(utr_polyAs, utrs, polyA):
     """
     For each UTR, save the clustered poly(A)-reads from both strands. For
     double-stranded reads, it is known that the poly(A) reads map to the
-    opposite side of the strand it came from. This information is helpful in
-    estimating the false positive rate.
+    opposite side of the strand it came from. You count the number of reads
+    landing in different strands and use the ratio as a false-positive rate. You
+    also count the number of identical reads in both strands as a measure of how
+    many on the self-strand are genuine!! REMEMBER TO WRITE ABOUT THIS! THIS IS
+    INTERESTING STUFF!.
     """
 
     # Ff there are no polyA reads or polyA is false: return empty lists 
@@ -1928,10 +1934,12 @@ def cluster_polyAs(utr_polyAs, utrs, polyA):
                            for utr_id in utrs)
         return polyA_reads
 
-    plus_values = {'+': [], '-':[]}
-    minus_values = {'+': [], '-':[]}
-
     polyA_reads = {}
+
+    this_strand_count = 0
+    other_strand_count = 0
+
+    both_strands_count = 0
 
     for utr_id, polyAs in utr_polyAs.iteritems():
         utr_info = utrs[utr_id]
@@ -1949,12 +1957,34 @@ def cluster_polyAs(utr_polyAs, utrs, polyA):
         polyA_reads[utr_id] = {'this_strand': cluster_loop(this_strand_ends),
                                'other_strand': cluster_loop(other_strand_ends)}
 
+        # NOTE you can do all these statistics more downstream as well! Maybe
+        # right before you output to file? You can write a small polyA
+        # statistics summary file :)
+
+        # Count the number of poly(A) reads on each strand
+        this_strand_count += len(this_strand_ends)
+        other_strand_count += len(other_strand_ends)
+
+        if this_strand_ends != [] and other_strand_ends != []:
+            for thi_end in this_strand_ends:
+                for oth_end in other_strand_ends:
+                    if int(oth_end)-10 < int(thi_end) < int(oth_end)+10:
+                        both_strands_count += 1
+
     # For those utr_id that don't have a cluster, give them an empty list; ad hoc
     for utr_id in utrs:
         if utr_id not in polyA_reads:
             polyA_reads[utr_id] = {'this_strand':[[],[]], 'other_strand':[[],[]]}
 
-    return polyA_reads
+    # get the "this strand" to "other strand" ratio -- it's a measure of
+    # correctness :) # this will be great to have in the table of different
+    # regions!!!!!!!!! You can quantify how likely it is that these poly(A)
+    # sites are genuine :) Long live paired-ended reads!
+    this_other = this_strand_count/other_strand_count
+    print "This-strand to other-strand ratio: {0}".format(this_other, '.5f')
+    debug()
+
+    return polyA_reads, this_other
 
 
 def pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs, settings,
@@ -2022,6 +2052,8 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs, settings,
     polyA_reads = cluster_polyAs(utr_polyAs, annotation.utr_exons, polyA)
 
     if get_length:
+        # Get RPKM, coverage, and write to file
+
         # Get the RPKM, if you get lengths
         print('Obtaining RPKM for {0} ...\n'.format(dset_id))
         rpkm = get_rpkm(bed_reads, utrfile_path, total_nr_reads,
@@ -2038,10 +2070,9 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs, settings,
                                      utr_seqs, rpkm, polyA_reads, settings,
                                      total_nr_reads, output_dir)
     else:
+        # Just get the poly(A) output
         only_polyA_writer(dset_id, annotation, utr_seqs, polyA_reads, settings,
                           total_nr_reads, output_dir)
-        # Just get the poly(A) output
-        # 
 
     print('Total time for {0}: {1}\n'.format(dset_id, time.time() - t0))
 
@@ -2056,7 +2087,35 @@ def only_polyA_writer(dset_id, annotation, utr_seqs, polyA_reads, settings,
                       total_nr_reads, output_dir):
     """ If only poly(A) is asked for, skip the footprint-heavy "output_writer"
     and use this special method for just writing poly(A) output.
+    The following is output should be output:
+
+        chrm
+        beg
+        end
+        utr_ID
+        polyA_number
+        strand
+        polyA_coordinate
+        number_supporting_reads
+        annotated_polyA_distance
+        nearby_PAS
+        PAS_distance
+
+    Thus you must remove the coverage and RPKM parameters from the
+    length-output.
+
+    NOTE: when running poly(A) checks on non-3UTR regions, you need to accept
+    poly(A) reads from both strands. When running in 3UTR regions you should
+    accept those from the other strand if they do overlap. Count the remainder
+    as a crude measure of error rate?
     """
+    # TODO: 1) check if the poly(A) reads from the same strand overlap the poly(A)
+    # sites of your strand. If they do, add them to the count.
+    # 2) get the distribution about the poly(A) sites as a measure of
+    # variability and number of mRNAs.
+    # 3) Can you check the nucleotide sequence for poly(A/T) runs? It's a
+    # conjace, but people will ask for it ...
+    debug()
 
 def make_directories(here, dirnames, DEBUGGING):
     """
@@ -2505,8 +2564,8 @@ def main():
     # function (called below). It also affects the 'temp' and 'output'
     # directories, respectively.
 
-    #DEBUGGING = True
-    DEBUGGING = False
+    DEBUGGING = True
+    #DEBUGGING = False
 
     # with this option, always remake the bedfiles
     rerun_annotation_parser = False
@@ -2588,16 +2647,16 @@ def main():
             arguments = (dset_id, dset_reads, tempdir, output_dir, utr_seqs,
                          settings, annotation, DEBUGGING)
 
-            #### FOR DEBUGGING #######
-            #akk = pipeline(*arguments)
-            ##########################
+            ### FOR DEBUGGING #######
+            akk = pipeline(*arguments)
+            #########################
 
-            result = my_pool.apply_async(pipeline, arguments)
-            results.append(result)
+            #result = my_pool.apply_async(pipeline, arguments)
+            #results.append(result)
 
         #debug()
-        my_pool.close()
-        my_pool.join()
+        #my_pool.close()
+        #my_pool.join()
 
          #Get the paths from the final output
         outp = [result.get() for result in results]
