@@ -423,9 +423,6 @@ def make_transcripts(annotation, file_format='GENCODE'):
     :returns: transcripts, genes
     """
 
-    # Skip first 4 lines of annotation (for gencode at least.......)
-    a_handle = skip_lines(annotation, 7)
-
     # Initialize dictionaries
     utr, cds, exons, transcripts, genes = (dict(), dict(), dict(), dict(),
                                            dict())
@@ -440,8 +437,7 @@ def make_transcripts(annotation, file_format='GENCODE'):
 
         (transcripts, genes) = ensembl_reader(a_handle)
 
-    # Go through all the damn transcripts and their damn exons, utrs, and cds,
-    # and sort them.
+    # Sort all exons of all transcripts
     for (ts_id, ts_obj) in transcripts.iteritems():
         ts_obj.five_utr.exons.sort()
         ts_obj.cds.exons.sort()
@@ -467,29 +463,24 @@ def skip_lines(file_path, nr):
     return handle
 
 def write_beds(transcripts, bed_dir, chr_sizes, *opts):
-
-    (merge, extend, no_overlapping, chr1) = opts
-
-    """" Write bed files for 3utr, cds, and 5utr introns and exons.
-    Write bed files for intergenic regions and annotated transcription
-    termination sites (aTTS).
+    """ Write bed files for 3utr, cds, and 5utr introns and exons, and
+    intergenic regions. If aTTS is True, write the annotated poly(A) sites.
     """
+
+    (merge, extend, no_overlapping, chr1, aTTS, skipsize, stranded) = opts
+
     output_names = ['five_utr_exons', 'five_utr_introns', 'three_utr_exons',
                    'three_utr_introns', 'cds_exons', 'cds_introns',
                    'aTTS_coding', 'aTTS_processed']
+    if not aTTS:
+        output_names.remove('aTTS_coding')
+        output_names.remove('aTTS_processed')
 
-    output = dict((name, path_join(bed_dir, name)+'.bed') for name in output_names)
+    # paths to all output files
+    paths = dict((name, path_join(bed_dir, name)+'.bed') for name in output_names)
 
-    # BED-files with chr, beg, end, strand.
-    fiveUTR_exons = open(output['five_utr_exons'], 'wb')
-    fiveUTR_introns = open(output['five_utr_introns'], 'wb')
-    threeUTR_exons = open(output['three_utr_exons'], 'wb')
-    threeUTR_introns = open(output['three_utr_introns'], 'wb')
-    CDS_exons = open(output['cds_exons'], 'wb')
-    CDS_introns = open(output['cds_introns'], 'wb')
-    aTTS_coding = open(output['aTTS_coding'], 'wb')
-    aTTS_processed = open(output['aTTS_processed'], 'wb')
-    # intergenic will be added at the bottom inside subfunction
+    # handles for writing to these files
+    handles = dict((name, open(paths[name], 'wb')) for name in output_names)
 
     for ts_id, ts in transcripts.iteritems():
 
@@ -497,100 +488,97 @@ def write_beds(transcripts, bed_dir, chr_sizes, *opts):
         for exon in ts.cds.exons:
             beg = str(exon[1])
             end = str(exon[2])
-            if exon[2]-exon[1] < 3:
+            if exon[2]-exon[1] < skipsize:
                 continue
             outp = '\t'.join([exon[0], beg, end, '.', '.', exon[3]])
-            CDS_exons.write(outp+'\n')
+            handles['cds_exons'].write(outp+'\n')
 
         # CDS introns
         for intr in ts.get_cds_introns():
-            if feature_length(intr) < 2:
+            if feature_length(intr) < 3:
                 continue
             outp = '\t'.join([intr[0], intr[1], intr[2], '.', '.', intr[3]])
-            CDS_introns.write(outp+'\n')
+            handles['cds_introns'].write(outp+'\n')
 
         #5 UTR introns
         for intr in ts.get_utr_introns(side=5):
-            if feature_length(intr) < 2:
+            if feature_length(intr) < skipsize:
                 continue
             outp = '\t'.join([intr[0], intr[1], intr[2], '.', '.', intr[3]])
-            fiveUTR_introns.write(outp+'\n')
+            handles['five_utr_introns'].write(outp+'\n')
 
-        #5 UTR exons
+        #5 UTR "exons"
         for exon in ts.five_utr.exons:
             beg = str(exon[1])
             end = str(exon[2])
-            if exon[2]-exon[1] < 3:
+            # Don't include very short 5UTRs
+            if exon[2]-exon[1] < skipsize:
                 continue
             outp = '\t'.join([exon[0], beg, end, '.', '.', exon[3]])
-            fiveUTR_exons.write(outp+'\n')
+            handles['five_utr_exons'].write(outp+'\n')
 
         #3 UTR introns
         for intr in ts.get_utr_introns(side=3):
-            if feature_length(intr) < 2:
+            if feature_length(intr) < skipsize:
                 continue
             outp = '\t'.join([intr[0], intr[1], intr[2], '.', '.', intr[3]])
-            threeUTR_introns.write(outp+'\n')
+            handles['three_utr_introns'].write(outp+'\n')
 
-        #3 UTR exons
+        #3 UTR "exons" (not really exons; the exon is split between CDS and UTR)
         for exon in ts.three_utr.exons:
             beg = str(exon[1])
             end = str(exon[2])
-            if exon[2]-exon[1] < 3:
+            if exon[2]-exon[1] < skipsize:
                 continue
             outp = '\t'.join([exon[0], beg, end, '.', '.', exon[3]])
-            threeUTR_exons.write(outp+'\n')
+            handles['three_utr_exons'].write(outp+'\n')
 
-        #aTTS coding transcripts
-        if ts.t_type == 'protein_coding':
+        if aTTS:
+            #aTTS coding transcripts
+            if ts.t_type == 'protein_coding':
 
-            # Only get it if coding_transcript has UTR. If not, don't get it.
-            aTTS = ts.get_aTTS(with_utr=True)
-            if aTTS == 0:
-                continue
+                # Only get it if coding_transcript has UTR. If not, don't get it.
+                aTTS = ts.get_aTTS(with_utr=True)
+                if aTTS == 0:
+                    continue
 
-            beg = str(aTTS[1])
-            end = str(aTTS[2])
-            outp = '\t'.join([aTTS[0], beg, end, '.', '.', aTTS[3]])
-            aTTS_coding.write(outp+'\n')
+                beg = str(aTTS[1])
+                end = str(aTTS[2])
+                outp = '\t'.join([aTTS[0], beg, end, '.', '.', aTTS[3]])
+                handles['aTTS_coding'].write(outp+'\n')
 
-        if ts.t_type == 'processed_transcript':
-            #aTTS from last exon
-            aTTS = ts.get_aTTS(with_utr=False)
-            beg = str(aTTS[1])
-            end = str(aTTS[2])
-            outp = '\t'.join([aTTS[0], beg, end, '.', '.', aTTS[3]])
-            aTTS_processed.write(outp+'\n')
+            if ts.t_type == 'processed_transcript':
+                #aTTS from last exon
+                aTTS = ts.get_aTTS(with_utr=False)
+                beg = str(aTTS[1])
+                end = str(aTTS[2])
+                outp = '\t'.join([aTTS[0], beg, end, '.', '.', aTTS[3]])
+                handles['aTTS_processed'].write(outp+'\n')
 
+    # Close all file objects
+    for name, handle in handles.items():
+        handle.close()
 
-    fiveUTR_exons.close()
-    fiveUTR_introns.close()
-    threeUTR_exons.close()
-    threeUTR_introns.close()
-    CDS_exons.close()
-    CDS_introns.close()
-    aTTS_coding.close()
-    aTTS_processed.close()
+    if aTTS:
+        # Extend the aTTS files by 40nt
+        extend_by = 40
+        if extend:
+            paths = extend_aTTS(paths, chr_sizes, extend_by)
 
-    # Extend the aTTS files by 40nt
-    extend_by = 40
-    if extend:
-        output = extend_aTTS(output, chr_sizes, extend_by)
-
-    # Create merged versions of all output if requested
+    # Create merged versions of all paths if requested
     if merge:
-        output = merge_output(bed_dir, output)
+        paths = merge_output(bed_dir, paths, stranded)
 
     # Remove overlap between the .bed files
     if no_overlapping:
-        output = remove_overlap(bed_dir, output)
+        paths = remove_overlap(bed_dir, paths, aTTS, stranded)
 
-    ## Create the intergenic bed as the adjoint of all the bed files in output
-    output = get_intergenic(bed_dir, output, chr_sizes, chr1)
+    ## Create the intergenic bed as the adjoint of all the bed files in paths
+    paths = get_intergenic(bed_dir, paths, chr_sizes, chr1, stranded)
 
-    return output
+    return paths
 
-def get_intergenic(bed_dir, output, chr_sizes, chr1):
+def get_intergenic(bed_dir, output, chr_sizes, chr1, stranded):
     """Create a .bed file for the whole genome. Then successively remove each
     region from this file. Optionally divide into 3UTR proximal/distal..."""
 
@@ -600,7 +588,7 @@ def get_intergenic(bed_dir, output, chr_sizes, chr1):
     keyword= ''
     all_other = output.keys()
     all_other.remove('intergenic')
-    output = subtractor(['intergenic'], all_other, keyword, output)
+    output = subtractor(['intergenic'], all_other, keyword, output, stranded)
 
     return output
 
@@ -608,11 +596,16 @@ def get_genomeBed(chrm_sizes, bed_dir, chr1):
     genBedPath = path_join(bed_dir, 'intergenic.bed')
     genBed = open(genBedPath, 'wb')
 
-    if chr1:
-        stop = 2
-    else:
-        stop = 25
-    for line in [l for l in open(chrm_sizes, 'rb')][1:stop]:
+    for line_nr, line in enumerate(open(chrm_sizes, 'rb')):
+        # Skip header or other stuff
+        if not line.startswith('chr'):
+            continue
+
+        # Only get the 'chr1' entry if so set
+        if chr1:
+            if line.split()[0] != 'chr1':
+                continue
+
         (chrm, end) = line.split()
         out_plus = '\t'.join([chrm, '1', end, '.', '.', '+'])+'\n'
         out_minus = '\t'.join([chrm, '1', end, '.', '.', '-'])+'\n'
@@ -628,41 +621,43 @@ def feature_length(feature):
     """Return the length of a (chr, beg, end, strnd) tuple """
     return (int(feature[2])-int(feature[1]))
 
-def remove_overlap(bed_dir, output):
-    """ Make sure that 3UTR_exons has no overlap with either aTTS_coding or
-    aTTS_processed. Make sure that cds_exons has no overlap with aTTS_processed.
-    Make sure that aTTS_processed does not overlap with aTTS_coding.
+def remove_overlap(bed_dir, output, aTTS, stranded):
+    """ Remove overlap between the different regions
     """
-    # 1) Remove entries of aTTS_coding from aTTS_processed
-    aTTS_nonc = ['aTTS_processed']
-    aTTS_cod = ['aTTS_coding']
 
-    keyword = 'wo_coding'
-    output = subtractor(aTTS_nonc, aTTS_cod, keyword, output)
-
-    # 2) For all introns and exons, remove overlap with aTTS
     introns = ['three_utr_introns', 'five_utr_introns', 'cds_introns']
     exons = ['five_utr_exons', 'cds_exons', 'three_utr_exons']
     int_ex = introns + exons
 
-    aTTS = ['aTTS_coding', 'aTTS_processed']
-    keyword = 'nov_atts'
-    output = subtractor(int_ex, aTTS, keyword, output)
+    if aTTS:
+        # 1) Remove entries of aTTS_coding from aTTS_processed
+        aTTS_nonc = ['aTTS_processed']
+        aTTS_cod = ['aTTS_coding']
+
+        keyword = 'wo_coding'
+        output = subtractor(aTTS_nonc, aTTS_cod, keyword, output, stranded)
+
+        # 2) For all introns and exons, remove overlap with aTTS
+        aTTS = ['aTTS_coding', 'aTTS_processed']
+        keyword = 'nov_atts'
+        output = subtractor(int_ex, aTTS, keyword, output, stranded)
 
     # 3) For all introns, remove all exons.
+    # Thus, exon dominates over intron.
     keyword = 'nov_exon'
-    output = subtractor(introns, exons, keyword, output)
+    output = subtractor(introns, exons, keyword, output, stranded)
 
     # 4) For CDS exons, remove 3/5 UTR exons
+    # Thus UTR dominate over CDS! d
     cds_exon = ['cds_exons']
     other_exons = ['five_utr_exons', 'three_utr_exons']
 
     keyword = 'nov_cds'
-    output = subtractor(cds_exon, other_exons, keyword, output)
+    output = subtractor(cds_exon, other_exons, keyword, output, stranded)
 
     return output
 
-def subtractor(a_names, b_names, keyword, output):
+def subtractor(a_names, b_names, keyword, output, stranded):
 
     for a_name in a_names:
 
@@ -676,7 +671,7 @@ def subtractor(a_names, b_names, keyword, output):
             ending = '_'+keyword+'_'+str(count)+'.bed'
             outp =  output[a_name].rpartition('.')[0] + ending
 
-            output[a_name] = my_subtractBed(a_file, b_file, outp)
+            output[a_name] = my_subtractBed(a_file, b_file, outp, stranded)
 
     return output
 
@@ -689,12 +684,18 @@ def bed_length(bed_file):
 
     return size
 
-def my_subtractBed(file_a, file_b, outfile):
+def my_subtractBed(file_a, file_b, outfile, stranded):
 
-    cmd = 'subtractBed -s -a {0} -b {1} > {2}'.\
-            format(file_a, file_b, outfile)
+    if stranded:
+        cmd = 'subtractBed -s -a {0} -b {1} > {2}'.\
+                format(file_a, file_b, outfile)
+    else:
+        cmd = 'subtractBed -a {0} -b {1} > {2}'.\
+                format(file_a, file_b, outfile)
 
-    call(cmd, shell=True)
+    p = call(cmd, shell=True)
+    p.wait()
+
     return outfile
 
 def extend_aTTS(inpot, chr_sizes, extend_by):
@@ -715,7 +716,7 @@ def extend_aTTS(inpot, chr_sizes, extend_by):
 
     return inpot
 
-def merge_output(bed_dir, output):
+def merge_output(bed_dir, output, stranded):
     """ Run mergeBed on all the files in output and replace original """
     # mergeBed will delete the two life-important dots!!
     # I must reintroduce them 
@@ -725,7 +726,11 @@ def merge_output(bed_dir, output):
         out_path = bed_file.rpartition('.')[0] + '_merged.bed'
         out_file = open(out_path, 'wb')
 
-        cmd = ['mergeBed','-s', '-i', bed_file]
+        if stranded:
+            cmd = ['mergeBed','-s', '-i', bed_file]
+        else:
+            cmd = ['mergeBed', '-i', bed_file]
+
         p = Popen(cmd, shell=False, stdout=PIPE, stderr=PIPE)
 
         for merged_entry in p.stdout:
@@ -1398,40 +1403,34 @@ def main():
     #chr1 = False
 
     #annotation = '/users/rg/jskancke/phdproject/3UTR/'\
-            #'gencode5/gencode5_annotation.gtf'
-    annotation = '/users/rg/jskancke/phdproject/3UTR/Annotations/'\
-            'Mus_musculus.NCBIM37.62.gtf'
+            #'gencode7/gencode7_annotation.gtf'
+    #annotation = '/users/rg/jskancke/phdproject/3UTR/Annotations/'\
+            #'Mus_musculus.NCBIM37.62.gtf'
     if chr1:
-        #annotation = '/users/rg/jskancke/phdproject/3UTR/'\
-                #'gencode5/gencode5_annotation_chr1.gtf'
-        annotation = '/users/rg/jskancke/phdproject/3UTR/Annotations/'\
-                'Mus_musculus.NCBIM37.62_chr1.gtf'
+        annotation = '/users/rg/jskancke/phdproject/3UTR/'\
+                'gencode7/gencode7_annotation_chr1.gtf'
+        #annotation = '/users/rg/jskancke/phdproject/3UTR/Annotations/'\
+                #'Mus_musculus.NCBIM37.62_chr1.gtf'
 
     an_frmt = 'GENCODE'
-    an_frmt = 'ENSEMBL'
-
-    #algo = get_3utr_bed_all_exons(annotation, 'somewhere')
-    ### TESTING START
+    #an_frmt = 'ENSEMBL'
 
     (transcripts, genes) = make_transcripts(annotation, an_frmt)
 
-    debug()
-
-
-    ### TESTING OVER
-
-    all_begends = [(ts.chrm, ts.beg, ts.end) for ts in transcripts.values()]
-    set_begends = set(all_begends)
     print time.time() - t1
-    #transcripts = []
 
-    # Create bed-files for introns and exons in 3-5 utr and cds, as well as aTTS
-    # sites and intergenic regions
-    bed_dir = '/users/rg/jskancke/phdproject/3UTR/key_bedfiles'
-    chr_s = '/users/rg/jskancke/phdproject/3UTR/BodyMap_3UTR/overlap/hg19genome'
+    # Create bed-files for introns and exons in 3-5 utr and cds
+    bed_dir = '/users/rg/jskancke/phdproject/3UTR/annotation_split'
+    chr_s = '/users/rg/jskancke/phdproject/3UTR/the_project/ext_files/hg19'
 
-    (merge, extend, no_overlapping) = (True, True, True)
-    opts = (merge, extend, no_overlapping, chr1)
+    # make the bed-dir if doesn't exist
+    if not os.path.exists(bed_dir):
+        os.makedirs(bed_dir)
+
+    (merge, extend, no_overlapping, aTTS, skipsize) = (True, True, True, False,
+                                                      50)
+    stranded = True
+    opts = (merge, extend, no_overlapping, chr1, aTTS, skipsize, stranded)
 
     write_beds(transcripts, bed_dir, chr_s, *opts)
 

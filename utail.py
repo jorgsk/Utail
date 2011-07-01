@@ -77,8 +77,8 @@ class Settings(object):
         debugging!
         """
 
-        self.chr1 = True
-        #self.chr1 = False
+        #self.chr1 = True
+        self.chr1 = False
         #self.read_limit = False
         self.read_limit = 100
         self.max_cores = 3
@@ -2388,8 +2388,9 @@ def only_polyA_writer(dset_id, annotation, utr_seqs, polyA_reads, settings,
             (nearby_PAS, PAS_distance) = get_pas_and_distance(rpoint,
                                                               pas_patterns,
                                                               sequence)
-            nearby_PAS = ' '.join(nearby_PAS)
-            PAS_distance = ' '.join([str(di) for di in PAS_distance])
+            if nearby_PAS != 'NA':
+                nearby_PAS = ' '.join(nearby_PAS)
+                PAS_distance = ' '.join([str(di) for di in PAS_distance])
 
             number_supporting_reads = len(cls_reads)
             number_unique_supporting_reads = len(set(cls_reads))
@@ -2926,7 +2927,8 @@ def main():
     # Should you move the false-negatives from this-strand to other-strand? This
     # should be dataset dependent. For 3UTR, I say yes. For the other datasets,
     # I'm not so sure.
-    moving = True # CHANGE THIS FOR NON-3UTR DATASETS!
+    moving = True # CHANGE THIS FOR NON-3UTR DATASETS! IT MIGHT NOT EVEN BE
+    #RELEVANT! THE NUMBERS ARE SO LOW!
 
     ##################################################################
     if simulate:
@@ -2952,15 +2954,15 @@ def main():
                          settings, annotation, DEBUGGING, moving)
 
             ### FOR DEBUGGING #######
-            akk = pipeline(*arguments)
+            #akk = pipeline(*arguments)
             #########################
 
-            #result = my_pool.apply_async(pipeline, arguments)
-            #results.append(result)
+            result = my_pool.apply_async(pipeline, arguments)
+            results.append(result)
 
         #debug()
-        #my_pool.close()
-        #my_pool.join()
+        my_pool.close()
+        my_pool.join()
 
          #Get the paths from the final output
         outp = [result.get() for result in results]
@@ -2973,8 +2975,10 @@ def main():
 
         # Now copy over the output that was in temp-files but that you want to
         # have in output files
-        # Fill the dicts with paths
         for line in outp:
+            # If this is a only-polyA-run, don't move stuff
+            if 'only_polyA' in line[line.keys()[0]].keys():
+                break
             for key, value in line.items():
                 coverage[key] = value['coverage']
                 final_outp_polyA[key] = value['polyA']
