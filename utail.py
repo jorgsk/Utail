@@ -80,16 +80,16 @@ class Settings(object):
         #self.chr1 = True
         self.chr1 = False
         #self.read_limit = False
-        self.read_limit = 100
+        self.read_limit = 10000
         self.max_cores = 3
         self.get_length = False
         self.extendby = 100
-        #self.polyA = True
+        self.polyA = True
         #self.polyA = False
         #self.polyA = '/users/rg/jskancke/phdproject/3UTR/the_project/polyA_files'\
                 #'/polyA_reads_K562_Whole_Cell_processed_mapped.bed'
-        self.polyA = '/users/rg/jskancke/phdproject/3UTR/the_project/polyA_files'\
-                '/polyA_reads_K562_Cytoplasm_processed_mapped.bed'
+        #self.polyA = '/users/rg/jskancke/phdproject/3UTR/the_project/polyA_files'\
+                #'/polyA_reads_K562_Cytoplasm_processed_mapped.bed'
         #self.bed_reads = '/users/rg/jskancke/phdproject/3UTR/the_project/temp_files'\
                 #'/reads_HeLa-S3_Nucleus.bed'
         self.bigwig = False
@@ -925,6 +925,9 @@ def zcat_wrapper(bed_reads, read_limit, out_path, polyA, polyA_path, get_reads):
     # A dictionary of strands
     getstrand = {'R':'-', 'F':'+'}
 
+    acount = 0
+    tcount = 0
+
     # Keep track on the number of reads you get for the sake of RPKM
     total_reads = 0
     # Run zcat with -f to act as noram cat if the gem-file is not compressed
@@ -967,12 +970,17 @@ def zcat_wrapper(bed_reads, read_limit, out_path, polyA, polyA_path, get_reads):
                 # Check for putative poly(A)-tail. Remove tail and write to file.
                 if (seq[-5:] == 'AAAAA') or (seq[-7:].count('A') >=6):
                     polyA_file.write(strip_tailA(seq, trail_A, non_A) + '\n')
+                    acount += 1
 
                 if (seq[:5] == 'TTTTT') or (seq[:7].count('T') >=6):
                     polyA_file.write(strip_tailT(seq, lead_T, non_T) + '\n')
+                    tcount +=1
 
     out_file.close()
     polyA_file.close()
+
+    print acount, ' acount'
+    print tcount, ' tcount'
 
     return total_reads
 
@@ -2029,6 +2037,9 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs, settings,
     polyA = settings.polyA
     get_length = settings.get_length
     utr_exons = annotation.utr_exons
+
+    # Extract the name of the bed-region you are checking for poly(A) reads
+
     # Define utr_polyAs in case polyA is false
     utr_polyAs = {}
 
@@ -2929,6 +2940,7 @@ def main():
     # I'm not so sure.
     moving = True # CHANGE THIS FOR NON-3UTR DATASETS! IT MIGHT NOT EVEN BE
     #RELEVANT! THE NUMBERS ARE SO LOW!
+    debug()
 
     ##################################################################
     if simulate:

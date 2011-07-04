@@ -575,6 +575,10 @@ def write_beds(transcripts, bed_dir, chr_sizes, *opts):
 
     ## Create the intergenic bed as the adjoint of all the bed files in paths
     paths = get_intergenic(bed_dir, paths, chr_sizes, chr1, stranded)
+    # TODO: create stranded and unstranded versions of the genomic regions.
+    # publish them to the group. start running these regions on Utail and
+    # produce the information Roderic wants for all the regions.
+    # 
 
     return paths
 
