@@ -589,6 +589,30 @@ def write_beds(transcripts, bed_dir, chr_sizes, *opts):
     if not os.path.isdir(savedir):
         os.makedirs(savedir)
 
+    ## debugging
+    #known = []
+    #for name1, filepath1 in paths.items():
+        #for name2, filepath2 in paths.items():
+            #if name1 == name2:
+                #continue
+
+            #if sorted([name1, name2]) in known:
+                #continue
+            #else:
+                #known.append(sorted([name1, name2]))
+
+            #cmd = ['intersectBed', '-a', filepath1, '-b', filepath2]
+            #p = Popen(cmd, stdout=PIPE)
+
+            #go = [line for line in p.stdout]
+
+            #if go != []:
+                #print 'Intersection: {0} and {1} '.format(name1, name2)
+                #print 'Intersection length: {0}'.format(len(go))
+
+            #if go == []:
+                #print 'No intersection: {0} and {1} '.format(name1, name2)
+
     # rename the paths and save them to the stranded or non-stranded directories
     for name, filepath in paths.items():
         out_path = os.path.join(savedir, name+'_'+strnd+'_'+chrm+'.bed')
@@ -713,13 +737,10 @@ def remove_overlap(bed_dir, output, stranded):
     # 1) For all introns, remove all exons (including noncoding exons).
     # Thus, exon dominates over intron.
     keyword = 'nov_exon'
-    output = subtractor(introns, exons+noncoding_exons, keyword, output, stranded)
+    output = subtractor(introns+noncoding_introns, exons+noncoding_exons,
+                        keyword, output, stranded)
 
     # 2) From UTR exons, remove CDS exons
-    # Thus CDS dominates over UTR
-    # The reason is that in the annotation are many utr regions that overlap CDS
-    # in the middle of genes where probably most transcripts are expressing
-    # exons and not UTR
     cds_exon = ['cds_exons']
     other_exons = ['five_utr_exons', 'three_utr_exons', 'noncoding_exons']
     keyword = 'nov_cds'
@@ -735,6 +756,17 @@ def remove_overlap(bed_dir, output, stranded):
     keyword = 'all'
     output = subtractor(noncoding_exons, exons, keyword, output, stranded)
     output = subtractor(noncoding_introns, introns, keyword, output, stranded)
+
+    # 5) From 5UTR introns and exons, remove 3UTR introns and exons
+    keyword = 'no_5'
+    five_utr_exons = ['five_utr_exons']
+    three_utr_exons = ['three_utr_exons']
+    output = subtractor(five_utr_exons, three_utr_exons, keyword, output, stranded)
+
+    five_utr_introns = ['five_utr_introns']
+    three_utr_introns = ['three_utr_introns']
+    output = subtractor(five_utr_introns, three_utr_introns, keyword, output,
+                        stranded)
 
     return output
 
@@ -1495,6 +1527,7 @@ def split_annotation(transcripts, chr1):
     skipsize = 3
 
     for stranded in [False, True]:
+    #for stranded in [False]:
 
         opts = (merge, extend, no_overlapping, chr1, skipsize, stranded)
 
@@ -1502,8 +1535,8 @@ def split_annotation(transcripts, chr1):
 
 def main():
 
-    #for chr1 in [True, False]:
-    for chr1 in [True]:
+    for chr1 in [True, False]:
+    #for chr1 in [True]:
 
         t1 = time.time()
 
@@ -1527,7 +1560,6 @@ def main():
         split_annotation(transcripts, chr1)
 
         print time.time() - t1
-
 
 
 if __name__ == '__main__':

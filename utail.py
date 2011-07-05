@@ -2934,6 +2934,10 @@ def main():
     moving = True # CHANGE THIS FOR NON-3UTR DATASETS! IT MIGHT NOT EVEN BE
     #RELEVANT! THE NUMBERS ARE SO LOW!
 
+    # TODO change the 3UTR position in the output path? then run a lot of stuff
+    # ... then compare a lot of stuff ... prepare results.py for the new format.
+    # I need to do this quick.
+
     ##################################################################
     if simulate:
         # For all 3UTR exons, get the genomic sequence. The sequence is needed
