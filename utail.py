@@ -80,9 +80,10 @@ class Settings(object):
         #self.chr1 = True
         self.chr1 = False
         #self.read_limit = False
-        self.read_limit = 10000
+        self.read_limit = 30000000
         self.max_cores = 3
-        self.get_length = False
+        #self.get_length = False
+        self.get_length = True
         self.extendby = 100
         self.polyA = True
         #self.polyA = False
@@ -795,7 +796,7 @@ class PolyAReads(object):
         """
 
         all_pas = {}
-        for rpoint in self.rel_polyread_sites:
+        for rpoint in self.rel_polyRead_sites:
             pas_seq = sequence[rpoint-40:rpoint]
 
             # special case if the polya read is is early in the sequence
@@ -1058,7 +1059,7 @@ def join_multiexon_utr(multi_exon_utr, total_nr_reads):
     return main_utr
 
 def output_writer(dset_id, coverage, annotation, utr_seqs, rpkm, polyA_reads,
-                  settings, total_nr_reads, output_dir, polyA):
+                  settings, total_nr_reads, output_dir, polyA, region):
     """
     Putting together all the info on the 3UTRs and writing to files. Write
     one file mainly about the length of the 3UTR, and write another file about
@@ -1073,12 +1074,12 @@ def output_writer(dset_id, coverage, annotation, utr_seqs, rpkm, polyA_reads,
     # Paths and file object for the two output files (length and one polyA)
 
     # Open the respective files if set in the settings
-    length_outpath = os.path.join(dirpath, 'length_'+dset_id)
+    length_outpath = os.path.join(dirpath, 'length_'+dset_id+'_'+region)
     length_outfile = open(length_outpath, 'wb')
 
     # Only make a poly(A) file if you're going to write to it
     if polyA:
-        polyA_outpath = os.path.join(dirpath, 'polyA_'+dset_id)
+        polyA_outpath = os.path.join(dirpath, 'polyA_'+dset_id+'_'+region)
         polyA_outfile = open(polyA_outpath, 'wb')
 
     # list of PAS hexamers
@@ -1169,8 +1170,6 @@ def output_writer(dset_id, coverage, annotation, utr_seqs, rpkm, polyA_reads,
             if calculate_and_write:
 
                 # Calculate output values like 99.5% length, cumulative coverage, etc
-                # BUG: adding coverage vectors is OK. Adding cumul vectors NOT
-                # SO IF THEY HAVE BEEN CUMUL'ed INDIVIDUALLY BEFORE. HAVE THEY?
                 length_output.calculate_output(pas_patterns, this_utr)
                 pAread_output.calculate_output(pas_patterns, this_utr)
 
@@ -1194,7 +1193,8 @@ def output_writer(dset_id, coverage, annotation, utr_seqs, rpkm, polyA_reads,
                 pAread_output = PolyAReads(utr_ID)
 
             # Assert that the next utr has correct info
-            assert utr_exons[utr_ID] == (chrm, int(beg), int(end), strand), 'Mismatch'
+            assert utr_exons[utr_ID] == (chrm, int(beg), int(end),
+                                         strand), 'Mismatch'
 
     # Close opened files
     length_outfile.close()
@@ -1344,7 +1344,8 @@ def read_settings(settings_file):
     length = conf.getboolean('GET_LENGTH', 'length')
 
     # datasets
-    datasets = dict((dset, files.split(':')) for dset, files in conf.items('DATASETS'))
+    datasets = dict((dset, files.split(':')) for dset,
+                    files in conf.items('DATASETS'))
 
     # Go through all the items in 'datsets'. Pop the directories from the list.
     # They are likely to be shortcuts.
@@ -1512,7 +1513,7 @@ def get_utr_path(settings, beddir, rerun_annotation_parser):
         user_provided = ''
 
     # utr path
-    utr_filename = '3utrs' + chrm + ext + user_provided + '.bed'
+    utr_filename = '3UTRs' + chrm + ext + user_provided + '.bed'
     utr_bed_path = os.path.join(beddir, utr_filename)
 
     # if you're not rerunning the annotation, check if file's already there
@@ -2039,6 +2040,7 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs, settings,
     utr_exons = annotation.utr_exons
 
     # Extract the name of the bed-region you are checking for poly(A) reads
+    region = os.path.basename(annotation.utrfile_path).split('_')[0]
 
     # Define utr_polyAs in case polyA is false
     utr_polyAs = {}
@@ -2092,7 +2094,8 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs, settings,
                                                    moving)
     # If polyA is true, write the polyA-statistics file!
     if polyA:
-        output_path = os.path.join(output_dir, dset_id+'_polyA_statistics')
+        output_path = os.path.join(output_dir,
+                                   dset_id+'_'+region+'_polyA_statistics')
         write_polyA_stats(polyA_reads, polyA_statistics, utr_exons, output_path)
 
     if get_length:
@@ -2112,7 +2115,7 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs, settings,
         print('Writing output files... {0} ...\n'.format(dset_id))
         output_files = output_writer(dset_id, coverage_path, annotation,
                                      utr_seqs, rpkm, polyA_reads, settings,
-                                     total_nr_reads, output_dir, polyA)
+                                     total_nr_reads, output_dir, polyA, region)
 
         # Get the paths to the two output files explicitly
         (polyA_output, length_output) = output_files
@@ -2123,7 +2126,7 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs, settings,
     else:
         # Just get the poly(A) output
         only_pA = only_polyA_writer(dset_id, annotation, utr_seqs, polyA_reads,
-                                    settings, total_nr_reads, output_dir)
+                                    settings, total_nr_reads, output_dir, region)
 
         return {dset_id: {'only_polyA': only_pA}}
 
@@ -2306,23 +2309,9 @@ def write_polyA_stats(polyA_reads, polyA_statistics, utr_exons, output_path):
     handle.close()
 
 def only_polyA_writer(dset_id, annotation, utr_seqs, polyA_reads, settings,
-                      total_nr_reads, output_dir):
+                      total_nr_reads, output_dir, region):
     """ If only poly(A) is asked for, skip the footprint-heavy "output_writer"
     and use this special method for just writing poly(A) output.
-    The following is output should be output:
-
-        chrm
-        beg
-        end
-        utr_ID
-        strand
-        polyA_coordinate
-        annotated_polyA_distance
-        nearby_PAS
-        PAS_distance
-        number_supporting_reads
-        number_unique_supporting_reads
-        unique_reads_distribution_std
 
     Thus you must remove the coverage and RPKM parameters from the
     length-output.
@@ -2368,7 +2357,7 @@ def only_polyA_writer(dset_id, annotation, utr_seqs, polyA_reads, settings,
     # 3) TODO Can you check the nucleotide sequence for poly(A/T) runs? It's a
     # conjace, but people will ask for it ...
 
-    polyA_outpath = os.path.join(output_dir, 'onlypolyA_'+dset_id)
+    polyA_outpath = os.path.join(output_dir, 'onlypolyA_'+dset_id+'_'+region)
     polyA_outfile = open(polyA_outpath, 'wb')
 
     # Write header to the columns
@@ -2875,6 +2864,10 @@ def main():
     # function (called below). It also affects the 'temp' and 'output'
     # directories, respectively.
 
+    # TODO compare K562 with HUVEC or H1. HUVEC and H1 are not a cancer cell
+    # line. Does K562 have shorter 3UTRs compared to HUVEC? Can we see this, if
+    # not in length, then in poly(A) reads relative usage?
+
     DEBUGGING = True
     #DEBUGGING = False
 
@@ -2940,7 +2933,6 @@ def main():
     # I'm not so sure.
     moving = True # CHANGE THIS FOR NON-3UTR DATASETS! IT MIGHT NOT EVEN BE
     #RELEVANT! THE NUMBERS ARE SO LOW!
-    debug()
 
     ##################################################################
     if simulate:
