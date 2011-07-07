@@ -148,9 +148,12 @@ restrict_reads = false
 [SUPPLIED_3UTR_BEDFILE]
 # If you don't want to extract 3UTRs from the annotation, or if you wish in
 # investigate some other genomic region than the 3UTR, you can supply a bedfile
-# yourself.
+# yourself. If you supply more than one bedfile, the pipeline will be run for
+# each region successively.
 # utr_bed_path = false
-utr_bed_path = /users/rg/jskancke/phdproject/3UTR/the_project/genomic_regions_hg19/chr1/3UTR_intronic_non_stranded_chr1.bed
+regions = /users/rg/jskancke/phdproject/3UTR/the_project/genomic_regions_hg19
+utr_bed_path = %(regions)s/3UTR_intronic_non_stranded.bed:%(regions)s/3UTR_exonic_non_stranded.bed:%(regions)s/3UTR_intronic_non_stranded.bed:%(regions)s/5UTR_exonic_non_stranded.bed:%(regions)s/5UTR_intronic_non_stranded.bed:%(regions)s/CDS_exonic_non_stranded.bed:%(regions)s/CDS_intronic_non_stranded.bed:%(regions)s/Intergenic_non_stranded.bed:%(regions)s/Nocoding_exonic_non_stranded.bed:%(regions)s/Noncoding_intronic_non_stranded.bed
+
 
 # utr_bed_path = /users/rg/pferreira/desktop/motifsapa/data/bedannotation/hg19/3utr_hg19.selectedcases.bed
 

@@ -305,6 +305,7 @@ class Settings(object):
         # A bit ad-hoc: dicrectory of polyA read files
         self.polyAread_dir = os.path.join(here, 'polyA_files')
 
+        # before: only one path; now, multiple ...
         self.annot_polyA_path = self.get_annot_polyas()
         self.polyA_DB_path = os.path.join(self.here, 'polyADB', 'polyA_db')
 
@@ -4336,6 +4337,9 @@ def polyA_summary(dsets, super_3utr, polyAstats):
 
     minus = AutoVivification()
 
+    # collect total unique poly(A) sites per region and per cell line
+    total_unique = AutoVivification()
+
     # make a [region][cl][compartment][polyA+/-][replica] structure; each region
     # will have its own plots. cl will be K562 only. Then compare compartments
     # first in terms of replicas, then in terms of polyA+/-
@@ -4368,20 +4372,6 @@ def polyA_summary(dsets, super_3utr, polyAstats):
                                and (cls.nearby_PAS != ['NA']):
                                 minus[comp]['both_an_and_PAS'] += 1
 
-        # IDEA: to make plots easily, why don't you save this all in a
-        # tab-separated file? First column is region, second is cell_type, third
-        # is compartment, fourth is replica yes/no. Starting from column 5, you
-        # have the statistics you are interested in. This should leave you with
-        # a simpler interface for plotting this stuff. With autovivification you
-        # can make a data[region][cell_line][compartment][replica] dictionary.
-        # Hey, how would that help EXACTLY? you already have the information
-        # right here. I think you're just putting off work. You don't even know
-        # how to present the data.
-        #
-        # NEW NOTES I recommend that you make this
-        # data structure HERE AND NOW and when you have finished your analysis,
-        # you may write it to file!
-
         for (comp, count_dict) in minus.items():
             total = count_dict['Tot pA']
 
@@ -4411,6 +4401,10 @@ def polyA_summary(dsets, super_3utr, polyAstats):
             print("Annotated poly(A) sites with PAS: {0} ({1})".format(anYpas,
                                                                         anYpas_rate))
             print("")
+
+            # get poly(A) + or - and get if it is a replicate or not
+            debug()
+            everything[region][cl][comp]
 
         total_unique = 0
         for utr_id, utr in super_3utr[region].iteritems():

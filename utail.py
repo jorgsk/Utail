@@ -44,7 +44,7 @@ class Settings(object):
     the UTR_SETTINGS file. Useful for passing to downstream code.
     """
     def __init__(self, datasets, annotation_path, annotation_format,
-                 utrfile_provided, read_limit, max_cores, chr1, hgfasta_path,
+                 utrfiles_provided, read_limit, max_cores, chr1, hgfasta_path,
                  polyA, min_utrlen, extendby, cumul_tuning, bigwig,
                  bigwig_datasets, bigwig_savedir, bigwig_url, gem_index,
                  length):
@@ -53,7 +53,10 @@ class Settings(object):
         self.datasets = datasets
         self.annotation_path = annotation_path
         self.annotation_format = annotation_format
-        self.utrfile_provided = utrfile_provided
+        self.regions = utrfiles_provided
+        self.utrfile_provided = True
+        if utrfiles_provided[0] == False:
+            self.utrfile_provided = False
         self.read_limit = read_limit
         self.max_cores = max_cores
         self.chr1 = chr1
@@ -1388,15 +1391,16 @@ def read_settings(settings_file):
 
     # supplied 3utr bedfile
     try:
-        utr_bedfile_path = conf.getboolean('SUPPLIED_3UTR_BEDFILE',
+        utr_bedfile_paths = conf.getboolean('SUPPLIED_3UTR_BEDFILE',
                                            'utr_bed_path')
     except ValueError:
-        utr_bedfile_path = conf.get('SUPPLIED_3UTR_BEDFILE', 'utr_bed_path')
-        verify_access(utr_bedfile_path) # Check if is a file
+        utr_bedfile_paths = conf.get('SUPPLIED_3UTR_BEDFILE',
+                                    'utr_bed_path').split(':')
+        [verify_access(path) for path in utr_bedfile_paths] # Check if is a file
 
     # If both 'annotation' and '3utr_bedfile' are false, your program isn't
     # going to go too far
-    if not annotation_path and not utr_bedfile_path:
+    if not annotation_path and not utr_bedfile_paths[0]:
         print('You must either use a GENCODE annotation or supply a bedfile'\
               ' yourself. Not both can be false.')
         sys.exit()
@@ -1448,12 +1452,12 @@ def read_settings(settings_file):
         print('To tune the cumulative value, you need to enable polyA reads')
         sys.exit()
 
-    return(datasets, annotation_path, annotation_format, utr_bedfile_path,
+    return(datasets, annotation_path, annotation_format, utr_bedfile_paths,
            read_limit, max_cores, chr1, hg_fasta, polyA, min_utrlen, extendby,
            cuml_tuning, bigwig, bigwig_datasets, bigwig_savedir, bigwig_url,
            gem_index, length)
 
-def get_a_polyA_sites_path(settings, beddir):
+def get_a_polyA_sites_path(settings, beddir, region_file):
     """
     Call the *annotation_parser* module to obtain the locations of all annotated
     utr-ends, in the program called 'a_polyA_sites'.
@@ -1465,7 +1469,7 @@ def get_a_polyA_sites_path(settings, beddir):
     else:
         chrm = ''
 
-    if settings.utrfile_provided:
+    if settings.utrfiles_provided:
         user_provided = '_user_provided'
     else:
         user_provided = ''
@@ -1480,7 +1484,8 @@ def get_a_polyA_sites_path(settings, beddir):
 
     # If a utrfile is provided, never re-make from annotation
     if settings.utrfile_provided:
-        polyA_site_bed_path = shape_provided_bed(polyA_site_bed_path, settings)
+        polyA_site_bed_path = shape_provided_bed(polyA_site_bed_path, settings,
+                                                region_file)
 
     # If utrfile is not provided, get it yourself from a provided annotation
     if not settings.utrfile_provided:
@@ -1496,7 +1501,7 @@ def get_a_polyA_sites_path(settings, beddir):
 
     return polyA_site_bed_path
 
-def get_utr_path(settings, beddir, rerun_annotation_parser):
+def get_utr_path(settings, beddir, rerun_annotation_parser, region_file):
     """
     Get 3utr.bed-file path from annotation via annotation_parser module.
     """
@@ -1524,7 +1529,7 @@ def get_utr_path(settings, beddir, rerun_annotation_parser):
         utr_filename = '3UTR_exons' + chrm + ext + user_provided + '.bed'
         utr_bed_path = os.path.join(beddir, utr_filename)
     else:
-        utr_filename = os.path.split(settings.utrfile_provided)[1]
+        utr_filename = os.path.split(region_file)[1]
         utr_bed_path = os.path.join(beddir, utr_filename)
 
     # if you're not rerunning the annotation, check if file's already there
@@ -1539,7 +1544,7 @@ def get_utr_path(settings, beddir, rerun_annotation_parser):
     # If a utrfile is provided, never re-make from annotation, but shape it to
     # your needs? This is a bit unfinished.
     if settings.utrfile_provided:
-        utr_bed_path = shape_provided_bed(utr_bed_path, settings)
+        utr_bed_path = shape_provided_bed(utr_bed_path, settings, region_file)
 
         return utr_bed_path
 
@@ -1592,7 +1597,7 @@ def get_chr1_annotation(settings, beddir):
 
     return outpath
 
-def shape_provided_bed(utr_bed_path, settings):
+def shape_provided_bed(utr_bed_path, settings, region_file):
     """
     Go through provided bedfile and shape it to confirm with internal standards
     in the program. Save in the bed-file directory.
@@ -1600,7 +1605,7 @@ def shape_provided_bed(utr_bed_path, settings):
 
     outfile = open(utr_bed_path, 'wb')
 
-    for line in open(settings.utrfile_provided, 'rb'):
+    for line in open(region_file, 'rb'):
         (chrm, beg, end, name, val, strand) = line.split()[:6]
 
         end = int(end)
@@ -1614,16 +1619,6 @@ def shape_provided_bed(utr_bed_path, settings):
         # Skip short utrs
         if end - beg < settings.min_utrlen:
             continue
-
-        # Don't extend them. If people want that, they can do it themselves.
-        ## Extend by the nr of nucleotides specified
-        ## TODO BUG!! Not all exons should be extended :S only the 3-prime ones!
-        ## If people provide bed-files, they can only be 1-exon 3UTRs.
-        #if settings.extendby:
-            #if strand == '+':
-                #end = end + settings.extendby
-            #if strand == '-':
-                #beg = beg - settings.extendby
 
         outfile.write('\t'.join([chrm, str(beg), str(end), name, val,
                                  strand])+'\n')
@@ -2903,9 +2898,6 @@ def main():
     """
     This method is called if script is run as __main__.
     """
-    # Set debugging mode. This affects the setting that are in the debugging
-    # function (called below). It also affects the 'temp' and 'output'
-    # directories, respectively.
 
     # TODO compare K562 with HUVEC or H1. HUVEC and H1 are not a cancer cell
     # line. Does K562 have shorter 3UTRs compared to HUVEC? Can we see this, if
@@ -2914,13 +2906,12 @@ def main():
     # published differences, it seems like they're a dime a dozen, while in fact
     # they're not that many.
 
-    # TIP: when you want to run your pipeline for all datasets for all regions,
-    # make a region-loop around the pipeline, where you change the bed-file
-    # annotation format each time. REMEMBER TO RENAME THEM SO THEY FIT WHAT YOU
-    # THINK THEY ARE :)
+    # Set debugging mode. This affects the setting that are in the debugging
+    # function (called below). It also affects the 'temp' and 'output'
+    # directories, respectively.
 
-    DEBUGGING = True
-    #DEBUGGING = False
+    #DEBUGGING = True
+    DEBUGGING = False
 
     # with this option, always remake the bedfiles
     #rerun_annotation_parser = False
@@ -2948,7 +2939,6 @@ def main():
     # You can chose to not simulate. Only purpose is to make bigwigs.
     #simulate = False
     simulate = True
-    #settings.bigwig = False
 
     # This option should be set only in case of debugging. It makes sure you
     # just run chromosome 1 and only extract a tiny fraction of the total reads.
@@ -2960,17 +2950,33 @@ def main():
     print('Reading settings ...\n')
     annotation = Annotation(settings.annotation_path, settings.annotation_format)
 
+    # XXX DEBUGGING do only the first two regions
+    settings.utrfiles_provided = settings.utrfiles_provided[:2]
+    # XXX REMOVE LATER
+
+    # loop through all regions supplied (often this will be just 1 -- the 3UTR)
+    for region_file in settings.regions:
+        # update the region bedfile for each run
+
+        piperunner(settings, annotation, simulate, DEBUGGING, beddir, tempdir,
+                   output_dir, rerun_annotation_parser, here, region_file)
+
+def piperunner(settings, annotation, simulate, DEBUGGING, beddir, tempdir,
+               output_dir, rerun_annotation_parser, here, region_file):
+
     # Check if 3UTRfile has been made or provided; if not, get it from annotation
-    annotation.utrfile_path = get_utr_path(settings, beddir, rerun_annotation_parser)
+    annotation.utrfile_path = get_utr_path(settings, beddir,
+                                           rerun_annotation_parser, region_file)
 
     # Get dictionary with (chrm, beg, end, strand) values for each 3utr-exon key
     # NOTE: for the 3'terminal exons, the beg/end is the extended value. For
     # internal exons, the beg/end are not extended.
-    print('Making 3UTR data structures ...\n')
+    print('Making data structures ...\n')
     annotation.utr_exons = annotation.get_utrdict()
 
     # You extract all annotated polyA sites into a bedfile: a_polyA_sites_path
-    annotation.a_polyA_sites_path = get_a_polyA_sites_path(settings, beddir)
+    annotation.a_polyA_sites_path = get_a_polyA_sites_path(settings, beddir,
+                                                           region_file)
     # TODO this step is annotation-dependent. What happens if the
     # genome-region bedfile does not intersect a single annotated 3UTR?
 
@@ -2990,10 +2996,6 @@ def main():
     # in reads.
     polyA_cache = True
 
-    # TODO change the 3UTR position in the output path? then run a lot of stuff
-    # ... then compare a lot of stuff ... prepare results.py for the new format.
-    # I need to do this quick.
-
     # Extract the name of the bed-region you are checking for poly(A) reads
     # you might have to extract it differently, because 'intergenic' doesn't
     # have any exon or intron part to it.
@@ -3008,7 +3010,7 @@ def main():
         # For all 3UTR exons, get the genomic sequence. The sequence is needed
         # to look for PAS sites.
         tx = time.time() # time the operation
-        print('Fetching the sequences of the annotated 3UTRs ...')
+        print('Fetching the sequences of the supplied genomic regions ...')
         utr_seqs = genome.get_seqs(annotation.utr_exons, settings.hgfasta_path)
         print('\tTime to get sequences: {0}\n'.format(time.time() - tx))
 
