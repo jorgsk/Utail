@@ -79,8 +79,8 @@ class Settings(object):
 
         self.chr1 = True
         #self.chr1 = False
-        #self.read_limit = False
-        self.read_limit = 30000000
+        self.read_limit = False
+        #self.read_limit = 20000000
         self.max_cores = 3
         self.get_length = False
         #self.get_length = True
@@ -98,6 +98,7 @@ class Settings(object):
 
         if not self.polyA and not self.get_length:
             print('Dude! The program does nothing! Use polyA or length or both!')
+            sys.exit()
 
 class Annotation(object):
     """
@@ -1979,7 +1980,7 @@ def cluster_polyAs(utr_polyAs, utrs, polyA, moving):
     if utr_polyAs == {} or polyA == False:
         polyA_reads = dict((utr_id, {'this_strand':[[],[]], 'other_strand':[[], []]})
                            for utr_id in utrs)
-        return polyA_reads
+        return polyA_reads, {}
 
     polyA_reads = {}
     polyA_statistics = {}
@@ -2106,7 +2107,7 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs, settings,
 
         # 1) Process reads by removing those with low-quality, and removing the
         #    leading Ts and/OR trailing As.
-        print('Processing poly(A) reads for {0}...'.format(dset_id))
+        print('Processing and remapping poly(A)-reads for {0}...'.format(dset_id))
         processed_reads, avrg_read_len = process_reads(p_polyA_bed)
 
         # 2) Map the surviving reads to the genome and return unique ones
@@ -2200,6 +2201,13 @@ def write_polyA_stats(polyA_reads, polyA_statistics, utr_exons, output_path):
     reflect the cleavage process.
     """
 
+    # If you don't have any reads, you can do nothing here 
+    if polyA_statistics == {}:
+        handle = open(output_path, 'wb')
+        handle.write('No poly(A) reads mapped')
+        handle.close()
+        return
+
     this_strand_count = 0
     other_strand_count = 0
     both_strand_count = 0
@@ -2212,9 +2220,11 @@ def write_polyA_stats(polyA_reads, polyA_statistics, utr_exons, output_path):
                      'other_strand': {'unique_reads': [], 'total_reads': [],
                                    'spread': []}}
 
+
     # Get the data for the false positive and negative from the
     # polyA_statistics, which does not have any moving from one strand to the
     # other
+
     for utr, strand_stats in polyA_statistics.items():
         # Skip those without poly(A) reads
         if strand_stats == {'other_strand': [[], []], 'this_strand': [[], []]}:
@@ -3027,7 +3037,6 @@ def main():
             result = my_pool.apply_async(pipeline, arguments)
             results.append(result)
 
-        #debug()
         my_pool.close()
         my_pool.join()
 
