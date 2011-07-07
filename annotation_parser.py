@@ -218,7 +218,8 @@ def gencode_reader(file_handle):
         g_id = g_id.rstrip(';').strip('"')
 
         if feature == 'transcript':
-            transcripts[t_id] = Transcript(t_id, g_id, t_type, chrm, beg, end, strand)
+            transcripts[t_id] = Transcript(t_id, g_id, t_type, chrm,
+                                           beg, end, strand)
             # The genes 
             if g_id in genes:
                 genes[g_id].append(t_id)
@@ -297,7 +298,8 @@ def ensembl_reader(file_handle):
 
         if t_id not in transcripts:
             # initialize the transcript with the first featre you find
-            transcripts[t_id] = Transcript(t_id, g_id, t_type, chrm, beg, end, strand)
+            transcripts[t_id] = Transcript(t_id, g_id, t_type, chrm,
+                                           beg, end, strand)
 
             # The genes 
             if g_id in genes:
@@ -477,10 +479,11 @@ def write_beds(transcripts, bed_dir, chr_sizes, *opts):
 
     (merge, extend, no_overlapping, chr1, skipsize, stranded) = opts
 
-    output_names = ['five_utr_exons', 'five_utr_introns', 'three_utr_exons',
-                    'three_utr_introns', 'cds_exons', 'cds_introns',
-                    'noncoding_exons', 'noncoding_introns']
+    output_names = ['five_utr_exonic', 'five_utr_intronic', 'three_utr_exonic',
+                    'three_utr_intronic', 'cds_exonic', 'cds_intronic',
+                    'noncoding_exonic', 'noncoding_intronic']
 
+    # DID THE CHANGE TO INTRONIC EXONIC WORK?
     # paths to all output files
     paths = dict((name, path_join(bed_dir, name)+'.bed') for name in output_names)
 
@@ -497,13 +500,13 @@ def write_beds(transcripts, bed_dir, chr_sizes, *opts):
                 if exon[2]-exon[1] < skipsize:
                     continue
                 outp = '\t'.join([exon[0], beg, end, '.', '.', exon[3]])
-                handles['noncoding_exons'].write(outp+'\n')
+                handles['noncoding_exonic'].write(outp+'\n')
 
             for intr in ts.get_exon_introns():
                 if feature_length(intr) < skipsize:
                     continue
                 outp = '\t'.join([intr[0], intr[1], intr[2], '.', '.', intr[3]])
-                handles['noncoding_introns'].write(outp+'\n')
+                handles['noncoding_intronic'].write(outp+'\n')
 
         # coding transcripts
         else:
@@ -514,21 +517,21 @@ def write_beds(transcripts, bed_dir, chr_sizes, *opts):
                 if exon[2]-exon[1] < skipsize:
                     continue
                 outp = '\t'.join([exon[0], beg, end, '.', '.', exon[3]])
-                handles['cds_exons'].write(outp+'\n')
+                handles['cds_exonic'].write(outp+'\n')
 
             # CDS introns
             for intr in ts.get_cds_introns():
                 if feature_length(intr) < skipsize:
                     continue
                 outp = '\t'.join([intr[0], intr[1], intr[2], '.', '.', intr[3]])
-                handles['cds_introns'].write(outp+'\n')
+                handles['cds_intronic'].write(outp+'\n')
 
             #5 UTR introns
             for intr in ts.get_utr_introns(side=5):
                 if feature_length(intr) < skipsize:
                     continue
                 outp = '\t'.join([intr[0], intr[1], intr[2], '.', '.', intr[3]])
-                handles['five_utr_introns'].write(outp+'\n')
+                handles['five_utr_intronic'].write(outp+'\n')
 
             #5 UTR "exons"
             for exon in ts.five_utr.exons:
@@ -538,14 +541,14 @@ def write_beds(transcripts, bed_dir, chr_sizes, *opts):
                 if exon[2]-exon[1] < skipsize:
                     continue
                 outp = '\t'.join([exon[0], beg, end, '.', '.', exon[3]])
-                handles['five_utr_exons'].write(outp+'\n')
+                handles['five_utr_exonic'].write(outp+'\n')
 
             #3 UTR introns
             for intr in ts.get_utr_introns(side=3):
                 if feature_length(intr) < skipsize:
                     continue
                 outp = '\t'.join([intr[0], intr[1], intr[2], '.', '.', intr[3]])
-                handles['three_utr_introns'].write(outp+'\n')
+                handles['three_utr_intronic'].write(outp+'\n')
 
             #3 UTR "exons" (not really exons; the exon is split between CDS and UTR)
             for exon in ts.three_utr.exons:
@@ -554,8 +557,9 @@ def write_beds(transcripts, bed_dir, chr_sizes, *opts):
                 if exon[2]-exon[1] < skipsize:
                     continue
                 outp = '\t'.join([exon[0], beg, end, '.', '.', exon[3]])
-                handles['three_utr_exons'].write(outp+'\n')
+                handles['three_utr_exonic'].write(outp+'\n')
 
+    print('finished separating')
     # Close all file objects
     for name, handle in handles.items():
         handle.close()
@@ -563,16 +567,30 @@ def write_beds(transcripts, bed_dir, chr_sizes, *opts):
     # Create merged versions of all paths if requested
     if merge:
         paths = merge_output(bed_dir, paths, stranded)
+    print('finished merging')
 
     # Remove overlap between the .bed files
     if no_overlapping:
         paths = remove_overlap(bed_dir, paths, stranded)
+    print('finished removing overlap')
 
     ## Create the intergenic bed as the adjoint of all the bed files in paths
     paths = get_intergenic(bed_dir, paths, chr_sizes, chr1, stranded)
+    print('finished getting intergenic')
+
+    printdict = {'five_utr_exonic': '5UTR_exonic',
+                 'five_utr_intronic': '5UTR_intronic',
+                 'three_utr_exonic': '3UTR_exonic',
+                 'three_utr_intronic': '3UTR_intronic',
+                 'cds_exonic': 'CDS_exonic',
+                 'cds_intronic': 'CDS_intronic',
+                 'noncoding_exonic': 'Nocoding_exonic',
+                 'noncoding_intronic': 'Noncoding_intronic',
+                 'intergenic': 'Intergenic'}
 
     # Finally filter again for anything smaller than skipsize
-    skipsize_filter(paths, skipsize, stranded, chr1)
+    skipsize_filter(paths, skipsize, stranded, chr1, printdict)
+    print('finished skipping small sizes')
 
     if stranded:
         strnd = 'stranded'
@@ -582,6 +600,7 @@ def write_beds(transcripts, bed_dir, chr_sizes, *opts):
     if chr1:
         chrm = 'chr1'
         savedir = os.path.join(bed_dir, strnd, chrm)
+        chrm = '_chr1'
     else:
         chrm = ''
         savedir = os.path.join(bed_dir, strnd)
@@ -615,26 +634,17 @@ def write_beds(transcripts, bed_dir, chr_sizes, *opts):
 
     # rename the paths and save them to the stranded or non-stranded directories
     for name, filepath in paths.items():
-        out_path = os.path.join(savedir, name+'_'+strnd+'_'+chrm+'.bed')
+        out_path = os.path.join(savedir, printdict[name]+'_'+strnd+chrm+'.bed')
         shutil.copyfile(filepath, out_path)
 
     return paths
 
-def skipsize_filter(output, skipsize, stranded, chr1):
+def skipsize_filter(output, skipsize, stranded, chr1, printdict):
     """ Skip all features smaller than skipsize
     """
     # Filter through the intergenic file, removing all entries smaller than the
     # setting
 
-    printdict = {'five_utr_exons': '5UTR exons',
-                 'five_utr_introns': '5UTR introns',
-                 'three_utr_exons': '3UTR exons',
-                 'three_utr_introns': '3UTR introns',
-                 'cds_exons': 'CDS exons',
-                 'cds_introns': 'CDS introns',
-                 'noncoding_exons': 'Nocoding exons',
-                 'noncoding_introns': 'Noncoding introns',
-                 'intergenic': 'Intergenic'}
     sizes = {}
 
     if stranded:
@@ -647,17 +657,18 @@ def skipsize_filter(output, skipsize, stranded, chr1):
     else:
         print 'All chromosomes\n'
 
-
     for name, path in output.items():
         sizes[name] = 0
         temp_interg = '_'.join([path, 'TEMP'])
         temp_handle = open(temp_interg, 'wb')
-        for line in open(path, 'rb'):
-            (chrm, beg, end, d, d, strand) = line.split()
+        for line_nr, line in enumerate(open(path, 'rb')):
+            (chrm, beg, end, nam, val, strand) = line.split()
             length = int(end) - int(beg)
 
             if length > skipsize:
-                temp_handle.write(line)
+                wname = name +'_{0}'.format(line_nr)
+                newline = '\t'.join((chrm, beg, end, wname, '0', strand, '\n'))
+                temp_handle.write(newline)
 
             sizes[name] += length
 
@@ -670,7 +681,7 @@ def skipsize_filter(output, skipsize, stranded, chr1):
 
     for (name, size) in sorted(sizes.items(), key=itemgetter(1)):
         rel_size = size/all_sizes
-        if name == 'noncoding_introns':
+        if name == 'noncoding_intronic':
             print('{0}:\t {1:.2e} ({2:.3f})'.format(printdict[name], size,
                                                            rel_size))
         else:
@@ -699,7 +710,8 @@ def get_genomeBed(chrm_sizes, bed_dir, chr1, stranded):
     genBedPath = path_join(bed_dir, 'intergenic.bed')
     genBed = open(genBedPath, 'wb')
 
-    for line_nr, line in enumerate(open(chrm_sizes, 'rb')):
+    for line in open(chrm_sizes, 'rb'):
+
         # Skip header or other stuff
         if not line.startswith('chr'):
             continue
@@ -712,6 +724,7 @@ def get_genomeBed(chrm_sizes, bed_dir, chr1, stranded):
         (chrm, end) = line.split()
         out_plus = '\t'.join([chrm, '1', end, '.', '.', '+'])+'\n'
         genBed.write(out_plus)
+
         if stranded:
             out_minus = '\t'.join([chrm, '1', end, '.', '.', '-'])+'\n'
             genBed.write(out_minus)
@@ -729,10 +742,10 @@ def remove_overlap(bed_dir, output, stranded):
     """ Remove overlap between the different regions
     """
 
-    introns = ['three_utr_introns', 'five_utr_introns', 'cds_introns']
-    exons = ['five_utr_exons', 'cds_exons', 'three_utr_exons']
-    noncoding_introns = ['noncoding_introns']
-    noncoding_exons = ['noncoding_exons']
+    introns = ['three_utr_intronic', 'five_utr_intronic', 'cds_intronic']
+    exons = ['five_utr_exonic', 'cds_exonic', 'three_utr_exonic']
+    noncoding_introns = ['noncoding_intronic']
+    noncoding_exons = ['noncoding_exonic']
 
     # 1) For all introns, remove all exons (including noncoding exons).
     # Thus, exon dominates over intron.
@@ -741,14 +754,14 @@ def remove_overlap(bed_dir, output, stranded):
                         keyword, output, stranded)
 
     # 2) From UTR exons, remove CDS exons
-    cds_exon = ['cds_exons']
-    other_exons = ['five_utr_exons', 'three_utr_exons', 'noncoding_exons']
+    cds_exon = ['cds_exonic']
+    other_exons = ['five_utr_exonic', 'three_utr_exonic', 'noncoding_exonic']
     keyword = 'nov_cds'
     output = subtractor(other_exons, cds_exon, keyword, output, stranded)
 
     # 3) From UTR introns, remove CDS introns
-    cds_intron = ['cds_introns']
-    other_introns = ['five_utr_introns', 'three_utr_introns', 'noncoding_introns']
+    cds_intron = ['cds_intronic']
+    other_introns = ['five_utr_intronic', 'three_utr_intronic', 'noncoding_intronic']
     keyword = 'nov_intr'
     output = subtractor(other_introns, cds_intron, keyword, output, stranded)
 
@@ -759,12 +772,12 @@ def remove_overlap(bed_dir, output, stranded):
 
     # 5) From 5UTR introns and exons, remove 3UTR introns and exons
     keyword = 'no_5'
-    five_utr_exons = ['five_utr_exons']
-    three_utr_exons = ['three_utr_exons']
+    five_utr_exons = ['five_utr_exonic']
+    three_utr_exons = ['three_utr_exonic']
     output = subtractor(five_utr_exons, three_utr_exons, keyword, output, stranded)
 
-    five_utr_introns = ['five_utr_introns']
-    three_utr_introns = ['three_utr_introns']
+    five_utr_introns = ['five_utr_intronic']
+    three_utr_introns = ['three_utr_intronic']
     output = subtractor(five_utr_introns, three_utr_introns, keyword, output,
                         stranded)
 
@@ -841,16 +854,16 @@ def merge_output(bed_dir, output, stranded):
 
         if stranded:
             cmd = ['mergeBed','-s', '-i', bed_file]
-            p = Popen(cmd, shell=False, stdout=PIPE, stderr=PIPE)
+            p = Popen(cmd, stdout=PIPE, stderr=PIPE)
             for merged_entry in p.stdout:
                 (chrm, beg, end, strand) = merged_entry.split()
-                out_file.write('\t'.join([chrm, beg, end, '0', '0', strand]) + '\n')
+                out_file.write('\t'.join([chrm, beg, end, '0', '0', strand])+'\n')
         else:
             cmd = ['mergeBed', '-i', bed_file]
-            p = Popen(cmd, shell=False, stdout=PIPE, stderr=PIPE)
+            p = Popen(cmd, stdout=PIPE, stderr=PIPE)
             for merged_entry in p.stdout:
                 (chrm, beg, end) = merged_entry.split()
-                out_file.write('\t'.join([chrm, beg, end, '0', '0', '+']) + '\n')
+                out_file.write('\t'.join([chrm, beg, end, '0', '0', '+'])+'\n')
 
         out_file.close()
 
@@ -1556,6 +1569,7 @@ def main():
         #an_frmt = 'ENSEMBL'
 
         (transcripts, genes) = make_transcripts(annotation, an_frmt)
+        print('finished getting transcripts')
 
         split_annotation(transcripts, chr1)
 
