@@ -121,6 +121,19 @@ class UTRDataset(object):
         return [utr.ID for (utr_id, utr) in self.utrs.iteritems()
                 if utr.eps_rel_size != 'NA']
 
+class BasicUtr(object):
+    """ The most simple UTR object: genomic coordinates plus a clusters list
+    """
+    def __init__(self, chrm, beg, end, strand, ID, line):
+
+        self.chrm = chrm
+        self.beg = beg
+        self.end = end
+        self.strand = strand
+        self.ID = ID
+
+        # Create the first clusters object. the rest will be added later
+        self.clusters = [Only(line)]
 
 class UTR(object):
     """
@@ -186,6 +199,38 @@ class UTR(object):
         return "\nChrm\t{0}\nBeg\t{1}\nEnd\t{2}\nStrand\t{3}\n"\
                 .format(self.chrm, self.beg, self.end, self.strand)
 
+class Only(object):
+    """ For the onlypolyA files. They don't have coverage and have fewer
+    parameters than the othes.
+    """
+
+    def __init__(self, input_line):
+
+        (chrm, beg, end, utr_ID, strand, polyA_coordinate,
+         annotated_polyA_distance, nearby_PAS, PAS_distance,
+         number_supporting_reads, nr_unique_supporting_reads,
+         unique_reads_spread) = input_line.split('\t')
+
+        self.chrm = chrm
+        self.beg = str_to_intfloat(beg)
+        self.end = str_to_intfloat(end)
+        self.ID = utr_ID
+        self.strand = strand
+
+        self.polyA_coordinate = str_to_intfloat(polyA_coordinate)
+        self.annotated_polyA_distance = annotated_polyA_distance
+
+        # PAS type and PAS distance are space-delimited
+        self.nearby_PAS = [str_to_intfloat(pas) for pas in nearby_PAS.split(' ')]
+
+        self.PAS_distance = [str_to_intfloat(dist) for dist in
+                             PAS_distance.split(' ')]
+
+        self.nr_support_reads = str_to_intfloat(number_supporting_reads)
+        self.nr_unique_support_reads = str_to_intfloat(nr_unique_supporting_reads)
+        self.uniquet_reads_spread = str_to_intfloat(unique_reads_spread)
+
+
 class Cluster(object):
     """
     For polyA cluster objects from the 'polyA' output file in the 'output' directory
@@ -244,6 +289,11 @@ class Settings(object):
         conf.read(settings_file)
 
         self.datasets = conf.get('PLOTTING', 'datasets').split(':')
+        self.length = conf.getboolean('PLOTTING', 'length')
+
+        # which genomic regions are to be investigated
+        self.regions = conf.get('PLOTTING', 'regions').split(':')
+
         self.savedir = savedir
         self.outputdir = outputdir
         self.here = here
@@ -301,9 +351,16 @@ class Settings(object):
         return dict((d, os.path.join(self.here, self.outputdir, 'polyA_' + d))
                     for d in self.datasets)
 
-    # Return the paths of the epsilon files
-    def epsilon_files(self):
-        return dict((d, os.path.join(self.here, self.outputdir,'cumul_'+d+'.stat'))
+    # Return the paths of the onlypolyA files
+    def only_files(self, region):
+        return dict((d, os.path.join(self.here, self.outputdir,
+                                     'onlypolyA_'+d+'_'+region))
+                    for d in self.datasets)
+
+    # Return the paths of the polyAstats files
+    def polyAstats_files(self, region):
+        return dict((d, os.path.join(self.here, self.outputdir,
+                                     d+'_'+region+'_polyA_statistics'))
                     for d in self.datasets)
 
     # Return the path of the svm-file. This file should be a bed-file where name
@@ -1639,7 +1696,70 @@ def get_clusters(settings):
 
     return clusters
 
-def get_utrs(settings,speedrun=False, svm=False):
+def super_falselength(settings, speedrun, svm):
+    """ Return the super clusters with information only from the poly(A) files
+    without using length (coverage) information.
+
+    Note that while the other investigations are whole-UTR orientied, this
+    investigation considers only 1-exons by themselves.
+    """
+
+    dsets = AutoVivification()
+    regions = settings.regions
+
+    super_3utr = AutoVivification()
+
+    for region in regions:
+
+        regionfiles = settings.only_files(region)
+
+        # Check if all length files exist or that you have access
+        [verify_access(f) for f in regionfiles.values()]
+        # limit the nr of reads from each dset if you want to be fast
+        if speedrun:
+            maxlines = 1000
+
+        linenr = 0
+        for dset_name in settings.datasets:
+
+            onlyfile = open(regionfiles[dset_name], 'rb')
+
+            # Skip headers
+            onlyfile.next()
+
+            # Create the utr objects from the length file
+            utr_dict = {}
+
+            for (linenr, line) in enumerate(onlyfile):
+
+                # If a speedrun, limit the nr of 3UTRs to read.
+                if speedrun:
+                    if linenr > maxlines:
+                        break
+
+                # key = utr_ID, value = UTR instance
+                (chrm, beg, end, utr_id, strand) = line.split()[:5]
+
+                if utr_id in utr_dict:
+                    utr_dict[utr_id].clusters.append(Only(line))
+                else:
+                    utr_dict[utr_id] = BasicUtr(chrm, beg, end, strand, utr_id,
+                                               line)
+
+            # Add the utr_dict for this cellLine-compartment 
+            this_cl = dset_name.split('_')[0]
+            this_comp = '_'.join(dset_name.split('_')[1:])
+
+            dsets[region][this_cl][this_comp] = utr_dict
+
+        # You send stuff to get super 3utr. the dsets themselves and the merged
+        # clusters of the dsets
+        super_3utr[region] = get_super_3utr(dsets[region],
+                                            *merge_clusters(dsets[region]))
+
+    return dsets, super_3utr
+
+def get_utrs(settings, speedrun=False, svm=False):
     """
     Return a list of UTR instances. Each UTR instance is
     instansiated with a list of UTR objects and the name of the datset.
@@ -1660,8 +1780,11 @@ def get_utrs(settings,speedrun=False, svm=False):
     dsets = dict((cln, {}) for cln in cell_lines)
 
     # Do everything for the length files
+    # XXX you must update these things to take the region (UTR etc) into
+    # account, since it's now part of the filename
     length_files = settings.length_files()
     cluster_files = settings.polyA_files()
+
 
     if svm:
         # Get a dictionary indexed by utr_id with the svm locations
@@ -4193,7 +4316,7 @@ def nucsec(dsets, super3UTR, settings, here):
 
     debug()
 
-def minusstats(dsets, super_3utr):
+def polyA_summary(dsets, super_3utr, polyAstats):
     """ Show that the polyA minus are fishy
 
     1) Number of total polyA sites
@@ -4201,63 +4324,137 @@ def minusstats(dsets, super_3utr):
     3) Number and % of polyA sites with PAS
     4) Total number of poly(A) reads
 
+    Now that you're getting lots of extra information, what about splitting this
+    up into
+
+    i) just the poly(A) reads between compartments (an anlysis of
+    fitness of the experiment) and
+
+    ii) a comparason between the strands for each compartment, cl, etc
+
     """
+
     minus = AutoVivification()
 
-    for cl, cl_dict in dsets.items():
-        for comp, comp_dict in cl_dict.items():
+    # make a [region][cl][compartment][polyA+/-][replica] structure; each region
+    # will have its own plots. cl will be K562 only. Then compare compartments
+    # first in terms of replicas, then in terms of polyA+/-
+    everything = AutoVivification()
 
-            minus[comp] = {'Tot pA':0, 'Annot pA':0, 'PAS pA':0, 'read_nr':0,
-                           'both_an_and_PAS':0}
+    for region, reg_dict in dsets.items():
 
-            for utr_id, utr in comp_dict.iteritems():
-                if utr.clusters != []:
-                    for cls in utr.clusters:
-                        minus[comp]['Tot pA'] += 1
-                        minus[comp]['read_nr'] += cls.nr_support_reads
+        print('-'*60+'\n\nResults for region: {0}\n\n'.format(region)+'-'*60+'\n')
 
-                        if cls.annotated_polyA_distance != 'NA':
-                            minus[comp]['Annot pA'] += 1
+        for cl, cl_dict in reg_dict.items():
 
-                        if cls.nearby_PAS != ['NA']:
-                            minus[comp]['PAS pA'] += 1
+            for comp, comp_dict in cl_dict.items():
 
-                        if (cls.annotated_polyA_distance != 'NA') \
-                           and (cls.nearby_PAS != ['NA']):
-                            minus[comp]['both_an_and_PAS'] += 1
+                minus[comp] = {'Tot pA':0, 'Annot pA':0, 'PAS pA':0, 'read_nr':0,
+                               'both_an_and_PAS':0}
+
+                for utr_id, utr in comp_dict.iteritems():
+                    if utr.clusters != []:
+                        for cls in utr.clusters:
+                            minus[comp]['Tot pA'] += 1
+                            minus[comp]['read_nr'] += cls.nr_support_reads
+
+                            if cls.annotated_polyA_distance != 'NA':
+                                minus[comp]['Annot pA'] += 1
+
+                            if cls.nearby_PAS != ['NA']:
+                                minus[comp]['PAS pA'] += 1
+
+                            if (cls.annotated_polyA_distance != 'NA') \
+                               and (cls.nearby_PAS != ['NA']):
+                                minus[comp]['both_an_and_PAS'] += 1
+
+        # IDEA: to make plots easily, why don't you save this all in a
+        # tab-separated file? First column is region, second is cell_type, third
+        # is compartment, fourth is replica yes/no. Starting from column 5, you
+        # have the statistics you are interested in. This should leave you with
+        # a simpler interface for plotting this stuff. With autovivification you
+        # can make a data[region][cell_line][compartment][replica] dictionary.
+        # Hey, how would that help EXACTLY? you already have the information
+        # right here. I think you're just putting off work. You don't even know
+        # how to present the data.
+        #
+        # NEW NOTES I recommend that you make this
+        # data structure HERE AND NOW and when you have finished your analysis,
+        # you may write it to file!
+
+        for (comp, count_dict) in minus.items():
+            total = count_dict['Tot pA']
+
+            annot = count_dict['Annot pA']
+            annot_frac = format(annot/total, '.2f')
+
+            pas = count_dict['PAS pA']
+            pas_frac = format(pas/total, '.2f')
+
+            read_nr = count_dict['read_nr']
+            read_per_site = format(read_nr/total, '.2f')
+
+            anYpas = count_dict['both_an_and_PAS']
+            anYpas_rate = format(anYpas/annot, '.2f')
+
+            oppos_readnr = polyAstats[region][cl][comp]['Other_strands_count']
+            this_readnr = polyAstats[region][cl][comp]['This_strands_count']
+            both_readnr = polyAstats[region][cl][comp]['Both_strands_count']
+
+            print cl
+            print comp
+            print("Total poly(A) sites: {0} ".format(total))
+            print("Total poly(A) reads (per site): {0} ({1}) ".format(read_nr,
+                                                                      read_per_site))
+            print("Annotated poly(A) sites: {0} ({1})".format(annot, annot_frac))
+            print("poly(A) sites with PAS: {0} ({1})".format(pas, pas_frac))
+            print("Annotated poly(A) sites with PAS: {0} ({1})".format(anYpas,
+                                                                        anYpas_rate))
+            print("")
+
+        total_unique = 0
+        for utr_id, utr in super_3utr[region].iteritems():
+            total_unique += len(utr.super_cover)
+
+        print("Total unique poly(A) sites for {1}: {0}".format(total_unique,
+                                                               region))
+            #for cls in utr.super
+
+def get_polyA_stats(settings):
+    """ Return a dictionary that for each [region][cell_line][compartment]
+    contains some output statistics for the poly(A) reads for that dataset.
+    """
+
+    polyA_stats = AutoVivification()
+    regions = settings.regions
+
+    for region in regions:
+
+        regionfiles = settings.polyAstats_files(region)
+
+        # Check if all length files exist or that you have access
+        [verify_access(f) for f in regionfiles.values()]
+
+        for dset_name in settings.datasets:
+
+            statsfile = open(regionfiles[dset_name], 'rb')
+
+            # Create the utr objects from the length file
+            stat_dict = {}
+
+            for (linenr, line) in enumerate(statsfile):
+                (key, value) = line.split('\t')
+
+                stat_dict[key] = value.rstrip()
 
 
-    for (comp, count_dict) in minus.items():
-        total = count_dict['Tot pA']
+            # Add the utr_dict for this cellLine-compartment 
+            this_cl = dset_name.split('_')[0]
+            this_comp = '_'.join(dset_name.split('_')[1:])
 
-        annot = count_dict['Annot pA']
-        annot_frac = annot/total
+            polyA_stats[region][this_cl][this_comp] = stat_dict
 
-        pas = count_dict['PAS pA']
-        pas_frac = pas/total
-
-        read_nr = count_dict['read_nr']
-        read_per_site = read_nr/total
-
-        anYpas = count_dict['both_an_and_PAS']
-        anYpas_rate = anYpas/annot
-
-        print comp
-        print("Total poly(A) sites: {0} ".format(total))
-        print("Total poly(A) reads (per site): {0} ({1}) ".format(read_nr,
-                                                                  read_per_site))
-        print("Annotated poly(A) sites: {0} ({1}%)".format(annot, annot_frac))
-        print("poly(A) sites with PAS: {0} ({1}%)".format(pas, pas_frac))
-        print("Annotated poly(A) sites with PAS: {0} ({1}%)".format(anYpas,
-                                                                    anYpas_rate))
-        print("")
-
-    total_unique = 0
-    for utr_id, utr in super_3utr.iteritems():
-        total_unique += len(utr.super_cover)
-
-    print("Total unique poly(A) sites for all sets: {0}".format(total_unique))
-        #for cls in utr.super
+    return polyA_stats
 
 def main():
     # The path to the directory the script is located in
@@ -4267,7 +4464,8 @@ def main():
     (savedir, outputdir) = [os.path.join(here, d) for d in ('figures', 'output')]
 
     # Speedruns with chr1
-    chr1 = False
+    #chr1 = False
+    chr1 = True
 
     # Read UTR_SETTINGS (there are two -- for two different annotations!)
     settings = Settings(os.path.join(here, 'UTR_SETTINGS'), savedir, outputdir,
@@ -4279,11 +4477,20 @@ def main():
     # Get the dsetswith utrs and their clusters from the length and polyA files
     # Optionally get SVM information as well
     # so that you will have the same 1000 3UTRs!
-    # dsets, super_3utr = get_utrs(settings, speedrun=True, svm=False)
-    dsets, super_3utr = get_utrs(settings, speedrun=False, svm=False)
 
-    # EMERGENCY CODE! GINGERAS STATS FOR MINUS
-    minusstats(dsets, super_3utr)
+    # For the old output files
+    #dsets, super_3utr = get_utrs(settings, speedrun=False, svm=False)
+
+    # for the onlypolyA files
+    # you now have an additional level: the "region" (often the 3UTR)
+    dsets, super_3utr = super_falselength(settings, speedrun=False, svm=False)
+
+    # Get the basic poly(A) stat file that is output with each run. It gives
+    # statistics on the number of reads that fall in which strand and so forth.
+    polyAstats = get_polyA_stats(settings)
+
+    # Basic poly(A) read statistics for the datasetes
+    polyA_summary(dsets, super_3utr, polyAstats)
 
     #### Nucleosomes (and sequences) ####
     # TODO continue with this: you're abount to make nucleotide coverage arrays!
