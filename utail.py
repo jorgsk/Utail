@@ -44,7 +44,7 @@ class Settings(object):
     the UTR_SETTINGS file. Useful for passing to downstream code.
     """
     def __init__(self, datasets, annotation_path, annotation_format,
-                 utrfiles_provided, read_limit, max_cores, chr1, hgfasta_path,
+                 regions_provided, read_limit, max_cores, chr1, hgfasta_path,
                  polyA, min_utrlen, extendby, cumul_tuning, bigwig,
                  bigwig_datasets, bigwig_savedir, bigwig_url, gem_index,
                  length):
@@ -53,10 +53,16 @@ class Settings(object):
         self.datasets = datasets
         self.annotation_path = annotation_path
         self.annotation_format = annotation_format
-        self.regions = utrfiles_provided
-        self.utrfile_provided = True
-        if utrfiles_provided[0] == False:
+
+        self.region_files = [os.path.split(path)[1] for path in regions_provided]
+
+        if regions_provided[0] == False:
             self.utrfile_provided = False
+            self.region_dir = False
+        else:
+            self.utrfile_provided = True
+            self.region_dir = os.path.split(regions_provided[0])[0]
+
         self.read_limit = read_limit
         self.max_cores = max_cores
         self.chr1 = chr1
@@ -1457,38 +1463,33 @@ def read_settings(settings_file):
            cuml_tuning, bigwig, bigwig_datasets, bigwig_savedir, bigwig_url,
            gem_index, length)
 
-def get_a_polyA_sites_path(settings, beddir, region_file):
+def get_a_polyA_sites_path(settings, beddir):
     """
     Call the *annotation_parser* module to obtain the locations of all annotated
     utr-ends, in the program called 'a_polyA_sites'.
+
+    Note that the user needs to specify the annotated polyA sites separately
+    from the region-file. We cannot simply assume that the region files are
+    3UTRs
     """
 
     # If options are not set, make them a 0-string define options
     if settings.chr1:
-        chrm = '_chr1'
+        chrm = '_chr1_'
     else:
         chrm = ''
 
-    if settings.utrfiles_provided:
-        user_provided = '_user_provided'
-    else:
-        user_provided = ''
+    # If an annotation is provided, get polyA sites from the annotation
+    if settings.annotation_path:
+        aname = os.path.splitext(os.path.split(settings.annotation_path)[1])[0]
 
-    # utr path
-    a_polyA_sites_filename = 'a_polyA_sites' + chrm + user_provided + '.bed'
-    polyA_site_bed_path = os.path.join(beddir, a_polyA_sites_filename)
+        a_polyA_sites_filename = 'a_polyA_sites' + chrm + aname + '.bed'
+        polyA_site_bed_path = os.path.join(beddir, a_polyA_sites_filename)
 
-    ## If the file already exists, don't make it again
-    if os.path.isfile(polyA_site_bed_path):
-        return polyA_site_bed_path
+        ## If the file already exists, don't make it again
+        if os.path.isfile(polyA_site_bed_path):
+            return polyA_site_bed_path
 
-    # If a utrfile is provided, never re-make from annotation
-    if settings.utrfile_provided:
-        polyA_site_bed_path = shape_provided_bed(polyA_site_bed_path, settings,
-                                                region_file)
-
-    # If utrfile is not provided, get it yourself from a provided annotation
-    if not settings.utrfile_provided:
         if settings.chr1:
             settings.annotation_path = get_chr1_annotation(settings, beddir)
 
@@ -1498,6 +1499,13 @@ def get_a_polyA_sites_path(settings, beddir, region_file):
 
         print('\tTime taken to generate polyA-bedfile: {0}\n'\
               .format(time.time()-t1))
+
+    else:
+        """ Since you're not getting information from the annotation, just make
+        an empty file
+        """
+        handle = open(polyA_site_bed_path, 'wb')
+        handle.close()
 
     return polyA_site_bed_path
 
@@ -1537,12 +1545,11 @@ def get_utr_path(settings, beddir, rerun_annotation_parser, region_file):
         if os.path.isfile(utr_bed_path):
             return utr_bed_path
 
-    ## Reload genome for any changes
-    #if rerun_annotation_parser:
-        #reload(genome)
+    ## Reload genome for any changes if asked for
+    if rerun_annotation_parser:
+        reload(genome)
 
     # If a utrfile is provided, never re-make from annotation, but shape it to
-    # your needs? This is a bit unfinished.
     if settings.utrfile_provided:
         utr_bed_path = shape_provided_bed(utr_bed_path, settings, region_file)
 
@@ -1604,8 +1611,9 @@ def shape_provided_bed(utr_bed_path, settings, region_file):
     """
 
     outfile = open(utr_bed_path, 'wb')
+    region_path = os.path.join(settings.region_dir, region_file)
 
-    for line in open(region_file, 'rb'):
+    for line in open(region_path, 'rb'):
         (chrm, beg, end, name, val, strand) = line.split()[:6]
 
         end = int(end)
@@ -2050,9 +2058,9 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs, settings,
 
     t0 = time.time()
 
-
     # Define the path of the polyA file
-    polyA_path = os.path.join(tempdir, 'polyA_reads_'+dset_id+'.fa')
+    just_dset = '_'.join(dset_id.split('_')[:-1])
+    polyA_path = os.path.join(tempdir, 'polyA_reads_'+just_dset+'.fa')
 
     # if the poly(A) reads have already been mapped and saved to poly(A) cache,
     # don't get them again
@@ -2067,6 +2075,8 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs, settings,
         if not os.path.isdir(cache_dir):
             os.makedirs(cache_dir)
 
+        # TODO make the cache region-independent. It should only depend on the
+        # dataset. ffs. fer fex sake. ffs. 
         polydone_path = os.path.splitext(os.path.split(polyA_path)[1])[0]
         polyA_cached_path = os.path.join(cache_dir, polydone_path+\
                                          '_processed_mapped.bed')
@@ -2906,6 +2916,14 @@ def main():
     # published differences, it seems like they're a dime a dozen, while in fact
     # they're not that many.
 
+    # XXX two bugs. 1) the cache doesn't work properly. 2) intronic and exonic
+    # regions have the same poly(A) reads, as if the dataset was the ... it is.
+    # Damnit! You only need to get the poly(A) reads for each dataset once. You
+    # don't need to get it again and again for the different compartments. You
+    # must 1) make the polyA cache work, 2) make the poly(A) cache
+    # region-independent. Just save it without the region suffix (which is built
+    # into dset_id ................)
+
     # Set debugging mode. This affects the setting that are in the debugging
     # function (called below). It also affects the 'temp' and 'output'
     # directories, respectively.
@@ -2914,8 +2932,8 @@ def main():
     DEBUGGING = False
 
     # with this option, always remake the bedfiles
-    #rerun_annotation_parser = False
-    rerun_annotation_parser = True
+    rerun_annotation_parser = False
+    #rerun_annotation_parser = True
 
     # The path to the directory the script is located in
     here = os.path.dirname(os.path.realpath(__file__))
@@ -2951,11 +2969,11 @@ def main():
     annotation = Annotation(settings.annotation_path, settings.annotation_format)
 
     # XXX DEBUGGING do only the first two regions
-    settings.utrfiles_provided = settings.utrfiles_provided[:2]
+    settings.region_files = settings.region_files[:2]
     # XXX REMOVE LATER
 
     # loop through all regions supplied (often this will be just 1 -- the 3UTR)
-    for region_file in settings.regions:
+    for region_file in settings.region_files:
         # update the region bedfile for each run
 
         piperunner(settings, annotation, simulate, DEBUGGING, beddir, tempdir,
@@ -2975,10 +2993,7 @@ def piperunner(settings, annotation, simulate, DEBUGGING, beddir, tempdir,
     annotation.utr_exons = annotation.get_utrdict()
 
     # You extract all annotated polyA sites into a bedfile: a_polyA_sites_path
-    annotation.a_polyA_sites_path = get_a_polyA_sites_path(settings, beddir,
-                                                           region_file)
-    # TODO this step is annotation-dependent. What happens if the
-    # genome-region bedfile does not intersect a single annotated 3UTR?
+    annotation.a_polyA_sites_path = get_a_polyA_sites_path(settings, beddir)
 
     # You intersect the annotated polyA files with the 3UTR bedfile you got from
     # the annotation. Put the intersected annotated polyA sites in a dictionary.
@@ -2988,7 +3003,8 @@ def piperunner(settings, annotation, simulate, DEBUGGING, beddir, tempdir,
     # Should you move the false-negatives from this-strand to other-strand? This
     # should be dataset dependent. For 3UTR, I say yes. For the other datasets,
     # I'm not so sure.
-    moving = True # CHANGE THIS FOR NON-3UTR DATASETS! IT MIGHT NOT EVEN BE
+    #moving = True # CHANGE THIS FOR NON-3UTR DATASETS! IT MIGHT NOT EVEN BE
+    moving = False # CHANGE THIS FOR NON-3UTR DATASETS! IT MIGHT NOT EVEN BE
     #RELEVANT! THE NUMBERS ARE SO LOW!
 
     # If this is true, the poly(A) reads will be saved after getting them. That
@@ -2999,11 +3015,8 @@ def piperunner(settings, annotation, simulate, DEBUGGING, beddir, tempdir,
     # Extract the name of the bed-region you are checking for poly(A) reads
     # you might have to extract it differently, because 'intergenic' doesn't
     # have any exon or intron part to it.
-    region = '-'.join(os.path.basename(annotation.utrfile_path).split('_')[:2])
+    region = os.path.basename(annotation.utrfile_path).split('_')[0]
     # ad hoc hack for intergenic region
-
-    if region.startswith('Intergenic'):
-        region = 'Intergenic'
 
     ##################################################################
     if simulate:
@@ -3039,6 +3052,7 @@ def piperunner(settings, annotation, simulate, DEBUGGING, beddir, tempdir,
             result = my_pool.apply_async(pipeline, arguments)
             results.append(result)
 
+        #debug()
         my_pool.close()
         my_pool.join()
 
