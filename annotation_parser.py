@@ -578,14 +578,14 @@ def write_beds(transcripts, bed_dir, chr_sizes, *opts):
     paths = get_intergenic(bed_dir, paths, chr_sizes, chr1, stranded)
     print('finished getting intergenic')
 
-    printdict = {'five_utr_exonic': '5UTR_exonic',
-                 'five_utr_intronic': '5UTR_intronic',
-                 'three_utr_exonic': '3UTR_exonic',
-                 'three_utr_intronic': '3UTR_intronic',
-                 'cds_exonic': 'CDS_exonic',
-                 'cds_intronic': 'CDS_intronic',
-                 'noncoding_exonic': 'Nocoding_exonic',
-                 'noncoding_intronic': 'Noncoding_intronic',
+    printdict = {'five_utr_exonic': '5UTR-exonic',
+                 'five_utr_intronic': '5UTR-intronic',
+                 'three_utr_exonic': '3UTR-exonic',
+                 'three_utr_intronic': '3UTR-intronic',
+                 'cds_exonic': 'CDS-exonic',
+                 'cds_intronic': 'CDS-intronic',
+                 'noncoding_exonic': 'Nocoding-exonic',
+                 'noncoding_intronic': 'Noncoding-intronic',
                  'intergenic': 'Intergenic'}
 
     # Finally filter again for anything smaller than skipsize
