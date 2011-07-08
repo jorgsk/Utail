@@ -278,7 +278,7 @@ class Cluster(object):
 
 class Settings(object):
     """
-    Convenience class.One instance is created from this class: it the pertinent
+    Convenience class. One instance is created from this class: it the pertinent
     settings parameters obtained from the UTR_SETTINGS file.
     """
     def __init__(self, settings_file, savedir, outputdir, here, chr1):
@@ -291,13 +291,17 @@ class Settings(object):
         self.datasets = conf.get('PLOTTING', 'datasets').split(':')
         self.length = conf.getboolean('PLOTTING', 'length')
 
-        # which genomic regions are to be investigated
-        self.regions = conf.get('PLOTTING', 'regions').split(':')
-
         self.savedir = savedir
         self.outputdir = outputdir
         self.here = here
 
+        # which genomic regions are to be investigated
+        # is this how you should get them out? I think you should get them from
+        # the files you have loaded
+        # Return the paths of the onlypolyA files
+
+        self.regions = conf.get('PLOTTING', 'regions').split(':')
+        #self.regions = self.get_onlyregions()
         self.chr1 = chr1
 
         self.settings_file = settings_file
@@ -305,17 +309,42 @@ class Settings(object):
         # A bit ad-hoc: dicrectory of polyA read files
         self.polyAread_dir = os.path.join(here, 'polyA_files')
 
-        # before: only one path; now, multiple ...
-        self.annot_polyA_path = self.get_annot_polyas()
-        self.polyA_DB_path = os.path.join(self.here, 'polyADB', 'polyA_db')
-
-        # the 3UTRs in use
-        self.utr_exons_path = self.get_utr_exons()
-
         # The hg19 genome
         self.hg19_path = os.path.join(self.here, 'ext_files', 'hg19')
 
-    def get_utr_exons(self):
+        # only valid for 3UTRs. You have to make sure to skip this one,
+        # otherwise you get into trouble for trying to make the annotated polyA
+        # sites again, yet in the settings file you haven't provided an
+        # annotation, because you want to analysie the non-annotated regions.
+        # kthnx.
+        if self.regions[0] == '3UTRs-exons':
+            self.annot_polyA_path = self.get_annot_polyas()
+            self.polyA_DB_path = os.path.join(self.here, 'polyADB', 'polyA_db')
+
+            # the exons of the regions in use (or 3UTRs)
+            # PS this is only needed for the 3UTRs, because you get the annotated
+            # poly(A) sites.
+            self.utr_exons_path = self.get_region_exons()
+
+
+    def get_onlyregions(self):
+        """ Go through all the files in the output dir for the datasets you
+        have, and report back what regions are there.
+        """
+        regions = []
+        cmd = 'ls '+ os.path.join(self.outputdir, 'onlypolyA*')
+        p = Popen(cmd, stdout=PIPE, shell=True)
+        for line in p.stdout:
+            reg = line.split('_')[-1].rstrip()
+
+            # add the regions only of one of our datasets are in these files
+            for dset in self.datasets:
+                if dset in line:
+                    regions.append(reg)
+
+        return list(set(regions))
+
+    def get_region_exons(self):
 
         import utail as utail
 
@@ -327,7 +356,13 @@ class Settings(object):
 
         beddir = os.path.join(self.here, 'source_bedfiles')
 
-        return utail.get_utr_path(utail_settings, beddir, False)
+        region_exons = {}
+
+        for region in self.regions:
+            # YOU ASSUME NOT CHR1 AND NOT STRANDED!
+            region_file = region + '_non_stranded.bed'
+            region_exons[region] = utail.get_utr_path(utail_settings, beddir,
+                                                      False, region_file)
 
     def get_annot_polyas(self):
         """
@@ -4385,11 +4420,23 @@ def polyA_summary(dsets, super_3utr, polyAstats):
             read_per_site = format(read_nr/total, '.2f')
 
             anYpas = count_dict['both_an_and_PAS']
-            anYpas_rate = format(anYpas/annot, '.2f')
+            if annot == 0:
+                anYpas_rate = 'NA'
+            else:
+                anYpas_rate = format(anYpas/annot, '.2f')
 
-            oppos_readnr = polyAstats[region][cl][comp]['Other_strands_count']
-            this_readnr = polyAstats[region][cl][comp]['This_strands_count']
+            oppos_readnr = polyAstats[region][cl][comp]['Other_strand_count']
+            this_readnr = polyAstats[region][cl][comp]['This_strand_count']
             both_readnr = polyAstats[region][cl][comp]['Both_strands_count']
+
+            ## XXX NOTE XXX when you get from the non-3UTRs, remember to take
+            #reads from both strands!!!!!!!!!!! by default you only report some
+            #of those. NOTE: this means that you have to change the part that
+            #reports polyA reads in utail. You must know if you're dealing with
+            # well-stranded annotated regions, or non-annotated regions.
+
+            debug()
+            #count_dict['O']
 
             print cl
             print comp
@@ -4403,8 +4450,29 @@ def polyA_summary(dsets, super_3utr, polyAstats):
             print("")
 
             # get poly(A) + or - and get if it is a replicate or not
-            debug()
-            everything[region][cl][comp]
+            # it's in comp
+            realcomp = comp # successively remove 'replicate' or 'minus'
+            if 'Replicate' in comp:
+                replicate = 'replicate'
+                realcomp = comp.partition('Replicate')
+            else:
+                replicate = 'not_replicate'
+
+            if 'Minus' in comp:
+                polyMinus = 'polyA_minus'
+                realcomp = realcomp.partition('Replicate')
+            else:
+                polyMinus = 'polyA_plus'
+
+            mdict = {}
+
+            # TODO finish adding stuff to this dict. Then, using this dict
+            # information, you can make the plots from these dicts.
+            mdict['total_sites'] = total
+            mdict['total_reads'] = read_nr
+
+            # finally, add all to this:
+            #everything[region][cl][realcomp][replicate][polyMinus] = mdict
 
         total_unique = 0
         for utr_id, utr in super_3utr[region].iteritems():
@@ -4484,6 +4552,9 @@ def main():
     polyAstats = get_polyA_stats(settings)
 
     # Basic poly(A) read statistics for the datasetes
+    # XXX There is something fishy about the 3UTR exon datasets. there are
+    # poly(A) reads on both strands in equal amounts. aaaaah... this is because
+    # it's just + :) nothing fishy at all!
     polyA_summary(dsets, super_3utr, polyAstats)
 
     #### Nucleosomes (and sequences) ####
