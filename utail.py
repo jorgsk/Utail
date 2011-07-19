@@ -47,9 +47,10 @@ class Settings(object):
                  regions_provided, read_limit, max_cores, chr1, hgfasta_path,
                  polyA, min_utrlen, extendby, cumul_tuning, bigwig,
                  bigwig_datasets, bigwig_savedir, bigwig_url, gem_index,
-                 length, stranded):
+                 length, pairend, strand):
 
-        self.stranded = stranded
+        self.strand = strand # for non-annotation .bed files
+        self.pairend = pairend # are the reads pair-ended?
         self.get_length = length
         self.datasets = datasets
         self.annotation_path = annotation_path
@@ -95,10 +96,10 @@ class Settings(object):
         self.get_length = False
         #self.get_length = True
         self.extendby = 100
-        self.polyA = True
+        #self.polyA = True
         #self.polyA = False
-        #self.polyA = '/users/rg/jskancke/phdproject/3UTR/the_project/polyA_files'\
-                #'/polyA_reads_K562_Whole_Cell_processed_mapped.bed'
+        self.polyA = '/users/rg/jskancke/phdproject/3UTR/the_project/polyA_files'\
+                '/polyA_reads_K562_Whole_Cell_processed_mapped.bed'
         #self.polyA = '/users/rg/jskancke/phdproject/3UTR/the_project/polyA_files'\
                 #'/polyA_reads_K562_Cytoplasm_processed_mapped.bed'
         #self.bed_reads = '/users/rg/jskancke/phdproject/3UTR/the_project/temp_files'\
@@ -920,6 +921,8 @@ def get_pas_and_distance(rpoint, pas_patterns, sequence, settings):
         pas_seq = sequence[rpoint-40:rpoint]
 
         pases = []
+        # check both strands -- this is not a good, but it's the best you've
+        # got. poly(A) reads would help -- you check the opposite strand.
         for turn in ['norm', 'reversecomp']:
 
             if turn == 'norm':
@@ -1422,14 +1425,16 @@ def read_settings(settings_file):
         verify_access(annotation_path)
         annotation_format = conf.get('ANNOTATION', 'annotation_format')
 
-    stranded = conf.getboolean('ANNOTATION', 'stranded')
 
     # length yes or no
     length = conf.getboolean('GET_LENGTH', 'length')
 
     # datasets
+    pairend = conf.getboolean('DATASETS', 'pairend')
+
     datasets = dict((dset, files.split(':')) for dset,
                     files in conf.items('DATASETS'))
+
 
     # Go through all the items in 'datsets'. Pop the directories from the list.
     # They are likely to be shortcuts.
@@ -1470,6 +1475,7 @@ def read_settings(settings_file):
         utr_bedfile_paths = conf.get('SUPPLIED_3UTR_BEDFILE',
                                     'utr_bed_path').split(':')
         [verify_access(path) for path in utr_bedfile_paths] # Check if is a file
+    strand = conf.getboolean('SUPPLIED_3UTR_BEDFILE', 'strand')
 
     # If both 'annotation' and '3utr_bedfile' are false, your program isn't
     # going to go too far
@@ -1525,10 +1531,13 @@ def read_settings(settings_file):
         print('To tune the cumulative value, you need to enable polyA reads')
         sys.exit()
 
+    # if both an annotation and bedfiles are supplied, give the user warning
+    # about this
+
     return(datasets, annotation_path, annotation_format, utr_bedfile_paths,
            read_limit, max_cores, chr1, hg_fasta, polyA, min_utrlen, extendby,
            cuml_tuning, bigwig, bigwig_datasets, bigwig_savedir, bigwig_url,
-           gem_index, length, stranded)
+           gem_index, length, pairend, strand)
 
 def get_a_polyA_sites_path(settings, beddir):
     """
@@ -2042,10 +2051,7 @@ def cluster_polyAs(settings, utr_polyAs, utrs, polyA):
     opposite side of the strand it came from. You count the number of reads
     landing in different strands and use the ratio as a false-positive rate. You
     also count the number of identical reads in both strands as a measure of how
-    many on the self-strand are genuine!. However, this only applies When You
-    Know The Strand! For other regions of the genome, it's not informative.
-    Well! That's not true. When you discover new poly(A) sites, you know that
-    the true site is the opposite of the one you find.
+    many on the self-strand are genuine!
     """
 
     # If there are no polyA reads or polyA is false: return empty lists 
@@ -2074,7 +2080,7 @@ def cluster_polyAs(settings, utr_polyAs, utrs, polyA):
                 this_strand_ends = sorted([tup[2] for tup in polyAs
                                            if tup[5] == '-'])
 
-        # if not, throw all reads into 'this_strand'
+        # if not, throw all reads into 'other_strand'
         else:
             other_strand_ends = sorted([tup[2] for tup in polyAs
                                         if tup[5] == '-'])
@@ -2188,8 +2194,9 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs, settings,
     # Cluster the poly(A) reads for each utr_id. If polyA is false or no polyA
     # reads were found, return a placeholder, since this variable is assumed to
     # exist in downstream code.
-    # If settings.stranded is true, the reads will be separated into two
-    # strands. if not, they will be joined.
+    # If reads are not paired ended, poly(A) reads from both strands will be
+    # merged to one strand. Only with paried ended reads can we know the
+    # strandedness of the transcript.
     polyA_reads = cluster_polyAs(settings, utr_polyAs, utr_exons, polyA)
 
     # If polyA is true, write the polyA-statistics file!
@@ -2515,8 +2522,9 @@ def only_polyA_writer(dset_id, annotation, utr_seqs, polyA_reads, settings,
                                                        strand)
 
             rpoint = cls_center - beg
-            # getting PAS with respect to stranded or not. If not stranded, you
-            # look at the reverse compliment to look for PAS.
+            # getting PAS. If annotation exists, look at the annotated strand.
+            # If not, look at the "other strand" than the poly(A) read maps to.
+            debug()
             (nearby_PAS, PAS_distance) = get_pas_and_distance(rpoint,
                                                               pas_patterns,
                                                               sequence, settings)
@@ -3000,20 +3008,16 @@ def main():
     # published differences, it seems like they're a dime a dozen, while in fact
     # they're not that many.
 
-    # XXX two bugs. 1) the cache doesn't work properly. 2) intronic and exonic
-    # regions have the same poly(A) reads, as if the dataset was the ... it is.
-    # Damnit! You only need to get the poly(A) reads for each dataset once. You
-    # don't need to get it again and again for the different compartments. You
-    # must 1) make the polyA cache work, 2) make the poly(A) cache
-    # region-independent. Just save it without the region suffix (which is built
-    # into dset_id ................)
-
     # Set debugging mode. This affects the setting that are in the debugging
     # function (called below). It also affects the 'temp' and 'output'
     # directories, respectively.
 
-    #DEBUGGING = True
-    DEBUGGING = False
+    # TODO: what holds presedence? supplied bedfiles or an annotation? answer:
+        # supplied files. you should make the user aware of this though, and
+        # give a chance to abort.
+
+    DEBUGGING = True
+    #DEBUGGING = False
 
     # with this option, always remake the bedfiles
     rerun_annotation_parser = False
