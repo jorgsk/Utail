@@ -56,14 +56,16 @@ class Settings(object):
         self.annotation_path = annotation_path
         self.annotation_format = annotation_format
 
-        self.region_files = [os.path.split(path)[1] for path in regions_provided]
-
-        if regions_provided[0] == False:
-            self.utrfile_provided = False
-            self.region_dir = False
-        else:
-            self.utrfile_provided = True
+        # if annotation is not used, make a list of the region files provided
+        if regions_provided:
+            self.region_files = [os.path.split(pa)[1] for pa in regions_provided]
+            self.regionfile_provided = True
             self.region_dir = os.path.split(regions_provided[0])[0]
+        # if not
+        else:
+            self.region_files = [False]
+            self.regionfile_provided = False
+            self.region_dir = False
 
         self.read_limit = read_limit
         self.max_cores = max_cores
@@ -885,11 +887,11 @@ def get_pas_and_distance(rpoint, pas_patterns, sequence, settings):
     as you find them. Must supply poly(A) sites relative to UTR-beg. The
     sequence must also be relative to UTR-beg (3->5 direction)
 
-    If settings.stranded = False, consider both the sequence and its reverse
+    If settings.pairend == False, consider both the sequence and its reverse
     complement.
     """
 
-    if settings.stranded:
+    if settings.pairend:
         pas_seq = sequence[rpoint-40:rpoint]
 
         # special case if the polya read is is early in the sequence
@@ -1434,10 +1436,12 @@ def read_settings(settings_file):
 
     datasets = dict((dset, files.split(':')) for dset,
                     files in conf.items('DATASETS'))
+    # pop the 'pairend' part ...
+    datasets.pop('pairend')
 
 
     # Go through all the items in 'datsets'. Pop the directories from the list.
-    # They are likely to be shortcuts.
+    # They are likely to be shortcuts. Also remove the boolean pairend
     for (dset, dpaths) in datasets.items():
         for pa in dpaths:
             if os.path.isdir(pa):
@@ -1533,6 +1537,17 @@ def read_settings(settings_file):
 
     # if both an annotation and bedfiles are supplied, give the user warning
     # about this
+    if annotation_path and utr_bedfile_paths:
+        print('\nYou have supplied a path to an annotation as well as a '\
+              'bedfile (or more) with genomic regions as input. The default '\
+             'setting is to ignore the annotation in this case. If you want to '\
+              'use the annotation and not the supplied bedfiles, set:\n\n'\
+             '"utr_bed_path = false"\n\nin the settings file.')
+
+        leave = raw_input('\nPress A to abort or ENTER to continue: ')
+        if leave == 'A':
+            print('Aborting ...')
+            sys.exit()
 
     return(datasets, annotation_path, annotation_format, utr_bedfile_paths,
            read_limit, max_cores, chr1, hg_fasta, polyA, min_utrlen, extendby,
@@ -1603,13 +1618,13 @@ def get_utr_path(settings, beddir, rerun_annotation_parser, region_file):
     else:
         chrm = ''
 
-    if settings.utrfile_provided:
+    if settings.regionfile_provided:
         user_provided = '_user_provided'
     else:
         user_provided = ''
 
     # utr path
-    if not settings.utrfile_provided:
+    if not settings.regionfile_provided:
         utr_filename = '3UTR_exons' + chrm + ext + user_provided + '.bed'
         utr_bed_path = os.path.join(beddir, utr_filename)
     else:
@@ -1625,14 +1640,14 @@ def get_utr_path(settings, beddir, rerun_annotation_parser, region_file):
     if rerun_annotation_parser:
         reload(genome)
 
-    # If a utrfile is provided, never re-make from annotation, but shape it to
-    if settings.utrfile_provided:
+    # If a regionfile is provided, never re-make from annotation, but shape it to
+    if settings.regionfile_provided:
         utr_bed_path = shape_provided_bed(utr_bed_path, settings, region_file)
 
         return utr_bed_path
 
-    # If utrfile is not provided, get it yourself from a provided annotation
-    if not settings.utrfile_provided:
+    # If regionfile is not provided, get it yourself from a provided annotation
+    if not settings.regionfile_provided:
         if settings.chr1:
             settings.annotation_path_chr1 = get_chr1_annotation(settings, beddir)
 
@@ -2066,8 +2081,8 @@ def cluster_polyAs(settings, utr_polyAs, utrs, polyA):
         utr_info = utrs[utr_id]
         real_strand = utr_info[3]
 
-        # separate into two if stranded
-        if settings.stranded:
+        # separate into two if pair-end reads
+        if settings.pairend:
             if real_strand == '+':
                 other_strand_ends = sorted([tup[2] for tup in polyAs
                                             if tup[5] == '-'])
@@ -3012,10 +3027,6 @@ def main():
     # function (called below). It also affects the 'temp' and 'output'
     # directories, respectively.
 
-    # TODO: what holds presedence? supplied bedfiles or an annotation? answer:
-        # supplied files. you should make the user aware of this though, and
-        # give a chance to abort.
-
     DEBUGGING = True
     #DEBUGGING = False
 
@@ -3056,7 +3067,7 @@ def main():
     print('Reading settings ...\n')
     annotation = Annotation(settings.annotation_path, settings.annotation_format)
 
-    # XXX DEBUGGING do only the first two regions
+    # XXX DEBUGGING: only the first two regions
     #settings.region_files = settings.region_files[:2]
     # XXX REMOVE LATER
 
@@ -3099,6 +3110,7 @@ def piperunner(settings, annotation, simulate, DEBUGGING, beddir, tempdir,
     region = os.path.basename(annotation.utrfile_path).split('_')[0]
     # ad hoc hack for intergenic region
 
+    debug()
     ##################################################################
     if simulate:
         # For all 3UTR exons, get the genomic sequence. The sequence is needed

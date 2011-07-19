@@ -80,7 +80,9 @@ K562_Whole_Cell = %(carrie)s/001WC/genome/LID16627_FC61U30AAXX_2_2.gem.map.gz:%(
 # If you want a stranded analysis, use 'stranded = true'. Use this if you
 # supply genomic regions where you know that the strands of the genomic regions
 # are factual. Use 'stranded = false' if you're just investigting general
-# 'exonic' regions for example.
+# 'exonic' regions for example. If you supply both regional bedfiles and an
+# annotation, the bedfiles will take presedence.
+
 # annotation_path = false
 # annotation_path = /users/rg/jskancke/phdproject/3UTR/gencode5/gencode5_annotation.gtf
 annotation_path = /users/rg/jskancke/phdproject/3UTR/gencode7/gencode7_annotation.gtf
@@ -91,12 +93,15 @@ annotation_format = GENCODE
 
 [SUPPLIED_3UTR_BEDFILE]
 # If you supply more than one bedfile, the pipeline will be run for
-# each region successively.
-regions = /users/rg/jskancke/phdproject/3UTR/the_project/genomic_regions_hg19
+# each region successively. If you supply both regional bedfiles and an
+# annotation, the bedfiles will take presedence.
 
-utr_bed_path = %(regions)s/3UTR-exonic_non_stranded.bed:%(regions)s/3UTR-intronic_non_stranded.bed:%(regions)s/5UTR-exonic_non_stranded.bed:%(regions)s/5UTR-intronic_non_stranded.bed:%(regions)s/CDS-exonic_non_stranded.bed:%(regions)s/CDS-intronic_non_stranded.bed:%(regions)s/Intergenic_non_stranded.bed:%(regions)s/Nocoding-exonic_non_stranded.bed:%(regions)s/Noncoding-intronic_non_stranded.bed
+utr_bed_path = false
+#
+# regdir = /users/rg/jskancke/phdproject/3UTR/the_project/genomic_regions_hg19
 
-# utr_bed_path = false
+# utr_bed_path = %(regdir)s/3UTR-exonic_non_stranded.bed:%(regdir)s/3UTR-intronic_non_stranded.bed:%(regdir)s/5UTR-exonic_non_stranded.bed:%(regdir)s/5UTR-intronic_non_stranded.bed:%(regdir)s/CDS-exonic_non_stranded.bed:%(regdir)s/CDS-intronic_non_stranded.bed:%(regdir)s/Intergenic_non_stranded.bed:%(regdir)s/Nocoding-exonic_non_stranded.bed:%(regdir)s/Noncoding-intronic_non_stranded.bed
+
 # utr_bed_path = /users/rg/pferreira/desktop/motifsapa/data/bedannotation/hg19/3utr_hg19.selectedcases.bed
 # Is the strand in the .bed files true? Specify if the strand is known (true)
 # or not (false)
@@ -251,10 +256,11 @@ tuning = false
 # datasets = K562_CytoplasmMinus:K562_Whole_CellMinus:K562_NucleusMinus:K562_Cytoplasm:K562_Whole_Cell:K562_Nucleus:K562_Nucleoplasm:K562_Chromatin
 #
 # datasets = K562_Whole_CellMinus:K562_Whole_CellMinusReplicate:K562_Whole_Cell:K562_Whole_CellReplicate:K562_Cytoplasm:K562_CytoplasmReplicate:K562_CytoplasmMinus:K562_CytoplasmMinusReplicate:K562_NucleusMinus:K562_Nucleus:K562_NucleusMinusReplicate:K562_NucleusReplicate
-datasets = K562_Nucleoplasm:K562_NucleoplasmReplicate:K562_Chromatin:K562_ChromatinReplicate
-# datasets = K562_Whole_CellMinus:K562_Whole_CellMinusReplicate:K562_Whole_Cell:K562_Whole_CellReplicate
-# datasets = K562_Whole_Cell:K562_Nucleoplasm
-# datasets = K562_Nucleoplasm:K562_NucleoplasmReplicate
+# datasets = K562_Nucleoplasm:K562_NucleoplasmReplicate:K562_Chromatin:K562_ChromatinReplicate
+datasets = K562_Whole_CellMinus:K562_Whole_CellMinusReplicate:K562_Whole_Cell:K562_Whole_CellReplicate
+# datasets = K562_Whole_Cell:K562_Whole_CellReplicate
+# datasets = K562_Nucleoplasm:K562_NucleoplasmReplicate:K562_Chromatin:K562_ChromatinReplicate
+
 
 # datasets = K562_Cytoplasm:K562_Nucleus:K562_Nucleoplasm:K562_Chromatin:K562_Whole_Cell
 
@@ -263,6 +269,7 @@ length = false
 
 # give a list of genomic regions you are investigating
 # regions = 3UTRs
-# regions = 3UTR-exonic
+regions = 3UTR-exonic
+# regions = 3UTR-exonic:3UTR-intronic
 # regions = 3UTR-exonic:3UTR-intronic:5UTR-exonic:5UTR-intronic
-regions = 3UTR-exonic:3UTR-intronic:5UTR-exonic:5UTR-intronic:CDS-exonic:CDS-intronic:Intergenic
+# regions = 3UTR-exonic:3UTR-intronic:5UTR-exonic:5UTR-intronic:CDS-exonic:CDS-intronic:Intergenic

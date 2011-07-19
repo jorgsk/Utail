@@ -19,6 +19,7 @@ plt.ion() # turn on the interactive mode so you can play with plots
 from operator import attrgetter
 from operator import itemgetter
 import math
+import cPickle as pickle
 
 import numpy as np
 
@@ -1576,22 +1577,7 @@ class Plotter(object):
         #    everything[region][cl][realcomp][replicate][polyMinus] = mdict
         reg_nr = len(everything)
 
-        # TODO: get the relative size thing to work, and get the number of
-        # poly(A) sites with PAS (arent you already?) It's a problem...
-        # solution: when getting the sequence: assume it is on the other stand!
-        # no more worries, no? no ... because you use the annotated strand as
-        # evidence to get the PAS sequence. Hey: you need to get sequences twice
-        # as long now: shiit shit shit shit shit. what if you do the same as
-        # before: don't take both sides. it won't work. just take the stuff on
-        # the opposite side of where the poly(A) site was annotated.
-
-        # if true, get the reads in each region relative to the size of the
-        # region
-        # relative = True
-        # TODO you are here, getting not just the read couts but the cluster
-        # sizes too. then ..
-
-        # Aaaand when you finish with this plot, go for the pol2 and nucleosomes.
+        # TODO: get the relative size thing to work, a
 
         for get_sites in [True, False]:
             #for relative in [True, False]:
@@ -4938,7 +4924,13 @@ def main():
 
     # for the onlypolyA files
     # you now have an additional level: the "region" (often the 3UTR)
-    dsets, super_3utr = super_falselength(settings, speedrun=False, svm=False)
+    pickfile = 'super_pickle'
+
+    if not os.path.isfile(pickfile):
+        dsets, super_3utr = super_falselength(settings, speedrun=False, svm=False)
+        pickle.dump((dsets, super_3utr), open(pickfile, 'wb'))
+    else:
+        (dsets, super_3utr) = pickle.load(open(pickfile))
 
     # Get the basic poly(A) stat file that is output with each run. It gives
     # statistics on the number of reads that fall in which strand and so forth.
