@@ -8,8 +8,10 @@ import ConfigParser
 import sys
 from itertools import combinations as combins
 
+from subprocess import Popen, PIPE
+
 import matplotlib.pyplot as plt
-import matplotlib.cm as cm
+#import matplotlib.cm as cm
 from matplotlib import lines
 
 plt.ion() # turn on the interactive mode so you can play with plots
@@ -17,6 +19,7 @@ plt.ion() # turn on the interactive mode so you can play with plots
 from operator import attrgetter
 from operator import itemgetter
 import math
+import cPickle as pickle
 
 import numpy as np
 
@@ -119,6 +122,19 @@ class UTRDataset(object):
         return [utr.ID for (utr_id, utr) in self.utrs.iteritems()
                 if utr.eps_rel_size != 'NA']
 
+class BasicUtr(object):
+    """ The most simple UTR object: genomic coordinates plus a clusters list
+    """
+    def __init__(self, chrm, beg, end, strand, ID, line):
+
+        self.chrm = chrm
+        self.beg = beg
+        self.end = end
+        self.strand = strand
+        self.ID = ID
+
+        # Create the first clusters object. the rest will be added later
+        self.clusters = [Only(line)]
 
 class UTR(object):
     """
@@ -130,8 +146,7 @@ class UTR(object):
         # Read all the parameters from line
         (chrm, beg, end, utr_extended_by, strand, ID, epsilon_coord,
          epsilon_rel_size, epsilon_downstream_covrg, epsilon_upstream_covrg,
-         annotTTS_dist, annot_downstream_covrg, annot_upstream_covrg,
-         epsilon_PAS_type, epsilon_PAS_distance, epsilon_beyond, RPKM,
+         annotTTS_dist, epsilon_PAS_type, epsilon_PAS_distance, RPKM,
          avrg_covrg) = input_line.split('\t')
 
         self.chrm = chrm
@@ -143,7 +158,6 @@ class UTR(object):
         self.ID = ID
         self.eps_coord = str_to_intfloat(epsilon_coord)
         self.eps_rel_size = str_to_intfloat(epsilon_rel_size)
-        self.epsilon_beyond_aTTS = str_to_intfloat(epsilon_beyond)
         # Get the _absoulte_ epsilong length and the distance from annotanted
         # end
         if self.eps_rel_size != 'NA':
@@ -155,8 +169,6 @@ class UTR(object):
         #
         self.eps_downstream_covrg = str_to_intfloat(epsilon_downstream_covrg)
         self.eps_upstream_covrg = str_to_intfloat(epsilon_upstream_covrg)
-        self.annot_downstream_covrg = str_to_intfloat(annot_downstream_covrg)
-        self.annot_upstream_covrg = str_to_intfloat(annot_upstream_covrg)
         self.annotTTS_dist = annotTTS_dist
 
         # PAS type and PAS distance are space-delimited
@@ -177,12 +189,48 @@ class UTR(object):
         # SVM info might be added
         self.svm_coordinates = []
 
+        # Array of nucleosome coverage
+        self.nucl_covr = np.zeros(self.length)
+        self.has_nucl = False #if you add coverage to the above array
+
     def __repr__(self):
         return self.ID[-8:]
 
     def __str__(self):
         return "\nChrm\t{0}\nBeg\t{1}\nEnd\t{2}\nStrand\t{3}\n"\
                 .format(self.chrm, self.beg, self.end, self.strand)
+
+class Only(object):
+    """ For the onlypolyA files. They don't have coverage and have fewer
+    parameters than the othes.
+    """
+
+    def __init__(self, input_line):
+
+        (chrm, beg, end, utr_ID, strand, polyA_coordinate,
+         annotated_polyA_distance, nearby_PAS, PAS_distance,
+         number_supporting_reads, nr_unique_supporting_reads,
+         unique_reads_spread) = input_line.split('\t')
+
+        self.chrm = chrm
+        self.beg = str_to_intfloat(beg)
+        self.end = str_to_intfloat(end)
+        self.ID = utr_ID
+        self.strand = strand
+
+        self.polyA_coordinate = str_to_intfloat(polyA_coordinate)
+        self.annotated_polyA_distance = annotated_polyA_distance
+
+        # PAS type and PAS distance are space-delimited
+        self.nearby_PAS = [str_to_intfloat(pas) for pas in nearby_PAS.split(' ')]
+
+        self.PAS_distance = [str_to_intfloat(dist) for dist in
+                             PAS_distance.split(' ')]
+
+        self.nr_support_reads = str_to_intfloat(number_supporting_reads)
+        self.nr_unique_support_reads = str_to_intfloat(nr_unique_supporting_reads)
+        self.uniquet_reads_spread = str_to_intfloat(unique_reads_spread)
+
 
 class Cluster(object):
     """
@@ -231,24 +279,104 @@ class Cluster(object):
 
 class Settings(object):
     """
-    Convenience class.One instance is created from this class: it the pertinent
+    Convenience class. One instance is created from this class: it the pertinent
     settings parameters obtained from the UTR_SETTINGS file.
     """
-    def __init__(self, settings_file, savedir, outputdir, here):
+    def __init__(self, settings_file, savedir, outputdir, here, chr1):
+
 
         conf = ConfigParser.ConfigParser()
         conf.optionxform = str
         conf.read(settings_file)
 
         self.datasets = conf.get('PLOTTING', 'datasets').split(':')
+        self.length = conf.getboolean('PLOTTING', 'length')
+
         self.savedir = savedir
         self.outputdir = outputdir
         self.here = here
+
+        # which genomic regions are to be investigated
+        # is this how you should get them out? I think you should get them from
+        # the files you have loaded
+        # Return the paths of the onlypolyA files
+
+        self.regions = conf.get('PLOTTING', 'regions').split(':')
+        #self.regions = self.get_onlyregions()
+        self.chr1 = chr1
 
         self.settings_file = settings_file
 
         # A bit ad-hoc: dicrectory of polyA read files
         self.polyAread_dir = os.path.join(here, 'polyA_files')
+
+        # The hg19 genome
+        self.hg19_path = os.path.join(self.here, 'ext_files', 'hg19')
+
+        # only valid for 3UTRs. You have to make sure to skip this one,
+        # otherwise you get into trouble for trying to make the annotated polyA
+        # sites again, yet in the settings file you haven't provided an
+        # annotation, because you want to analysie the non-annotated regions.
+        # kthnx.
+        if self.regions[0] == '3UTRs-exons':
+            self.annot_polyA_path = self.get_annot_polyas()
+            self.polyA_DB_path = os.path.join(self.here, 'polyADB', 'polyA_db')
+
+            # the exons of the regions in use (or 3UTRs)
+            # PS this is only needed for the 3UTRs, because you get the annotated
+            # poly(A) sites.
+            self.utr_exons_path = self.get_region_exons()
+
+
+    def get_onlyregions(self):
+        """ Go through all the files in the output dir for the datasets you
+        have, and report back what regions are there.
+        """
+        regions = []
+        cmd = 'ls '+ os.path.join(self.outputdir, 'onlypolyA*')
+        p = Popen(cmd, stdout=PIPE, shell=True)
+        for line in p.stdout:
+            reg = line.split('_')[-1].rstrip()
+
+            # add the regions only of one of our datasets are in these files
+            for dset in self.datasets:
+                if dset in line:
+                    regions.append(reg)
+
+        return list(set(regions))
+
+    def get_region_exons(self):
+
+        import utail as utail
+
+        utail_settings = utail.Settings\
+                (*utail.read_settings(self.settings_file))
+
+        if self.chr1:
+            utail_settings.chr1 = True
+
+        beddir = os.path.join(self.here, 'source_bedfiles')
+
+        region_exons = {}
+
+        for region in self.regions:
+            # YOU ASSUME NOT CHR1 AND NOT STRANDED!
+            region_file = region + '_non_stranded.bed'
+            region_exons[region] = utail.get_utr_path(utail_settings, beddir,
+                                                      False, region_file)
+
+    def get_annot_polyas(self):
+        """
+        Simply return the annotated poly(A) sites
+        """
+        beddir = os.path.join(self.here, 'source_bedfiles')
+
+        import utail as utail
+
+        utail_settings = utail.Settings\
+                (*utail.read_settings(self.settings_file))
+
+        return utail.get_a_polyA_sites_path(utail_settings, beddir)
 
     # Return the paths of the length files
     def length_files(self):
@@ -260,9 +388,16 @@ class Settings(object):
         return dict((d, os.path.join(self.here, self.outputdir, 'polyA_' + d))
                     for d in self.datasets)
 
-    # Return the paths of the epsilon files
-    def epsilon_files(self):
-        return dict((d, os.path.join(self.here, self.outputdir,'cumul_'+d+'.stat'))
+    # Return the paths of the onlypolyA files
+    def only_files(self, region):
+        return dict((d, os.path.join(self.here, self.outputdir,
+                                     'onlypolyA_'+d+'_'+region))
+                    for d in self.datasets)
+
+    # Return the paths of the polyAstats files
+    def polyAstats_files(self, region):
+        return dict((d, os.path.join(self.here, self.outputdir,
+                                     d+'_'+region+'_polyA_statistics'))
                     for d in self.datasets)
 
     # Return the path of the svm-file. This file should be a bed-file where name
@@ -1424,6 +1559,332 @@ class Plotter(object):
         #fig.subplots_adjust(wspace=adj)
         debug()
 
+    def region_comparer(self, dsets, everything, settings):
+        """ For each region, for each cell type, compute the read counts etc as in
+        'everything' for poly(A) minus and for replicates. Make one multi-plot per
+        region.
+        """
+
+        # NEW PLAN! GET all regions in one file. Simply use the average of the
+        # replicas (this gives you the variation there) and put the polyA+ next
+        # to the polyA- (this gives you that difference). A final bonus is to
+        # put the actual numbers on the top of each bar.
+
+        #repl = {'replicate': True, 'not_replicate': False}
+        #polyplus = {'poly_plus': True, 'poly_minus': False}
+
+        ## finally, add all to this:
+        #    everything[region][cl][realcomp][replicate][polyMinus] = mdict
+        reg_nr = len(everything)
+
+        # TODO: get the relative size thing to work, a
+
+        for get_sites in [True, False]:
+            #for relative in [True, False]:
+            relative = False
+            get_the_figure(get_sites, relative, reg_nr, dsets, everything,
+                           settings)
+
+def get_the_figure(get_sites, relative, reg_nr, dsets, everything, settings):
+    # Create the figure!
+    if reg_nr < 3:
+        (fig, axes) = plt.subplots(int(math.ceil(reg_nr/2))+1, 2, sharey=True)
+    else:
+        (fig, axes) = plt.subplots(int(math.ceil(reg_nr/2)), 2, sharey=True)
+
+    if relative:
+        fig.suptitle('Poly(A) reads in PolyA+ and polyA- samples for '\
+                     ' different genomic regions. Normalized to region '\
+                     'size ', size=23)
+    else:
+        fig.suptitle('Poly(A) reads in PolyA+ and polyA- samples for '\
+                     ' different genomic regions', size=23)
+
+    for reg_ind, (region, reg_dict) in enumerate(sorted(everything.items())):
+
+        for cell_line, cl_dict in reg_dict.items():
+            # get compartments in the sorted order you want
+            compartments = [comp for comp in sorted(cl_dict.keys())]
+            colors = ['b', 'g', 'c', 'm', 'y', 'r']
+
+            color_map = dict(zip(compartments, colors))
+            cols = colors[:len(color_map)]
+
+            bar_cl_nr = len(compartments)
+            #bar_nr = bar_cl_nr*2
+            x_arr = np.arange(1, bar_cl_nr+1) # bar at 1, 2, 3, etc
+
+            # where you keep the height of the bars
+            read_dict = {'polyA_plus': dict((rep, []) for rep in
+                           ['replicate', 'not_replicate']),
+                     'polyA_minus': dict((rep, []) for rep in
+                           ['replicate', 'not_replicate'])}
+
+            # where you keep the RELATIVe height of the bar
+            rel_read_dict = {'polyA_plus': dict((rep, []) for rep in
+                           ['replicate', 'not_replicate']),
+                     'polyA_minus': dict((rep, []) for rep in
+                           ['replicate', 'not_replicate'])}
+
+            # sorting keeps the order of replic
+            for compartment, comp_dict in sorted(cl_dict.items()):
+
+                # Get values for the bars for the different plots
+                for replicate, rep_dict in comp_dict.items():
+                    for polypl, polyA_statistics in rep_dict.items():
+
+                        if not get_sites:
+                            treads = polyA_statistics['total_reads']
+                        if get_sites:
+                            treads = polyA_statistics['total_sites']
+
+                        if not get_sites:
+                            relreads =\
+                            polyA_statistics['total_reads_region_normalized']
+
+                        if get_sites:
+                            relreads =\
+                            polyA_statistics['total_sites_normalized']
+
+                        # 1) Absolute nr of reads
+                        read_dict[polypl][replicate].append(treads)
+                        # 2) nr of reads relative to region size
+                        rel_read_dict[polypl][replicate].append(relreads)
+
+            # Get the axis
+            column = reg_ind % 2
+            row = int(math.ceil(reg_ind//2))
+            ax = axes[row, column]
+
+            ax.set_title(region, size=17)
+            bar_width = 0.25
+            # make the plots for COMPARING POLYA + AND -
+            for ind, polyPM in enumerate(['polyA_plus', 'polyA_minus']):
+
+                # if relative size
+                if relative:
+                    repl = rel_read_dict[polyPM]['replicate']
+                    norepl = rel_read_dict[polyPM]['not_replicate']
+                    # this is for nucleus and nucleoplasm that dont have
+                    # minus fractions
+                    if (repl == []) and (norepl == []):
+                        repl = np.zeros(len(compartments)).tolist()
+                        norepl = np.zeros(len(compartments)).tolist()
+
+                # if standard count
+                else:
+                    repl = read_dict[polyPM]['replicate']
+                    norepl = read_dict[polyPM]['not_replicate']
+                    # this is for nucleus and nucleoplasm that dont have
+                    # minus fractions
+                    if (repl == []) and (norepl == []):
+                        repl = np.zeros(len(compartments)).tolist()
+                        norepl = np.zeros(len(compartments)).tolist()
+
+                #repl = [1,3,4,5,56,6]
+                #norepl = [3,5,66,57,67] 
+                # you need the mean and std of each
+                joiner = np.array([np.array(repl), np.array(norepl)])
+                mean = joiner.mean(axis=0)
+                std = joiner.std(axis=0)
+
+                if ind == 0:
+                    ax.bar(x_arr-0.25, mean, width=bar_width, yerr=std, color =
+                           cols)
+                    ax.set_ylabel('Poly(A) reads', size=15)
+
+                if ind == 1:
+                    ax.bar(x_arr, mean, width=bar_width, yerr=std, color =
+                           cols, alpha=0.5, edgecolor = 'k')
+
+                ax.yaxis.grid(True)
+                ax.set_xticks(x_arr)
+                ax.set_xticklabels(compartments)
+                ax.set_xlim((min(x_arr)-0.5, max(x_arr)+0.5))
+
+    plt.setp([a.get_yticklabels() for a in axes[:,1]], visible=False)
+    fig.subplots_adjust(wspace=0.1)
+    fig.subplots_adjust(hspace=0.5)
+
+    # Fine-tune: remove space between subplots
+    #fig.subplots_adjust(hspace=adj)
+    plt.draw()
+
+
+    def region_comparer_old(self, dsets, everything, settings):
+        """ For each region, for each cell type, compute the read counts etc as in
+        'everything' for poly(A) minus and for replicates. Make one multi-plot per
+        region.
+        """
+
+        # 1) For all exonic regions, plot the poly(A) + read count, absolute and
+        # relative. Then do it for intronic regions. In the plot, use whole cell.
+        # Repeat for whole cell replica. TODO eh, do this? Make many different
+        # versions? one for poly(A)+ and one for poly(A) minus? Ugh? I think you
+        # must make many different varieties. First, just make it as you had
+        # planned. One big plot per region. Later you can summarize this in the way
+        # that you think is best. Maybe it's easier to summarize too when you have
+        # all the data in front of you.
+
+        #repl = {'replicate': True, 'not_replicate': False}
+        #polyplus = {'poly_plus': True, 'poly_minus': False}
+
+        ## finally, add all to this:
+        #    everything[region][cl][realcomp][replicate][polyMinus] = mdict
+        for region, reg_dict in everything.items():
+            #fig = plt.figure()
+
+            for cell_line, cl_dict in reg_dict.items():
+                # get compartments in the sorted order you want
+                compartments = [comp for comp in sorted(cl_dict.keys())]
+
+                colors = ['b', 'g', 'c', 'm', 'y', 'r']
+
+                color_map = dict(zip(compartments, colors))
+
+                cols = colors[:len(color_map)]
+
+                (fig, axes) = plt.subplots(2, 2, sharey=True)
+                bar_cl_nr = len(compartments)
+                #bar_nr = bar_cl_nr*2
+                bar_width = 0.25
+                x_arr = np.arange(1, bar_cl_nr+1) # bar at 1, 2, 3, etc
+
+                # where you keep the height of the bars
+                read_dict = {'polyA_plus': dict((rep, []) for rep in
+                               ['replicate', 'not_replicate']),
+                         'polyA_minus': dict((rep, []) for rep in
+                               ['replicate', 'not_replicate'])}
+
+                # sorting keeps the order of replic
+                for compartment, comp_dict in sorted(cl_dict.items()):
+
+                    # Get values for the bars for the different plots
+                    for replicate, rep_dict in comp_dict.items():
+                        for polypl, polyA_statistics in rep_dict.items():
+
+                            treads = polyA_statistics['total_reads']
+                            # 1) Compare biological replicates
+                            read_dict[polypl][replicate].append(treads)
+
+                # make the plots for COMPARING REPLICAETES
+                for ind, (polypm, pmdict) in enumerate(read_dict.items()):
+                    ax = axes[0,ind]
+
+                    ax.set_title('Comparing read count for {0}'.format(polypm,
+                                                                       size=20))
+                    origs = pmdict['not_replicate']
+                    ax.bar(x_arr-0.25, origs, width=bar_width, color = cols)
+
+                    repls = pmdict['replicate']
+                    ax.bar(x_arr, repls, width=bar_width, alpha=0.7, color =
+                          cols)
+
+                    ax.yaxis.grid(True)
+
+                # make the plots for COMPARING POLYA + AND -
+                ax = axes[1,0]
+                for ind, polyPM in enumerate(['polyA_plus', 'polyA_minus']):
+                    ax.set_title('Comparing read count for poly(A)+ and poly(A)-')
+
+                    repl = read_dict[polyPM]['replicate']
+                    norepl = read_dict[polyPM]['not_replicate']
+
+                    #repl = [1,3,4,5,56,6]
+                    #norepl = [3,5,66,57,67] 
+                    # you need the mean and std of each
+                    joiner = np.array([np.array(repl), np.array(norepl)])
+                    mean = joiner.mean(axis=0)
+                    std = joiner.std(axis=0)
+
+                    if ind == 0:
+                        ax.bar(x_arr-0.25, mean, width=bar_width, yerr=std, color =
+                               cols)
+
+                    if ind == 1:
+                        ax.bar(x_arr, mean, width=bar_width, yerr=std, color =
+                               cols, alpha=0.5, edgecolor = 'k')
+
+                    ax.yaxis.grid(True)
+
+                for ax in axes[0,:]:
+                    ax.set_xticks(x_arr)
+                    ax.set_xticklabels(compartments)
+                    ax.set_xlabel('Compartments and their replicates', size=20)
+
+                for ax in axes[1,:]:
+                    ax.set_xticks(x_arr)
+                    ax.set_xticklabels(compartments)
+                    ax.set_xlabel('Compartments in poly(A)+ and poly(A)-', size=20)
+
+                # set ylabel only for the left one
+                axes[0,0].set_ylabel('Number of poly(A) reads', size=20)
+                axes[1,0].set_ylabel('Number of poly(A) reads', size=20)
+                plt.setp([a.get_yticklabels() for a in axes[:,1]], visible=False)
+                fig.subplots_adjust(wspace=0.1)
+                fig.subplots_adjust(hspace=1.4)
+
+                # Fine-tune: remove space between subplots
+                #fig.subplots_adjust(hspace=adj)
+                plt.draw()
+
+                debug()
+
+
+            #ax_list.append(ax.bar(ind, pairw_matrix[0, :, 0], facecolor=cols[1],
+                                  #width=bar_width))
+
+            ## 1) Plot the first bars: the all_clusters ones.
+
+            ## Total number of bars in each complex
+            #bar_nr = len(pairw_matrix[:,0,0]) # actually =  + all_cl and - union
+            ## Set width of bars
+            #bar_width = 0.6 # total width of bar-cluster = wid*bar_nr
+            ## Get the width of the whole bar-compled
+            #complex_width = bar_width*bar_nr
+            ## Set how much space should be between the bar-complexes
+            #complex_interspace = complex_width/2
+            ## Total number of complexes is cutoff. Get the last x-coordinate.
+            #final_x = math.ceil((complex_width + complex_interspace)*cutoff)
+
+            ## Set your x-axis so that it will be wide enough for all complexes
+            ## this will be the leftmost x-position of the first bar
+            #ind = np.arange(1, final_x+1, complex_width+complex_interspace)
+            ## Shorten to make sure that this is as long as the data-points
+            #ind = ind[:cutoff]
+
+            ## Get max height of bars
+            #max_height = counter[dset_ind].max() # original clusters always highest
+
+            ## Plot the cluster counts (keep axis objects for later)
+            #ax_list = [ax.bar(ind, counter[dset_ind], facecolor=cols[0],
+                          #width=bar_width)]
+            ## Plot the union-counts on top of the cluster counts
+            #ax_list.append(ax.bar(ind, pairw_matrix[0, :, 0], facecolor=cols[1],
+                                  #width=bar_width))
+
+            ## Plot the rest of the bars.
+            #for int_ind in range(1, bar_nr):
+
+                #array = pairw_matrix[int_ind,:,0] # absolute numbers has dim 0
+                #clr = cols[int_ind+2]
+                ## ind+bar_width*(int_ind+1) adjusts the bars one 'bar_width' on the
+                ## x-axis
+                #ll = ax.bar(ind+bar_width*(int_ind), array, facecolor=clr,
+                            #width=bar_width)
+                #ax_list.append(ll)
+
+            ## format the union percentages nicely
+            #form_perc = [[format(el*100, '.0f')+'%' for el in pairw_matrix[ind,:,1]]
+                         #for ind in range(bar_nr)]
+
+
+            ## get the plot
+            #(fig, ax) = plt.subplots()
+
+
+        # 1) Compare replicates for each dataset.
+
 
 def pairwise_intersect(in_terms_of, dset_dict, cutoff):
     """
@@ -1583,8 +2044,8 @@ def get_clusters(settings):
     for dset_name in settings.datasets:
 
         clusterfile = open(cluster_files[dset_name], 'rb')
-        # Get headers
-        c_header = clusterfile.next()
+        # Skip headers
+        clusterfile.next()
 
         dset_clusters = []
 
@@ -1598,7 +2059,70 @@ def get_clusters(settings):
 
     return clusters
 
-def get_utrs(settings,speedrun=False, svm=False):
+def super_falselength(settings, speedrun, svm):
+    """ Return the super clusters with information only from the poly(A) files
+    without using length (coverage) information.
+
+    Note that while the other investigations are whole-UTR orientied, this
+    investigation considers only 1-exons by themselves.
+    """
+
+    dsets = AutoVivification()
+    regions = settings.regions
+
+    super_3utr = AutoVivification()
+
+    for region in regions:
+
+        regionfiles = settings.only_files(region)
+
+        # Check if all length files exist or that you have access
+        [verify_access(f) for f in regionfiles.values()]
+        # limit the nr of reads from each dset if you want to be fast
+        if speedrun:
+            maxlines = 1000
+
+        linenr = 0
+        for dset_name in settings.datasets:
+
+            onlyfile = open(regionfiles[dset_name], 'rb')
+
+            # Skip headers
+            onlyfile.next()
+
+            # Create the utr objects from the length file
+            utr_dict = {}
+
+            for (linenr, line) in enumerate(onlyfile):
+
+                # If a speedrun, limit the nr of 3UTRs to read.
+                if speedrun:
+                    if linenr > maxlines:
+                        break
+
+                # key = utr_ID, value = UTR instance
+                (chrm, beg, end, utr_id, strand) = line.split()[:5]
+
+                if utr_id in utr_dict:
+                    utr_dict[utr_id].clusters.append(Only(line))
+                else:
+                    utr_dict[utr_id] = BasicUtr(chrm, beg, end, strand, utr_id,
+                                               line)
+
+            # Add the utr_dict for this cellLine-compartment 
+            this_cl = dset_name.split('_')[0]
+            this_comp = '_'.join(dset_name.split('_')[1:])
+
+            dsets[region][this_cl][this_comp] = utr_dict
+
+        # You send stuff to get super 3utr. the dsets themselves and the merged
+        # clusters of the dsets
+        super_3utr[region] = get_super_3utr(dsets[region],
+                                            *merge_clusters(dsets[region]))
+
+    return dsets, super_3utr
+
+def get_utrs(settings, speedrun=False, svm=False):
     """
     Return a list of UTR instances. Each UTR instance is
     instansiated with a list of UTR objects and the name of the datset.
@@ -1614,14 +2138,16 @@ def get_utrs(settings,speedrun=False, svm=False):
     """
     # parse the datasets to get the cell lines and compartments in this dataset
     cell_lines = list(set([ds.split('_')[0] for ds in settings.datasets]))
-    compartments = list(set(['_'.join(ds.split('_')[1:]) for ds in settings.datasets]))
 
     # Initialize the dsets
     dsets = dict((cln, {}) for cln in cell_lines)
 
     # Do everything for the length files
+    # XXX you must update these things to take the region (UTR etc) into
+    # account, since it's now part of the filename
     length_files = settings.length_files()
     cluster_files = settings.polyA_files()
+
 
     if svm:
         # Get a dictionary indexed by utr_id with the svm locations
@@ -1630,9 +2156,9 @@ def get_utrs(settings,speedrun=False, svm=False):
     # Check if all length files exist or that you have access
     [verify_access(f) for f in length_files.values()]
 
-    #
+    # limit the nr of reads from each dset if you want to be fast
     if speedrun:
-        maxreads = 1000
+        maxlines = 1000
 
     linenr = 0
     for dset_name in settings.datasets:
@@ -1640,9 +2166,9 @@ def get_utrs(settings,speedrun=False, svm=False):
         lengthfile = open(length_files[dset_name], 'rb')
         clusterfile = open(cluster_files[dset_name], 'rb')
 
-        # Get headers
-        l_header = lengthfile.next()
-        c_header = clusterfile.next()
+        # Skip headers
+        lengthfile.next()
+        clusterfile.next()
 
         # Create the utr objects from the length file
         utr_dict = {}
@@ -1650,7 +2176,7 @@ def get_utrs(settings,speedrun=False, svm=False):
         for (linenr, line) in enumerate(lengthfile):
             # If a speedrun, limit the nr of 3UTRs to read.
             if speedrun:
-                if linenr > maxreads:
+                if linenr > maxlines:
                     break
             # key = utr_ID, value = UTR instance
             utr_dict[line.split()[5]] = UTR(line)
@@ -2956,7 +3482,6 @@ def novel_polyAs(dsets, super_clusters, dset_2super):
     # poly(A) site, but they are more expressed than the ratio of
     # annotated/non-annotated would hint.
 
-    # TODO HELLO WHEN YOU COME BACK. I HOPE U ARE WELL.
     # What you you need to start doing:
     # 1) Using novel_PA, Print a small table of the novel poly(A) sites you
     # find. First print for all compartments; then merge compartments and print
@@ -3144,14 +3669,142 @@ def count_polyAs(novel_PA, dsets, minRPKM):
 
     return polyAcounter
 
-def polyadenylation_comparison(dsets, super_clusters, dset_2super):
+def novel_polyAs_2(dsets, super_3utr, settings):
+    """
+    1) How many total annotated poly(A) sites
+    wc -l on the annot poly(A) file
+
+    2) How many annotated poly(A) sites in "my" 3UTRs
+    wc -l on the same file after intersection with "my" 3UTRs
+
+    3) How many novel poly(A) sites in "my" 3UTRs
+    loop through super_3utr, and get those with 2> reads
+
+    4) How many of these have been detected with ESTs/cDNA?
+    expand the polyA_db.bed-file and unique-intersect with a bedfile you write
+    of all your poly(A) sites
+    """
+
+    my_novel_polyAs = []
+
+    print('\n'+'-'*70+'\n')
+    ## 1) How many total annotated poly(A) sites (and tian tb sites)
+    #cmd1 = ['slopBed', '-b', '200', '-i', settings.annot_polyA_path, '-g',
+           #settings.hg19_path]
+
+    #f1 = Popen(cmd1, stdout=PIPE, bufsize=-1)
+
+    #cmd2 = ['mergeBed', '-s', '-i', 'stdin'] # read from stdin
+
+    #f2 = Popen(cmd2, stdin=f1.stdout, stdout=PIPE, bufsize=-1)
+
+    all_annot_polyA = sum(1 for i in open(settings.annot_polyA_path))
+    tian_db = sum(1 for i in open(settings.polyA_DB_path))
+
+    print('Number of GENCODE annotated poly(A) sites: '\
+          '{0}\n'.format(all_annot_polyA))
+    print('Number of poly(A) sites in polyA_db: '\
+          '{0}\n'.format(tian_db))
+
+    # 2) How many annotated poly(A) sites in "my" 3UTRs. How many of these do I
+    # recover? How many new do I find?
+    cmd = ['intersectBed', '-u', '-a', settings.annot_polyA_path, '-b',
+           settings.utr_exons_path]
+
+    f = Popen(cmd, stdout=PIPE)
+    # The number of annotated poly(A) sites in YOUR 3utrs
+    my_annot = sum(1 for i in f.stdout)
+    print('Number of GENCODE annotated poly(A) sites in "our" 3UTRS: '\
+          '{0}\n'.format(my_annot))
+
+    # 3)
+    # The number of annotated pol(A) sites that I recover
+    my_recover = 0
+    # The number of novel poly(A) sites in 'my' 3UTRs
+    my_novel = 0
+    for utr_id, utr in super_3utr.iteritems():
+        for super_polyA, cell_dict in utr.super_cover.items():
+            has_annot = False
+            enough_covrg = False
+            # Trust if you find pA in more than 1 cell line
+            if len(cell_dict) > 1:
+                enough_covrg = True
+            for c_line, comp_dict in cell_dict.items():
+                # Trust if you find pA in more than 1 compartment
+                if len(comp_dict) > 1:
+                    enough_covrg = True
+                for comp, polyA in comp_dict.items():
+                    if polyA.annotated_polyA_distance != 'NA':
+                        has_annot = True
+                    #  Trust if you find pA with more than 1 read
+                    if polyA.nr_support_reads > 1:
+                        enough_covrg = True
+
+            if has_annot:
+                my_recover += 1
+            if enough_covrg:
+                my_novel += 1
+
+                # Save the novel polyA sites to a list
+                if len(super_polyA.split('+')) == 2:
+                    my_novel_polyAs.append(tuple(super_polyA.split('+') + ['+']))
+                else:
+                    my_novel_polyAs.append(tuple(super_polyA.split('-') + ['-']))
+
+    print('Number of "our" poly(A) sites that are also in the GENCODe annotation: '\
+          '{0}\n'.format(my_recover))
+    print('Number of "our" poly(A) sites that are new to GENCODE: '\
+          '{0}\n'.format(my_novel))
+
+    #4) How many of these have been detected with ESTs/cDNA?
+    #expand the polyA_db.bed-file and unique-intersect with a bedfile you write
+    #of all your poly(A) sites
+    # i) write these novel polyAs to bedfile
+    out_dir = os.path.dirname(settings.annot_polyA_path)
+    temp_path = os.path.join(out_dir, 'novel_polyA.bed')
+    temp_handle = open(temp_path, 'wb')
+
+    for nov in my_novel_polyAs:
+        out = '\t'.join([nov[0], nov[1], str(int(nov[1])+1), nov[2]]) + '\n'
+        temp_handle.write(out)
+
+    temp_handle.close()
+
+    # ii) Expand all entries in annotated polyAs with 2 nt, merge these entries,
+    # and feed this into an overlapper with novel_polyA.bed; count the number of
+    # overlaps
+    cmd1 = ['slopBed', '-b', '20', '-i', settings.polyA_DB_path, '-g',
+           settings.hg19_path]
+
+    f1 = Popen(cmd1, stdout=PIPE, bufsize=-1)
+
+    cmd2 = ['mergeBed', '-s', '-i', 'stdin'] # read from stdin
+
+    f2 = Popen(cmd2, stdin=f1.stdout, stdout=PIPE, bufsize=-1)
+
+    cmd3 = ['intersectBed', '-a', temp_path, '-b', 'stdin']
+
+    f3 = Popen(cmd3, stdin=f2.stdout, stdout=PIPE, bufsize=-1)
+
+    # the number of my novel poly(A) sites that are in Tian's database
+    in_tian = sum(1 for i in f3.stdout)
+
+    print('Number of "our" novel poly(A) sites that are also in polyA_db: '\
+          '{0}\n'.format(in_tian))
+
+    print('-'*70+'\n')
+
+
+def polyadenylation_comparison(dsets, super_3utr, settings):
     """
     * compare 3UTR polyadenylation in general
     * compare 3UTR polyadenylation UTR-to-UTR
     """
 
     #### Novel polyA sites in annotated 3UTRS
-    novel_polyAs(dsets, super_clusters, dset_2super)
+    #novel_polyAs(dsets, super_clusters, dset_2super)
+    # The new version that makes stuff easy
+    novel_polyAs_2(dsets, super_3utr, settings)
 
     #### Compare the compartments; how many annotated do we find? etc.
     #compare_cluster_evidence(dsets, super_clusters, dset_2super)
@@ -3289,7 +3942,7 @@ def classic_polyA_stats(settings, dsets):
     # 1) Try to call rna_analyser methods to re-intersecting and
     # re-clustering the polyA reads
 
-    import utr_finder as finder
+    import utail as finder
 
     finder_settings = finder.Settings\
             (*finder.read_settings(settings.settings_file))
@@ -3301,7 +3954,7 @@ def classic_polyA_stats(settings, dsets):
 
     # Get the bedfile with 3UTR exons
     beddir = os.path.join(settings.here, 'source_bedfiles')
-    utr_bed = finder.get_utr_path(finder_settings, beddir)
+    utr_bed = finder.get_utr_path(finder_settings, beddir, False)
     polyA_dir = settings.polyAread_dir
 
     # Get the annotation class from utr_finder.py
@@ -3602,7 +4255,9 @@ def merge_clusters(dsets):
 
                 # The information you're looking for. You can add more later if
                 # needed. If you need everything, you can add the whole object.
-                coverages = [clu.nr_support_reads for (clu, dn) in mega_cluster]
+                #coverages = [clu.nr_support_reads for (clu, dn) in mega_cluster]
+                # NOTE: adding whole object!
+                coverages = [clu for (clu, dn) in mega_cluster]
                 dsets= [dn for (clu, dn) in mega_cluster]
 
                 # add entry to the all clusters
@@ -3909,6 +4564,339 @@ def visualizedict(dictionary):
                         continue
                     print su4.keys()[:maxdepth]
 
+def pipeline_utrpath(settings, chr1=False):
+    """
+    Return the path of the 3UTR bed file that was used for simulating the
+pipeline
+    """
+
+    import utail as finder
+
+    finder_settings = finder.Settings\
+            (*finder.read_settings(settings.settings_file))
+
+    if chr1:
+        finder_settings.chr1 = True
+
+    beddir = os.path.join(settings.here, 'source_bedfiles')
+
+    return finder.get_utr_path(finder_settings, beddir, False)
+
+def nucsec(dsets, super3UTR, settings, here):
+    """ Get the sequences of all the 3UTR objects (a few hundred megabytes of
+    memory?). Then intersect the 3UTR regions with the nucleosome bedGraph
+    files. TODO your chromatin runs are done. Read them (fast) and start reading
+    sequences and other stuffs.
+
+    IDEA: for each extra dataset, how many new (high quality) poly(A) sites are
+    found? Can we draw a nice curve to saturation? :) To do this properly, you
+    should add each 'lane' file for both biological replictates of one of the
+    cell lines. Maybe even add cytosolic samples too. This can be done easily!
+    Just define datasets: 1lane, 2lanes, 3lanes, 4lanes etc! Then also output
+    the number of reads in each (alternatively you get get this later with wc -l
+    on the raw reads file in the temp-dirs.)
+
+    Another idea: a measure for sensitivity: how many of the datasets have a
+    1-read poly(A) site that is supported by >2 in other datasets?
+
+    """
+    # 1) Get the path of the 3UTR-bedfile used in the pipeline
+    # 2) Get the path of the nucleosomal reads
+    nuclpaths = [os.path.join(here, 'nucleosomes', dset,
+                 'nucl_'+dset+'_sample.bed') for dset in dsets]
+
+    utr_path = pipeline_utrpath(settings, chr1=True)
+
+    # 3) run bed-intersect on these two files
+
+    # HEY! you are not getting the coverages 'out' of the file. The coverages
+    # are in the 'val' lane -- this is lost. I think you want intersectBed!
+    # Either that, or you need  to run coverageBed on the ORIGINAL raw reads.
+    for nupath in nuclpaths:
+        cmd = ['intersectBed', '-wa', '-wb', '-a', nupath, '-b', utr_path]
+
+        p = Popen(cmd, stdout=PIPE)
+        # 4) Loop through the output and create a nucleosome coverage 
+        for line in p.stdout:
+            (chrmP, beP, enP, covr, chrmU, beU, enU, utr_id, val,
+             strand) = line.split()
+            (tot_exons, extendby) = val.split('+')
+
+            # For now, ignore the 3UTRs with more than 1 exon
+            if int(tot_exons) != 1:
+                continue
+
+            # OK, there's something you need to know about UTR_ID
+            # UTR_ID = emsembID + _UTRnr + _EXONnr in this utr
+            local_utrID = '_'.join(utr_id.split('_')[:-1])
+
+            # DEBUGGING XXX
+            if local_utrID not in super3UTR:
+                continue
+            # XXX DEBUGGING
+            # XXX what does it mean that an utr_ID is not in super3UTR? maybe
+            # because you only get the first 1000 lines from each file!
+
+            # Get the slice of intersection and fill this slice in the coverage
+            # vector
+            vec_beg = max(int(beP), int(beU)) - int(beU)
+            vec_end = min(int(enP), int(enU)) - int(beU)
+
+            # Check if 
+            super3UTR[local_utrID].has_nucl = True
+            super3UTR[local_utrID].nucl_covr[vec_beg:vec_end] = int(covr)
+
+    # OK, now you are covering the 3UTRs with their nucleosomes. Now you just
+    # need to do some correlation.
+
+    # How to do that exactly? First: plot. Compute the average of all nucl_covr
+    # vector +/- 400 nt around each poly(A) site
+
+    # 1) Go through each poly(A) site. If there is 400 on 'both sides' of it,
+    # and if has_nucl-coverage, and if there is at least 500 nt to the next
+    # poly(A) site, add this coverage vector to a coverage matrix
+    coverages = []
+    for utr_id, utr in super3UTR.iteritems():
+        # Skip those without nucleosome coverage
+        if not utr.has_nucl:
+            continue
+        # Skip those that don't have any poly(A) clusters
+        if utr.super_cover == {}:
+            continue
+        debug()
+
+    # XXX Do the below with 1000-extended 3UTRs using biological replicates.
+
+    # TODO the below! Now you are turning to making "Roderic's table ... "
+    # NOTE this is just basics. What you really should do is go through
+    # super_3UTR and classify poly(A) sites in different ways. Then you simply
+    # write out as many bedfiles as you have classifications with +/- 1000 nt
+    # extensions. Then you intersect those extensions with the genome-covered
+    # file. Then you make graphs based on those extensions. That's more or less
+    # what Hagen did. When you do the above, also get controls: 1) non-expressed
+    # transcripts' poly(A) sites, 2) random AATAAA sites in 5'utr and cds
+    # (intergenic regions in molecular Cell paper).
+
+    debug()
+
+def get_region_sizes():
+    region_dir =\
+    '/users/rg/jskancke/phdproject/3UTR/the_project/genomic_regions_hg19'
+
+    # don't do the same job again ... only change if your ananlyssi changes!
+    sizes = {'3UTR-exonic': 29901395,
+             '3UTR-intronic': 11911101,
+             '5UTR-exonic': 8176282,
+             '5UTR-intronic': 146019292,
+             'CDS-exonic': 35392076,
+             'CDS-intronic': 976171790,
+             'Intergenic': 1607232798,
+             'Nocoding-exonic': 32682004,
+             'Noncoding-intronic': 247883855}
+
+    return sizes
+
+
+    cmd = 'ls '+ os.path.join(region_dir)
+    p = Popen(cmd, stdout=PIPE, shell=True)
+    for filename in p.stdout:
+        filename = filename.rstrip()
+
+        # skip the 'chr1' directory
+        if filename.startswith('chr'):
+            continue
+
+        reg = filename.split('_')[0]
+
+        sizes[reg] = 0
+
+        for line in open(os.path.join(region_dir, filename), 'rb'):
+            (chrm, beg, end, d,d, strand) = line.split()
+            sizes[reg] += int(end) - int(beg)
+
+    return sizes
+
+def polyA_summary(dsets, super_3utr, polyAstats, settings):
+    """ Show that the polyA minus are fishy
+
+    1) Number of total polyA sites
+    2) Number and % of polyA sites in annotation
+    3) Number and % of polyA sites with PAS
+    4) Total number of poly(A) reads
+
+    Now that you're getting lots of extra information, what about splitting this
+    up into
+
+    i) just the poly(A) reads between compartments (an anlysis of
+    fitness of the experiment) and
+
+    ii) a comparason between the strands for each compartment, cl, etc
+
+    """
+
+    # Get the sizes of the different genomic regions
+    region_sizes = get_region_sizes()
+    tot_size = sum(region_sizes.values())
+
+    minus = AutoVivification()
+
+    # make a [region][cl][compartment][polyA+/-][replica] structure; each region
+    # will have its own plots. cl will be K562 only. Then compare compartments
+    # first in terms of replicas, then in terms of polyA+/-
+    everything = AutoVivification()
+    unique_sites = AutoVivification()
+
+    for region, reg_dict in dsets.items():
+
+        print('-'*60+'\n\nResults for region: {0}\n\n'.format(region)+'-'*60+'\n')
+
+        for cl, cl_dict in reg_dict.items():
+
+            for comp, comp_dict in cl_dict.items():
+
+                minus[comp] = {'Tot pA':0, 'Annot pA':0, 'PAS pA':0, 'read_nr':0,
+                               'both_an_and_PAS':0}
+
+                for utr_id, utr in comp_dict.iteritems():
+                    if utr.clusters != []:
+                        for cls in utr.clusters:
+                            minus[comp]['Tot pA'] += 1
+                            minus[comp]['read_nr'] += cls.nr_support_reads
+
+                            if cls.annotated_polyA_distance != 'NA':
+                                minus[comp]['Annot pA'] += 1
+
+                            if cls.nearby_PAS != ['NA']:
+                                minus[comp]['PAS pA'] += 1
+
+                            if (cls.annotated_polyA_distance != 'NA') \
+                               and (cls.nearby_PAS != ['NA']):
+                                minus[comp]['both_an_and_PAS'] += 1
+
+        for (comp, count_dict) in minus.items():
+            total = count_dict['Tot pA']
+
+            annot = count_dict['Annot pA']
+            annot_frac = format(annot/total, '.2f')
+
+            pas = count_dict['PAS pA']
+            pas_frac = format(pas/total, '.2f')
+
+            read_nr = count_dict['read_nr']
+            read_per_site = format(read_nr/total, '.2f')
+
+            anYpas = count_dict['both_an_and_PAS']
+            if annot == 0:
+                anYpas_rate = 'NA'
+            else:
+                anYpas_rate = format(anYpas/annot, '.2f')
+
+            # PLOT THIS STATISTIC WHEN RUNNING ONLY FOR ANNOTATED 3UTR REGIONS
+            # YOU KNOW 3UTRs!
+            oppos_readnr = polyAstats[region][cl][comp]['Other_strand_count']
+            this_readnr = polyAstats[region][cl][comp]['This_strand_count']
+            both_readnr = polyAstats[region][cl][comp]['Both_strands_count']
+
+            ## XXX NOTE XXX when you get from the non-3UTRs, remember to take
+            #reads from both strands!!!!!!!!!!! by default you only report some
+            #of those. NOTE: this means that you have to change the part that
+            #reports polyA reads in utail. You must know if you're dealing with
+            # well-stranded annotated regions, or non-annotated regions.
+
+            print cl
+            print comp
+            print("Total poly(A) sites: {0} ".format(total))
+            print("Total poly(A) reads (per site): {0} ({1}) ".format(read_nr,
+                                                                      read_per_site))
+            print("Annotated poly(A) sites: {0} ({1})".format(annot, annot_frac))
+            print("poly(A) sites with PAS: {0} ({1})".format(pas, pas_frac))
+            print("Annotated poly(A) sites with PAS: {0} ({1})".format(anYpas,
+                                                                        anYpas_rate))
+            print("")
+
+            # get poly(A) + or - and get if it is a replicate or not it's in
+            # comp
+            realcomp = comp # successively remove 'replicate' or 'minus'
+
+            if 'Replicate' in comp:
+                replicate = 'replicate'
+                realcomp = comp.partition('Replicate')[0]
+            else:
+                replicate = 'not_replicate'
+
+            if 'Minus' in comp:
+                polyMinus = 'polyA_minus'
+                realcomp = realcomp.partition('Minus')[0]
+            else:
+                polyMinus = 'polyA_plus'
+
+            mdict = {}
+
+            mdict['total_sites'] = total
+            mdict['total_reads'] = read_nr
+
+            # How many reads normalized by region size?
+            mdict['total_reads_region_normalized'] =\
+            read_nr*(1-(region_sizes[region]/tot_size))
+            mdict['total_sites_normalized'] =\
+            total*(1-(region_sizes[region]/tot_size))
+            mdict['sites_with_pas_fraction'] = pas_frac
+
+            # finally, add all to this:
+            everything[region][cl][realcomp][replicate][polyMinus] = mdict
+
+        total_unique = 0
+        for utr_id, utr in super_3utr[region].iteritems():
+            total_unique += len(utr.super_cover)
+
+        unique_sites[region]['Total_poly(A)_sites'] = total_unique
+        unique_sites[region]['Total_normalized_poly(A)_sites'] =\
+                total_unique/region_sizes[region]
+
+        print("Total unique poly(A) sites for {1}: {0}".format(total_unique,
+                                                               region))
+
+    # HO HO HO !!!!!!!! PLOT THE EVERYTHING STATS!!!
+    p = Plotter()
+    #p.region_comparer_old(dsets, everything, settings)
+    p.region_comparer(dsets, everything, settings)
+
+def get_polyA_stats(settings):
+    """ Return a dictionary that for each [region][cell_line][compartment]
+    contains some output statistics for the poly(A) reads for that dataset.
+    """
+
+    polyA_stats = AutoVivification()
+    regions = settings.regions
+
+    for region in regions:
+
+        regionfiles = settings.polyAstats_files(region)
+
+        # Check if all length files exist or that you have access
+        [verify_access(f) for f in regionfiles.values()]
+
+        for dset_name in settings.datasets:
+
+            statsfile = open(regionfiles[dset_name], 'rb')
+
+            # Create the utr objects from the length file
+            stat_dict = {}
+
+            for (linenr, line) in enumerate(statsfile):
+                (key, value) = line.split('\t')
+
+                stat_dict[key] = value.rstrip()
+
+
+            # Add the utr_dict for this cellLine-compartment 
+            this_cl = dset_name.split('_')[0]
+            this_comp = '_'.join(dset_name.split('_')[1:])
+
+            polyA_stats[region][this_cl][this_comp] = stat_dict
+
+    return polyA_stats
+
 def main():
     # The path to the directory the script is located in
     here = os.path.dirname(os.path.realpath(__file__))
@@ -3916,20 +4904,48 @@ def main():
     # Directory paths for figures and where the output lies
     (savedir, outputdir) = [os.path.join(here, d) for d in ('figures', 'output')]
 
+    # Speedruns with chr1
+    #chr1 = False
+    chr1 = True
+
     # Read UTR_SETTINGS (there are two -- for two different annotations!)
-    settings = Settings(os.path.join(here, 'UTR_SETTINGS'), savedir, outputdir, here)
+    settings = Settings(os.path.join(here, 'UTR_SETTINGS'), savedir, outputdir,
+                        here, chr1)
+
     #settings = Settings(os.path.join(here, 'OLD_ENCODE_SETTINGS'),
-                        #savedir, outputdir, here)
+                        #savedir, outputdir, here, chr1)
 
     # Get the dsetswith utrs and their clusters from the length and polyA files
     # Optionally get SVM information as well
-    #so that you will have the same 1000 3UTRs!
-    dsets, super_3utr = get_utrs(settings, speedrun=True, svm=False)
+    # so that you will have the same 1000 3UTRs!
 
-    # TODO you have gotten the super_3utr object now. how can it help you?
-    # However: the first thing you must do is read the literature much more
-    # carefully. if you're going to be the first author, you need to know what
-    # you're talking about. second, send the stuff to Simone.
+    # For the old output files
+    #dsets, super_3utr = get_utrs(settings, speedrun=False, svm=False)
+
+    # for the onlypolyA files
+    # you now have an additional level: the "region" (often the 3UTR)
+    pickfile = 'super_pickle'
+
+    if not os.path.isfile(pickfile):
+        dsets, super_3utr = super_falselength(settings, speedrun=False, svm=False)
+        pickle.dump((dsets, super_3utr), open(pickfile, 'wb'))
+    else:
+        (dsets, super_3utr) = pickle.load(open(pickfile))
+
+    # Get the basic poly(A) stat file that is output with each run. It gives
+    # statistics on the number of reads that fall in which strand and so forth.
+    polyAstats = get_polyA_stats(settings)
+
+    # Basic poly(A) read statistics for the datasetes
+    # XXX There is something fishy about the 3UTR exon datasets. there are
+    # poly(A) reads on both strands in equal amounts. aaaaah... this is because
+    # it's just + :) nothing fishy at all!
+    polyA_summary(dsets, super_3utr, polyAstats, settings)
+
+    #### Nucleosomes (and sequences) ####
+    # TODO continue with this: you're abount to make nucleotide coverage arrays!
+    # XXX seems you're using too much ram smartypants ...
+    #nucsec(dsets, super_3utr, settings, here)
 
     #### RPKM distribution
     #### What is the distribution of 3UTR RPKMS? run this function and find out!
@@ -3949,6 +4965,10 @@ def main():
     ##### Write a bedfile with all the polyA sites confirmed by both annotation and
     ##### 3UTR poly(A) reads (For Sarah)
     #write_verified_TTS(clusters) broken, clusters replaced with dsets
+
+    # TODO the methods in this functions must be updated to use super3utr. It
+    # should be a huge hustle.
+    #polyadenylation_comparison(dsets, super_3utr, settings)
 
     ##### get the before/after coverage ratios for trusted epsilon ends
     #before_after_ratio(dsets)
@@ -3973,12 +4993,8 @@ def main():
 
     #utr_length_comparison(settings, dsets)
 
-    polyadenylation_comparison(dsets, super_cluster, dset_2super)
-
     ## The classic polyA variation distributions
     #classic_polyA_stats(settings, dsets)
-
-    debug()
 
     #reads(settings)
 
@@ -3989,6 +5005,7 @@ def main():
     #other_methods_comparison(settings)
 
     #rouge_polyA_sites(settings)
+    debug()
 
 if __name__ == '__main__':
     main()

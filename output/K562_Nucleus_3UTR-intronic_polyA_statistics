@@ -1,0 +1,16 @@
+This_strand_count	0
+Other_strand_count	255
+Both_strands_count	0
+Both strands by chance	0
+"False positive"-rate	0.0
+"False negative"-rate	0.0
+other_strand Average total reads in clusters	1.35638297872
+other_strand Std total reads in clusters	1.20089138087
+other_strand Sum unique reads	209
+other_strand Average unique reads in clusters	1.11170212766
+other_strand Std uniuqe reads in clusters	0.453439897957
+this_strand Average total reads in clusters	0
+this_strand Std total reads in clusters	0
+this_strand Sum unique reads	0
+this_strand Average unique reads in clusters	0
+this_strand Std uniuqe reads in clusters	0

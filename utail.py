@@ -23,6 +23,7 @@ def run_from_ipython():
         return True
     except NameError:
         return False
+
 if run_from_ipython():
     from IPython.Debugger import Tracer
     debug = Tracer()
@@ -43,14 +44,29 @@ class Settings(object):
     the UTR_SETTINGS file. Useful for passing to downstream code.
     """
     def __init__(self, datasets, annotation_path, annotation_format,
-                 utrfile_provided, read_limit, max_cores, chr1, hgfasta_path,
+                 regions_provided, read_limit, max_cores, chr1, hgfasta_path,
                  polyA, min_utrlen, extendby, cumul_tuning, bigwig,
-                 bigwig_datasets, bigwig_savedir, bigwig_url, gem_index):
+                 bigwig_datasets, bigwig_savedir, bigwig_url, gem_index,
+                 length, pairend, strand):
 
+        self.strand = strand # for non-annotation .bed files
+        self.pairend = pairend # are the reads pair-ended?
+        self.get_length = length
         self.datasets = datasets
         self.annotation_path = annotation_path
         self.annotation_format = annotation_format
-        self.utrfile_provided = utrfile_provided
+
+        # if annotation is not used, make a list of the region files provided
+        if regions_provided:
+            self.region_files = [os.path.split(pa)[1] for pa in regions_provided]
+            self.regionfile_provided = True
+            self.region_dir = os.path.split(regions_provided[0])[0]
+        # if not
+        else:
+            self.region_files = [False]
+            self.regionfile_provided = False
+            self.region_dir = False
+
         self.read_limit = read_limit
         self.max_cores = max_cores
         self.chr1 = chr1
@@ -76,17 +92,26 @@ class Settings(object):
 
         self.chr1 = True
         #self.chr1 = False
-        #self.read_limit = False
-        self.read_limit = 1000000
+        self.read_limit = False
+        #self.read_limit = 20000000
         self.max_cores = 3
+        self.get_length = False
+        #self.get_length = True
+        self.extendby = 100
         #self.polyA = True
-        self.polyA = False
-        #self.polyA = '/users/rg/jskancke/phdproject/3UTR/the_project/temp_files'\
-                #'/polyA_reads_HeLa-S3_Nucleus_processed_mapped.bed'
+        #self.polyA = False
+        self.polyA = '/users/rg/jskancke/phdproject/3UTR/the_project/polyA_files'\
+                '/polyA_reads_K562_Whole_Cell_processed_mapped.bed'
+        #self.polyA = '/users/rg/jskancke/phdproject/3UTR/the_project/polyA_files'\
+                #'/polyA_reads_K562_Cytoplasm_processed_mapped.bed'
         #self.bed_reads = '/users/rg/jskancke/phdproject/3UTR/the_project/temp_files'\
                 #'/reads_HeLa-S3_Nucleus.bed'
         self.bigwig = False
         #self.bigwig = True
+
+        if not self.polyA and not self.get_length:
+            print('Dude! The program does nothing! Use polyA or length or both!')
+            sys.exit()
 
 class Annotation(object):
     """
@@ -169,8 +194,8 @@ class UTR(object):
     attributes have the same value.
     """
 
-    def __init__(self, chrm, beg, end, strand, val, utr_ID, rpkm, extendby,
-                 first_covr, sequence, polyA_reads, a_polyA_sites):
+    def __init__(self, chrm, beg, end, strand, val, utr_ID, rpkm, first_covr,
+                 sequence, polyA_reads, a_polyA_sites):
 
         # variables you have to initialize
         self.chrm = chrm
@@ -178,11 +203,15 @@ class UTR(object):
         # ASSUME that the exon has been extended. This might not be the case. 
         self.beg_ext = int(beg)
         self.end_ext = int(end)
-        self.val = int(val)
+
+        # the total nr of exons and the extendby come in one bundle
+        sval, sextendby = val.split('+')
+        (self.val, self.extendby) = int(sval), int(sextendby)
+        extendby = self.extendby
+
         self.utr_ID = utr_ID
         self.strand = strand
         self.rpkm = rpkm
-        self.extendby = extendby # how far has this annotation been extended
         self.sequence = sequence
         self.polyA_reads = polyA_reads # the polyA reads
         self.a_polyA_sites = [int(site[1]) for site in a_polyA_sites] # annotated sites
@@ -222,13 +251,16 @@ class UTR(object):
         # If extended, update these values
         if extendby > 0:
 
-            # This UTR has only one exon
+            # Get different scenarios for this UTR; depending on which you do
+            # different things
+
+            # 1)This UTR has only one exon
             one_exon = (self.this_exnr == self.tot_exnr == 1)
 
-            # This is the 3' exon on the + strand
+            # 2)This is the 3' exon on the + strand
             fin_ex_plus = (strand == '+') and (self.this_exnr == self.tot_exnr > 1)
 
-            # This is the 3' exon on the - strand
+            # 3)This is the 3' exon on the - strand
             fin_ex_min = (strand=='-') and (self.tot_exnr>1) and (self.this_exnr==1)
 
             if one_exon:
@@ -252,8 +284,7 @@ class UTR(object):
         # utrs
         if self.multi_exon:
             self.begends_ext = [(self.beg_ext, self.end_ext)]
-            if extendby > 0:
-                self.begends_nonext = [(self.beg_nonext, self.end_nonext)]
+            self.begends_nonext = [(self.beg_nonext, self.end_nonext)]
 
     def __repr__(self):
         return self.utr_ID[-8:]
@@ -261,7 +292,6 @@ class UTR(object):
     def __str__(self):
         return "\nChrm\t{0}\nBeg\t{1}\nEnd\t{2}\nStrand\t{3}\n"\
                 .format(self.chrm, self.beg_nonext, self.end_nonext, self.strand)
-
 
     def is_empty(self):
         """
@@ -287,18 +317,17 @@ class UTR(object):
         written to file.
         """
 
+        # Update lengths
+        self.length_nonext += new_exon.length_nonext
+        self.length_ext += new_exon.length_ext
+
         # Update RPKM with weights on the lenghts of the two exons You need to
         # recover the number of reads falling over the UTRS 
         R_self = (self.rpkm)*(total_nr_reads)*(self.length_nonext)/(10**9)
         R_new = (new_exon.rpkm)*(total_nr_reads)*(new_exon.length_nonext)/(10**9)
 
-        newlength = self.length_nonext + new_exon.length_nonext
         # Update rpkm with these two values and the new length
-        self.rpkm = ((10**9)*(R_self + R_new))/(total_nr_reads*newlength)
-
-        # Update lengths
-        self.length_nonext += new_exon.length_nonext
-        self.length_ext += new_exon.length_ext
+        self.rpkm = ((10**9)*(R_self+R_new))/(total_nr_reads*self.length_nonext)
 
         # Update begends lists to know where all exons begin and end
         self.begends_ext.append((new_exon.beg_ext, new_exon.end_ext))
@@ -373,26 +402,23 @@ class FullLength(object):
         self.has_PAS = 'NA'
         self.eps_dstream_coverage = 'NA'
         self.eps_ustream_coverage = 'NA'
-        self.annot_dstream_coverage = 'NA'
-        self.annot_ustream_coverage = 'NA'
         self.cuml_rel_size = 'NA'
         self.annotTTS_dist = 'NA'
 
-        self.epsilon = 0.999
-
-        # How many nucleotides does this UTR possibly extend beyond the aTTS?
-        self.epsilon_beyond = 0
+        self.epsilon = 0.995
 
     def header_dict(self, this_utr):
         """
         Return a dictionary that maps header-entries to the UTR or FullLength
         instances that are being written to file. This ensures that each column
         contains the data that corresponds to the colum header.
+
+        Note that you are writing the beg/end of the extended 3UTRs.
         """
         return dict((
                     ('chrm', this_utr.chrm),
-                    ('beg', frmt(this_utr.beg_nonext)),
-                    ('end', frmt(this_utr.end_nonext)),
+                    ('beg', frmt(this_utr.beg_ext)),
+                    ('end', frmt(this_utr.end_ext)),
                     ('utr_ID', frmt(this_utr.utr_ID[:-2])),
                     ('strand', this_utr.strand),
                     ('3utr_extended_by', frmt(this_utr.extendby)),
@@ -401,13 +427,8 @@ class FullLength(object):
                     ('epsilon_downstream_covrg', frmt(self.eps_dstream_coverage)),
                     ('epsilon_upstream_covrg', frmt(self.eps_ustream_coverage)),
                     ('annotation_distance', frmt(self.annotTTS_dist)),
-                    ('annotation_downstream_covrg',
-                     frmt(self.annot_dstream_coverage)),
-                    ('annotation_upstream_covrg',
-                     frmt(self.annot_ustream_coverage)),
                     ('epsilon_PAS_type', self.has_PAS),
                     ('epsilon_PAS_distance', frmt(self.PAS_dist)),
-                    ('epsilon_covrg_beyond_aTTS', frmt(self.epsilon_beyond)),
                     ('3utr_RPKM', frmt(this_utr.rpkm)),
                     ('3utr_average_coverage', frmt(this_utr.avrg_coverage))
                      ))
@@ -430,11 +451,8 @@ class FullLength(object):
         epsilon_downstream_covrg
         epsilon_upstream_covrg
         annotation_distance
-        annotation_downstream_covrg
-        annotation_upstream_covrg
         epsilon_PAS_type
         epsilon_PAS_distance
-        epsilon_covrg_beyond_aTTS
         3utr_RPKM
         3utr_average_coverage
         """.split()
@@ -474,41 +492,15 @@ class FullLength(object):
             this_utr.avrg_coverage = sum(non_ext_covr)/len(non_ext_covr)
 
         # calculate the PAS and pas distance for 'length'
-        self.get_pas(pas_patterns, this_utr)
+        self.get_pas_epsilon(pas_patterns, this_utr)
 
         # See if there is an annotated TTS end close to the length-defined end
         self.annotTTS_dist = self.annot_TTS_dist(this_utr)
 
-        # If the epsilon_rel_size is bigger or equal to epsilon, see how many
-        # nucleotides the 'true' rel_epsilon of the the coverage vector extends
-        # beyond the aTTS
-        if self.cuml_rel_size >= self.epsilon:
-            self.epsilon_beyond = self.beyond_aTTS(this_utr)
-
-    def beyond_aTTS(self, this_utr):
-        #"""
-        #Re-calculate the coverage, but now in terms of the extended one.
-        #"""
-        # If -, reverse coverage vector for the cumulative normalization
-        if this_utr.strand == '-':
-            cov = this_utr.covr_vector[::-1]
-        else:
-            cov = this_utr.covr_vector
-
-        tot_cov = sum(cov) #sum of coverage for normalization
-        # get cumulative and normalize it at the same time
-        norm_cum_cov = [sum(cov[:i+1])/tot_cov for i in range(len(cov))]
-
-        # Go through it again, and get the index from the end where eps is.
-        # Return how much this extends from the aTTS end.
-        for indx, val in enumerate(norm_cum_cov[::-1]):
-            if val < self.epsilon:
-                return this_utr.extendby - indx
-
     def annot_TTS_dist(self, this_utr):
-        #"""
-        #Check if the 3UTR length end has an annotated TTS nearby
-        #"""
+        """
+        Check if the 3UTR length end has an annotated TTS nearby
+        """
         eps_end = this_utr.epsilon_coord
         for apoint in this_utr.a_polyA_sites:
             if eps_end-50 < apoint < eps_end+50:
@@ -517,97 +509,82 @@ class FullLength(object):
         # If you make it here, a close-by aTTS site has not been found
         return 'NA'
 
-
     def cumul_minus(self, this_utr):
-        #"""
-        #Calculate the position of cumulative coverage (e.g 0.98) relative to the
-        #length of the annotated 3UTR. This is refered to as the *epsilon*
-        #position. Calculate the coverage on both sides of this position.
-        #"""
-        covr_vector = this_utr.covr_vector
-        extendby = this_utr.extendby
-        cumul_covr = this_utr.cumul_covr
-        # NOTE the coverage arrays are in terms of the non-extended one
+        """
+        Calculate the position of cumulative coverage (e.g 0.98) relative to the
+        length of the annotated 3UTR. This is refered to as the *epsilon*
+        position. Calculate the coverage on both sides of this position.
 
-        # get the cumulated coverage resulting from the extension
-        ext_cumul = cumul_covr[extendby-1]
-        # subtract this from extension
-        if ext_cumul > 0:
-            cumul_covr = [val-ext_cumul for val in cumul_covr[extendby:]]
-        else:
-            cumul_covr = cumul_covr[extendby:]
+        This is the new version, where I calculate the epsilon coverage
+        including the extension.
+        """
+
+        covr_vector = this_utr.covr_vector
+        cumul_covr = this_utr.cumul_covr
 
         # Get normalized cuml-coverage of non-extended 3UTR. save to this_utr
-        covr_sum = sum(covr_vector[extendby:])
+        covr_sum = sum(covr_vector)
         this_utr.norm_cuml = [1-val/covr_sum for val in cumul_covr]
 
-        # Test for a special case where only the last entry has coverage
-        if covr_sum == covr_vector[-1]:
-            rel_pos = 1
-            self.cuml_rel_size = rel_pos/float(this_utr.length_nonext)
-
-        # Get the non_extended utr-relative position where 99.5% of the reads
+        # Get the extended-utr-relative position where 99.5% of the reads
         # have landed
+
+        # Assume rel_pos is 0 and then update it
+        rel_pos = 0
+
         for ind, el in enumerate(this_utr.norm_cuml):
+            # What if el is never < than self.epsilon?
             if el < self.epsilon:
                 rel_pos = ind
-                length_nonext = this_utr.length_nonext
-                self.cuml_rel_size = (length_nonext-rel_pos)/length_nonext
+                length_ext = this_utr.length_ext
+                self.cuml_rel_size = (length_ext-rel_pos)/this_utr.length_nonext
                 break
 
         # Save relative cumulative position with the this utr for later usage
         this_utr.rel_pos = rel_pos
-        #Note that rel_pos is relative to the un-extended 3UTR.
 
         # Update the epsilon coordinate relative to the genome
-        this_utr.epsilon_coord = this_utr.beg_nonext + this_utr.rel_pos
-
-        # rel_pos according to extended 3utr
-        er_pos = rel_pos + extendby
+        this_utr.epsilon_coord = this_utr.beg_ext + this_utr.rel_pos
 
         # Calculate the mean coverage on both sides of rel_pos
-        self.eps_dstream_coverage = sum(covr_vector[er_pos-50:er_pos])/float(50)
-        self.eps_ustream_coverage = sum(covr_vector[er_pos:er_pos+50])/float(50)
+        self.eps_dstream_coverage = sum(covr_vector[rel_pos-50:rel_pos])/50
+        self.eps_ustream_coverage = sum(covr_vector[rel_pos:rel_pos+50])/50
 
-        # Get the mean values 'extendby' around the annotated end too
-        self.annot_ustream_coverage = sum(covr_vector[extendby:2*extendby])/extendby
-        self.annot_dstream_coverage = sum(covr_vector[:extendby])/extendby
+        if rel_pos < 50 and rel_pos!= 0:
+            self.eps_dstream_coverage = sum(covr_vector[:rel_pos])/rel_pos
 
+        if rel_pos == 0:
+            self.eps_dstream_coverage = 0
 
     def cumul_plus(self, this_utr):
-        #"""
-        #See cumul_minus
-        #"""
+        """
+        See cumul_minus
+        """
         covr_vector = this_utr.covr_vector
-        extendby = this_utr.extendby
+        cumul_covr = this_utr.cumul_covr # extended cumul_covr
 
-        # Get normalized cuml-coverage of UN-extended 3UTR
-        cumul_covr = this_utr.cumul_covr[:-extendby] # non-extended cumul_covr
-        covr_sum = sum(covr_vector[:-extendby]) # non-extended sum(covr_vector)
+        # Get normalized cuml-coverage of EXTENDED 3UTR
+        covr_sum = sum(covr_vector) # extended sum(covr_vector)
         this_utr.norm_cuml = [val/covr_sum for val in cumul_covr]
 
-        # Test special case where only first entry has value
-        if covr_sum == covr_vector[0]:
-            rel_pos = 1
-            self.cuml_rel_size = rel_pos/float((this_utr.length_nonext))
+        # Assume rel_pos is 0 and then update it
+        rel_pos = 0
 
         # Get the point where epsilon percent of reads have landed (e.g. 99.5)
         for ind, el in enumerate(reversed(this_utr.norm_cuml)):
             if el < self.epsilon:
-                length_nonext = this_utr.length_nonext
-                rel_pos = length_nonext - ind
-                self.cuml_rel_size = rel_pos/float(length_nonext)
+                length_ext = this_utr.length_ext
+                rel_pos = length_ext - ind
+                self.cuml_rel_size = rel_pos/float(this_utr.length_nonext)
                 break
 
         # Save relative position (relative to extended 3utr) with the object
         this_utr.rel_pos = rel_pos
 
         # Update the epsilon coordinate relative to the genome
-        this_utr.epsilon_coord = this_utr.beg_nonext + this_utr.rel_pos
+        this_utr.epsilon_coord = this_utr.beg_ext + this_utr.rel_pos
 
-        # Calculate the mean coverage on both sides of this.
-        # Note for ext_mean_99: ext_rel_pos + extendby = rel_pos
-        # ext_mean_99 -> upstream_coverage
+        # Calculate the mean coverage on both sides of epsilon_pos.
         self.eps_dstream_coverage = sum(covr_vector[rel_pos:rel_pos+50])/float(50)
         self.eps_ustream_coverage = sum(covr_vector[rel_pos-50:rel_pos])/float(50)
 
@@ -618,24 +595,19 @@ class FullLength(object):
         if rel_pos == 0:
             self.eps_ustream_coverage = 0
 
-        # Get the mean values extendby around the annotated end too
-        self.annot_dstream_coverage = sum(covr_vector[-2*extendby:-extendby])/extendby
-        self.annot_ustream_coverage = sum(covr_vector[-extendby:])/extendby
 
-    def get_pas(self, pas_patterns, this_utr):
+    def get_pas_epsilon(self, pas_patterns, this_utr):
         #"""
         #Return all close-by PAS and their distances.
         #"""
 
-        utr_ID = this_utr.utr_ID
-
         if this_utr.strand == '+':
             rel_pos = this_utr.rel_pos
             # For negative strand, take the length of the sequence mins rel_pos.
-            # However, since the sequence has been extended, and rel_pos is from
-            # the non-extended sequence, subtract the extension.
+            # (because the sequence is in 5->3' direction
+
         if this_utr.strand == '-':
-            rel_pos = len(this_utr.sequence) - this_utr.extendby - this_utr.rel_pos
+            rel_pos = len(this_utr.sequence) - this_utr.rel_pos
 
         temp_PAS = []
         pas_seq = this_utr.sequence[rel_pos-40:rel_pos]
@@ -699,8 +671,8 @@ class PolyAReads(object):
 
         return dict((
                     ('chrm', this_utr.chrm),
-                    ('beg', frmt(this_utr.beg_nonext)),
-                    ('end', frmt(this_utr.end_nonext)),
+                    ('beg', frmt(this_utr.beg_ext)),
+                    ('end', frmt(this_utr.end_ext)),
                     ('utr_ID', this_utr.utr_ID[:-2]),
                     ('polyA_number', frmt(polA_nr)),
                     ('strand', this_utr.strand),
@@ -829,41 +801,41 @@ class PolyAReads(object):
 
         #3) If there is a PAS nearby? all_PAS hold all the PAS and their
         #distances for all the polyA read clusters in the 3UTR
-        self.all_PAS = self.get_pas(pas_patterns, this_utr)
+        self.all_PAS = self.get_pas(pas_patterns, this_utr.sequence)
 
-    def get_pas(self, pas_patterns, this_utr):
+    def get_pas(self, pas_patterns, sequence):
         """
-        Go through the -40 from the polyA read average. Collect PAS and distance
+        go through the -40 from the polya read average. collect pas and distance
         as you find them.
         """
 
-        all_PAS = {}
+        all_pas = {}
         for rpoint in self.rel_polyRead_sites:
-            pas_seq = this_utr.sequence[rpoint-40:rpoint]
+            pas_seq = sequence[rpoint-40:rpoint]
 
-            # special case if the polyA read is is early in the sequence
+            # special case if the polya read is is early in the sequence
             if rpoint < 40:
-                pas_seq = this_utr.sequence[:rpoint]
+                pas_seq = sequence[:rpoint]
 
-            temp_PAS = []
+            temp_pas = []
             for pas_exp in pas_patterns:
-                temp_PAS.append([(m.group(), m.start()) for m in
+                temp_pas.append([(m.group(), m.start()) for m in
                                 pas_exp.finditer(pas_seq)])
 
-            if sum(temp_PAS, []) != []:
-                has_PAS = sum(temp_PAS, [])
-                if len(has_PAS) == 1:
-                    (has_PAS, PAS_dist) = ([has_PAS[0][0]], [has_PAS[0][1]])
+            if sum(temp_pas, []) != []:
+                has_pas = sum(temp_pas, [])
+                if len(has_pas) == 1:
+                    (has_pas, pas_dist) = ([has_pas[0][0]], [has_pas[0][1]])
                 else:
-                    (has_PAS, PAS_dist) = zip(*has_PAS)
+                    (has_pas, pas_dist) = zip(*has_pas)
 
-                all_PAS[rpoint] = (has_PAS, PAS_dist)
+                all_pas[rpoint] = (has_pas, pas_dist)
 
-            # In case no PAS are found, return 'NA'
+            # in case no pas are found, return 'na'
             else:
-                all_PAS[rpoint] = ('NA', 'NA')
+                all_pas[rpoint] = ('na', 'na')
 
-        return all_PAS
+        return all_pas
 
     def read_annotation_support(self, this_utr):
         """
@@ -889,7 +861,124 @@ class PolyAReads(object):
 
         return supp
 
-def zcat_wrapper(bed_reads, read_limit, out_path, polyA, polyA_path):
+def annotation_dist(rpoint, annotated_polyA_sites, strand):
+    """
+    Check if the polyA cluster has an annotated polyA site nearby. If it has,
+    return the distance to the site. If it doesn't, return 'NA'.
+    """
+
+    for a_pA in annotated_polyA_sites:
+        apoint = int(a_pA[1])
+        if apoint-40 < rpoint < apoint+40:
+            if strand == '+':
+                return rpoint-apoint + 1
+            else:
+                return rpoint-apoint
+            # RESULT: for +, distance is one too little
+            # Otherwise, it seems good.
+            break
+
+    # If you get here, you didn't find any annotated distances
+    return 'NA'
+
+def get_pas_and_distance(rpoint, pas_patterns, sequence, settings):
+    """
+    Go through the -40 from the polya read average. Collect PAS and distance
+    as you find them. Must supply poly(A) sites relative to UTR-beg. The
+    sequence must also be relative to UTR-beg (3->5 direction)
+
+    If settings.pairend == False, consider both the sequence and its reverse
+    complement.
+    """
+
+    if settings.pairend:
+        pas_seq = sequence[rpoint-40:rpoint]
+
+        # special case if the polya read is is early in the sequence
+        if rpoint < 40:
+            pas_seq = sequence[:rpoint]
+
+        temp_pas = []
+        for pas_exp in pas_patterns:
+            temp_pas.append([(m.group(), m.start()) for m in
+                            pas_exp.finditer(pas_seq)])
+
+        if sum(temp_pas, []) != []:
+            has_pas = sum(temp_pas, [])
+            if len(has_pas) == 1:
+                (has_pas, pas_dist) = ([has_pas[0][0]], [has_pas[0][1]])
+            else:
+                (has_pas, pas_dist) = zip(*has_pas)
+
+            debug()
+            #(('GATAAA', 'AATGAA'), (22, 28))
+            # This is what you return.
+            return (has_pas, pas_dist)
+
+        # in case no pas are found, return 'na'
+        else:
+            return ('NA', 'NA')
+    else:
+
+        pas_seq = sequence[rpoint-40:rpoint]
+
+        pases = []
+        # check both strands -- this is not a good, but it's the best you've
+        # got. poly(A) reads would help -- you check the opposite strand.
+        for turn in ['norm', 'reversecomp']:
+
+            if turn == 'norm':
+                pass
+
+            if turn == 'reversecomp':
+                pas_seq = reverseComplement(pas_seq)
+
+            # special case if the polya read is is early in the sequence
+            if rpoint < 40:
+                pas_seq = sequence[:rpoint]
+
+            temp_pas = []
+            for pas_exp in pas_patterns:
+                temp_pas.append([(m.group(), m.start()) for m in
+                                pas_exp.finditer(pas_seq)])
+
+            if sum(temp_pas, []) != []:
+                has_pas = sum(temp_pas, [])
+                if len(has_pas) == 1:
+                    (has_pas, pas_dist) = ((has_pas[0][0],), (has_pas[0][1],))
+                else:
+                    (has_pas, pas_dist) = zip(*has_pas)
+
+                #(('GATAAA', 'AATGAA'), (22, 28))
+                # This is what you return.
+                pases.append((has_pas, pas_dist))
+
+            # in case no pas are found, return 'na'
+            else:
+                # If both were 'NA', return it
+                pases.append(('NA', 'NA'))
+
+        # Join the pases together. if the length is 1, it means that both are
+        # 'NA', 'NA'. Just return one of them.
+        if len(set(pases)) == 1:
+            return(pases[0])
+
+        # If not, join the two together. A zip perhaps? If one of them is 'NA',
+        # remove it, and return the other
+        else:
+            try:
+                pases.remove(('NA', 'NA'))
+                return pases[0]
+            except ValueError:
+                zipases = zip(*pases)
+                return (sum(zipases[0], ()), sum(zipases[1], ()))
+
+
+def reverseComplement(sequence):
+    complement = {'A':'T','C':'G','G':'C','T':'A','N':'N'}
+    return "".join([complement[nt] for nt in sequence[::-1]])
+
+def zcat_wrapper(bed_reads, read_limit, out_path, polyA, polyA_path, get_length):
     """
     Wrapper around zcat. Call on gem-mapped reads. Write uniquely mapped
     reads (up to 2 mismatches) to .bed file.
@@ -900,6 +989,10 @@ def zcat_wrapper(bed_reads, read_limit, out_path, polyA, polyA_path):
     the last/first 7 nucleotides must be present for the read to be considered
     as a putative poly(A) read.
     """
+
+    # if get_length is false AND! polyA is given, return nothing
+    if not get_length and polyA != True:
+        return 0
 
     # File objects for writing to
     out_file = open(out_path, 'wb')
@@ -917,13 +1010,19 @@ def zcat_wrapper(bed_reads, read_limit, out_path, polyA, polyA_path):
     # A dictionary of strands
     getstrand = {'R':'-', 'F':'+'}
 
+    acount = 0
+    tcount = 0
+
     # Keep track on the number of reads you get for the sake of RPKM
     total_reads = 0
+
     # Run zcat with -f to act as noram cat if the gem-file is not compressed
     cmd = ['zcat', '-f'] + bed_reads
     f = Popen(cmd, stdout=PIPE)
+
     if read_limit:
         count = 0
+
     for map_line in f.stdout:
         (ID, seq, quality, mapinfo, position) = map_line.split('\t')
 
@@ -933,7 +1032,7 @@ def zcat_wrapper(bed_reads, read_limit, out_path, polyA, polyA_path):
                 break
 
         # Acceptable and poly(A) reads are mutually exclusive.
-        if mapinfo in acceptable:
+        if mapinfo in acceptable and get_length == True:
             # Get chromosome
             chrom, rest = position.split(':')
             # Get the strand
@@ -959,12 +1058,17 @@ def zcat_wrapper(bed_reads, read_limit, out_path, polyA, polyA_path):
                 # Check for putative poly(A)-tail. Remove tail and write to file.
                 if (seq[-5:] == 'AAAAA') or (seq[-7:].count('A') >=6):
                     polyA_file.write(strip_tailA(seq, trail_A, non_A) + '\n')
+                    acount += 1
 
                 if (seq[:5] == 'TTTTT') or (seq[:7].count('T') >=6):
                     polyA_file.write(strip_tailT(seq, lead_T, non_T) + '\n')
+                    tcount +=1
 
     out_file.close()
     polyA_file.close()
+
+    print acount, ' acount'
+    print tcount, ' tcount'
 
     return total_reads
 
@@ -1004,7 +1108,7 @@ def strip_tailT(seq, lead_T, non_T):
 
     return seq
 
-def coverage_wrapper(dset_id, filtered_reads, utrfile_path, options):
+def coverage_wrapper(dset_id, filtered_reads, utrfile_path):
     """
     Wrapper around coverageBed. Calcuates coverage of the reads over the
     3UTR-regions, or whatever region was sent in to the program. If the region
@@ -1016,7 +1120,7 @@ def coverage_wrapper(dset_id, filtered_reads, utrfile_path, options):
     out_path = os.path.join(dirpath, 'covered_'+dset_id)
     outfile = open(out_path, 'wb')
 
-    cmd = ['coverageBed', options, '-a', filtered_reads, '-b', utrfile_path]
+    cmd = ['coverageBed', '-d', '-a', filtered_reads, '-b', utrfile_path]
 
     f = Popen(cmd, stdout=outfile)
     f.wait()
@@ -1041,8 +1145,8 @@ def join_multiexon_utr(multi_exon_utr, total_nr_reads):
 
     return main_utr
 
-def output_writer(dset_id, coverage, annotation, utr_seqs, rpkm, extendby,
-                 polyA_reads, settings, total_nr_reads, output_dir):
+def output_writer(dset_id, coverage, annotation, utr_seqs, rpkm, polyA_reads,
+                  settings, total_nr_reads, output_dir, polyA):
     """
     Putting together all the info on the 3UTRs and writing to files. Write
     one file mainly about the length of the 3UTR, and write another file about
@@ -1054,11 +1158,16 @@ def output_writer(dset_id, coverage, annotation, utr_seqs, rpkm, extendby,
 
     (dirpath, basename) = os.path.split(coverage)
 
-    # Paths and file objecutr for the two output files (length and one polyA)
+    # Paths and file object for the two output files (length and one polyA)
+
+    # Open the respective files if set in the settings
     length_outpath = os.path.join(dirpath, 'length_'+dset_id)
-    polyA_outpath = os.path.join(dirpath, 'polyA_'+dset_id)
     length_outfile = open(length_outpath, 'wb')
-    polyA_outfile = open(polyA_outpath, 'wb')
+
+    # Only make a poly(A) file if you're going to write to it
+    if polyA:
+        polyA_outpath = os.path.join(dirpath, 'polyA_'+dset_id)
+        polyA_outfile = open(polyA_outpath, 'wb')
 
     # list of PAS hexamers
     PAS_sites = ['AATAAA', 'ATTAAA', 'TATAAA', 'AGTAAA', 'AAGAAA', 'AATATA',
@@ -1080,8 +1189,8 @@ def output_writer(dset_id, coverage, annotation, utr_seqs, rpkm, extendby,
     (chrm, beg, end, utr_ID, val, strand, rel_pos, covr) = line1.split()
 
     # Create a UTR-instance
-    this_utr = UTR(chrm, beg, end, strand, val, utr_ID, rpkm[utr_ID], extendby,
-                   covr, utr_seqs[utr_ID], polyA_reads[utr_ID]['other_strand'],
+    this_utr = UTR(chrm, beg, end, strand, val, utr_ID, rpkm[utr_ID], covr,
+                   utr_seqs[utr_ID], polyA_reads[utr_ID]['other_strand'],
                    a_polyA_sites_dict[utr_ID])
 
     # Create instances for writing to two output files
@@ -1148,8 +1257,6 @@ def output_writer(dset_id, coverage, annotation, utr_seqs, rpkm, extendby,
             if calculate_and_write:
 
                 # Calculate output values like 99.5% length, cumulative coverage, etc
-                # BUG: adding coverage vectors is OK. Adding cumul vectors NOT
-                # SO IF THEY HAVE BEEN CUMUL'ed INDIVIDUALLY BEFORE. HAVE THEY?
                 length_output.calculate_output(pas_patterns, this_utr)
                 pAread_output.calculate_output(pas_patterns, this_utr)
 
@@ -1157,14 +1264,13 @@ def output_writer(dset_id, coverage, annotation, utr_seqs, rpkm, extendby,
                 length_output.write_output(length_outfile, this_utr)
                 pAread_output.write_output(polyA_outfile, this_utr)
 
-
                 # If tuning, calculate the tuning variables and write to file
                 if settings.cumul_tuning:
                     calc_write_tuning(tuning_handle, length_output, this_utr)
 
             # Update to the new utr and start the loop from scratch
             this_utr = UTR(chrm, beg, end, strand, val, utr_ID, rpkm[utr_ID],
-                           extendby, covr, utr_seqs[utr_ID],
+                           covr, utr_seqs[utr_ID],
                            polyA_reads[utr_ID]['other_strand'],
                            a_polyA_sites_dict[utr_ID])
 
@@ -1174,7 +1280,8 @@ def output_writer(dset_id, coverage, annotation, utr_seqs, rpkm, extendby,
                 pAread_output = PolyAReads(utr_ID)
 
             # Assert that the next utr has correct info
-            assert utr_exons[utr_ID] == (chrm, int(beg), int(end), strand), 'Mismatch'
+            assert utr_exons[utr_ID] == (chrm, int(beg), int(end),
+                                         strand), 'Mismatch'
 
     # Close opened files
     length_outfile.close()
@@ -1195,8 +1302,8 @@ def calc_write_tuning(tuning_handle, length_output, this_utr):
     if this_utr.is_empty():
         return
 
-    # Get the absolute end-position of the 99.5%, relative to the non-extended UTR
-    end_pos = this_utr.beg_nonext + this_utr.rel_pos
+    # Get the absolute end-position of the 99.5%, relative to the extended UTR
+    end_pos = this_utr.epsilon_coord
 
     # Get the cumulative coverage and +/- 50nt coverage of the closest pA site
     write_output = False
@@ -1208,8 +1315,9 @@ def calc_write_tuning(tuning_handle, length_output, this_utr):
             write_output = True
 
     if write_output:
-        # There could be 3 clusters within 50 nt of the end_pos. You need to
-        # choose the most downstream cluster.
+
+         #There could be 3 clusters within 50 nt of the end_pos. You need to
+         #choose the most downstream cluster.
         close_sites.sort()
         if this_utr.strand == '+':
             pAsite = close_sites[-1]
@@ -1219,23 +1327,29 @@ def calc_write_tuning(tuning_handle, length_output, this_utr):
         # Get the absolute distance from the polyA site
         pA_dist = pAsite-end_pos
 
-        # Get the relative-to-non-extended position of the polyA site 
-        rel_pA_pos = pAsite - this_utr.beg_nonext
+        # XXX now skipping the coverage on both sides of the polyA read. That
+        # isn't very informative.
 
-        covr_vec = this_utr.covr_vector
+        ## Get the relative-to-extended position of the polyA site 
+        ## HEY! you can't switch between genomic coordinates and covr_vector
+        ## coordinates. For multi-3UTRs it might not matter at all.
 
-        # Get the coverage 50 nt on both sides of the polyA site
-        # No worried about extension -- it is in the end.
-        if this_utr.strand == '+':
-            d_stream_covr = sum(covr_vec[rel_pA_pos-50:rel_pA_pos])/float(50)
-            u_stream_covr = sum(covr_vec[rel_pA_pos:rel_pA_pos+50])/float(50)
+        #rel_pA_pos = pAsite - this_utr.beg_ext
 
-        # if negative strand and extended, become relative to the extended one
-        if this_utr.strand == '-':
-            if this_utr.extendby:
-                rel_ex_pA_pos = rel_pA_pos + this_utr.extendby
-            d_stream_covr = sum(covr_vec[rel_ex_pA_pos:rel_ex_pA_pos+50])/float(50)
-            u_stream_covr = sum(covr_vec[rel_ex_pA_pos-50:rel_ex_pA_pos])/float(50)
+        #covr_vec = this_utr.covr_vector
+
+        ## Get the coverage 50 nt on both sides of the polyA site
+        ## No worried about extension -- it is in the end.
+        #if this_utr.strand == '+':
+            #d_stream_covr = sum(covr_vec[rel_pA_pos-50:rel_pA_pos])/float(50)
+            #u_stream_covr = sum(covr_vec[rel_pA_pos:rel_pA_pos+50])/float(50)
+
+        ## if negative strand and extended, become relative to the extended one
+        #if this_utr.strand == '-':
+            #if this_utr.extendby:
+                #rel_ex_pA_pos = rel_pA_pos + this_utr.extendby
+            #d_stream_covr = sum(covr_vec[rel_ex_pA_pos:rel_ex_pA_pos+50])/float(50)
+            #u_stream_covr = sum(covr_vec[rel_ex_pA_pos-50:rel_ex_pA_pos])/float(50)
 
         # Get the cumulative coverage of the polyA site
         # However, watch out for reads that land outside the non-extended
@@ -1243,27 +1357,32 @@ def calc_write_tuning(tuning_handle, length_output, this_utr):
         # For now I simply assign them to the last value of the region.. 
         # it's not satisfactory!
 
-        if (rel_pA_pos < 0) or (rel_pA_pos >= this_utr.length_nonext):
-            if this_utr.strand == '+':
-                cumul_pA = this_utr.norm_cuml[-1]
-            if this_utr.strand == '-':
-                cumul_pA = this_utr.norm_cuml[0]
-        else:
-            cumul_pA = this_utr.norm_cuml[rel_pA_pos]
+        #if (rel_pA_pos < 0) or (rel_pA_pos >= this_utr.length_nonext):
+            #if this_utr.strand == '+':
+                #cumul_pA = this_utr.norm_cuml[-1]
+            #if this_utr.strand == '-':
+                #cumul_pA = this_utr.norm_cuml[0]
+        #else:
+            #cumul_pA = this_utr.norm_cuml[rel_pA_pos]
 
-        d_stream_covr = str(d_stream_covr)
-        u_stream_covr = str(u_stream_covr)
+        #d_stream_covr = str(d_stream_covr)
+        #u_stream_covr = str(u_stream_covr)
+        #cumul_pA = str(cumul_pA)
+
         pA_dist = str(pA_dist)
-        cumul_pA = str(cumul_pA)
         rpkm = str(this_utr.rpkm)
         length = str(this_utr.length_nonext)
         default_pos = str(this_utr.rel_pos)
         strand = str(this_utr.strand)
+
         # Write To file
         tuning_handle.write('\t'.join([this_utr.utr_ID[:-2], default_pos,
-                                       pA_dist, cumul_pA, d_stream_covr,
-                                       u_stream_covr, rpkm, length, strand]) +
-                            '\n')
+                                       pA_dist, rpkm, length, strand]) + '\n')
+
+        #tuning_handle.write('\t'.join([this_utr.utr_ID[:-2], default_pos,
+                                       #pA_dist, cumul_pA, d_stream_covr,
+                                       #u_stream_covr, rpkm, length, strand]) +
+                            #'\n')
 
 def verify_access(f):
     """
@@ -1290,7 +1409,7 @@ def read_settings(settings_file):
     expected_fields = ['DATASETS', 'ANNOTATION', 'CPU_CORES', 'RESTRICT_READS',
                        'CHROMOSOME1', 'SUPPLIED_3UTR_BEDFILE', 'HG_FASTA',
                        'POLYA_READS', 'MIN_3UTR_LENGTH', 'EXTEND', 'PLOTTING',
-                       'UTR_LENGTH_TUNING', 'BIGWIG']
+                       'UTR_LENGTH_TUNING', 'BIGWIG', 'GET_LENGTH']
 
     missing = set(conf.sections()) - set(expected_fields)
 
@@ -1302,17 +1421,27 @@ def read_settings(settings_file):
 
     # annotation
     try:
-        annotation = conf.getboolean('ANNOTATION', 'annotation_path')
+        annotation_path = conf.getboolean('ANNOTATION', 'annotation_path')
     except ValueError:
         annotation_path = conf.get('ANNOTATION', 'annotation_path')
         verify_access(annotation_path)
         annotation_format = conf.get('ANNOTATION', 'annotation_format')
 
+
+    # length yes or no
+    length = conf.getboolean('GET_LENGTH', 'length')
+
     # datasets
-    datasets = dict((dset, files.split(':')) for dset, files in conf.items('DATASETS'))
+    pairend = conf.getboolean('DATASETS', 'pairend')
+
+    datasets = dict((dset, files.split(':')) for dset,
+                    files in conf.items('DATASETS'))
+    # pop the 'pairend' part ...
+    datasets.pop('pairend')
+
 
     # Go through all the items in 'datsets'. Pop the directories from the list.
-    # They are likely to be shortcuts.
+    # They are likely to be shortcuts. Also remove the boolean pairend
     for (dset, dpaths) in datasets.items():
         for pa in dpaths:
             if os.path.isdir(pa):
@@ -1344,15 +1473,17 @@ def read_settings(settings_file):
 
     # supplied 3utr bedfile
     try:
-        utr_bedfile_path = conf.getboolean('SUPPLIED_3UTR_BEDFILE',
+        utr_bedfile_paths = conf.getboolean('SUPPLIED_3UTR_BEDFILE',
                                            'utr_bed_path')
     except ValueError:
-        utr_bedfile_path = conf.get('SUPPLIED_3UTR_BEDFILE', 'utr_bed_path')
-        verify_access(utr_bedfile_path) # Check if is a file
+        utr_bedfile_paths = conf.get('SUPPLIED_3UTR_BEDFILE',
+                                    'utr_bed_path').split(':')
+        [verify_access(path) for path in utr_bedfile_paths] # Check if is a file
+    strand = conf.getboolean('SUPPLIED_3UTR_BEDFILE', 'strand')
 
     # If both 'annotation' and '3utr_bedfile' are false, your program isn't
     # going to go too far
-    if not annotation_path and not utr_bedfile_path:
+    if not annotation_path and not utr_bedfile_paths[0]:
         print('You must either use a GENCODE annotation or supply a bedfile'\
               ' yourself. Not both can be false.')
         sys.exit()
@@ -1386,6 +1517,10 @@ def read_settings(settings_file):
         polyA = conf.get('POLYA_READS', 'polya')
         verify_access(polyA) # Check if is a file
 
+    if not polyA and not length:
+        print('You must have either "length" or "polya" (or both) as true ...)')
+        sys.exit()
+
     # Get the gem_index_file
     gem_index = conf.get('POLYA_READS', 'gem_mapper_index')
     # If poly(A) reads == True, you need the index file for the gem-mapper
@@ -1400,42 +1535,52 @@ def read_settings(settings_file):
         print('To tune the cumulative value, you need to enable polyA reads')
         sys.exit()
 
-    return(datasets, annotation_path, annotation_format, utr_bedfile_path,
+    # if both an annotation and bedfiles are supplied, give the user warning
+    # about this
+    if annotation_path and utr_bedfile_paths:
+        print('\nYou have supplied a path to an annotation as well as a '\
+              'bedfile (or more) with genomic regions as input. The default '\
+             'setting is to ignore the annotation in this case. If you want to '\
+              'use the annotation and not the supplied bedfiles, set:\n\n'\
+             '"utr_bed_path = false"\n\nin the settings file.')
+
+        leave = raw_input('\nPress A to abort or ENTER to continue: ')
+        if leave == 'A':
+            print('Aborting ...')
+            sys.exit()
+
+    return(datasets, annotation_path, annotation_format, utr_bedfile_paths,
            read_limit, max_cores, chr1, hg_fasta, polyA, min_utrlen, extendby,
            cuml_tuning, bigwig, bigwig_datasets, bigwig_savedir, bigwig_url,
-           gem_index)
+           gem_index, length, pairend, strand)
 
 def get_a_polyA_sites_path(settings, beddir):
     """
     Call the *annotation_parser* module to obtain the locations of all annotated
     utr-ends, in the program called 'a_polyA_sites'.
+
+    Note that the user needs to specify the annotated polyA sites separately
+    from the region-file. We cannot simply assume that the region files are
+    3UTRs
     """
 
     # If options are not set, make them a 0-string define options
     if settings.chr1:
-        chrm = '_chr1'
+        chrm = '_chr1_'
     else:
         chrm = ''
 
-    if settings.utrfile_provided:
-        user_provided = '_user_provided'
-    else:
-        user_provided = ''
+    # If an annotation is provided, get polyA sites from the annotation
+    if settings.annotation_path:
+        aname = os.path.splitext(os.path.split(settings.annotation_path)[1])[0]
 
-    # utr path
-    a_polyA_sites_filename = 'a_polyA_sites' + chrm + user_provided + '.bed'
-    polyA_site_bed_path = os.path.join(beddir, a_polyA_sites_filename)
+        a_polyA_sites_filename = 'a_polyA_sites' + chrm + aname + '.bed'
+        polyA_site_bed_path = os.path.join(beddir, a_polyA_sites_filename)
 
-    ## If the file already exists, don't make it again
-    if os.path.isfile(polyA_site_bed_path):
-        return polyA_site_bed_path
+        ## If the file already exists, don't make it again
+        if os.path.isfile(polyA_site_bed_path):
+            return polyA_site_bed_path
 
-    # If a utrfile is provided, never re-make from annotation
-    if settings.utrfile_provided:
-        polyA_site_bed_path = shape_provided_bed(polyA_site_bed_path, settings)
-
-    # If utrfile is not provided, get it yourself from a provided annotation
-    if not settings.utrfile_provided:
         if settings.chr1:
             settings.annotation_path = get_chr1_annotation(settings, beddir)
 
@@ -1446,18 +1591,25 @@ def get_a_polyA_sites_path(settings, beddir):
         print('\tTime taken to generate polyA-bedfile: {0}\n'\
               .format(time.time()-t1))
 
+    else:
+        """ Since you're not getting information from the annotation, just make
+        an empty file
+        """
+        handle = open(polyA_site_bed_path, 'wb')
+        handle.close()
+
     return polyA_site_bed_path
 
-def get_utr_path(settings, beddir, rerun_annotation_parser):
+def get_utr_path(settings, beddir, rerun_annotation_parser, region_file):
     """
     Get 3utr.bed-file path from annotation via annotation_parser module.
     """
-
     # Put together the name of the output file. The name depends on the options
     # that were used to get it.
     # If options are not set, make them a 0-string
+
     if settings.extendby:
-        ext = '_extendby_'+str(settings.extendby)
+        ext = '_extendby_max_'+str(settings.extendby)
     else:
         ext = ''
 
@@ -1466,31 +1618,36 @@ def get_utr_path(settings, beddir, rerun_annotation_parser):
     else:
         chrm = ''
 
-    if settings.utrfile_provided:
+    if settings.regionfile_provided:
         user_provided = '_user_provided'
     else:
         user_provided = ''
 
     # utr path
-    utr_filename = '3utrs' + chrm + ext + user_provided + '.bed'
-    utr_bed_path = os.path.join(beddir, utr_filename)
+    if not settings.regionfile_provided:
+        utr_filename = '3UTR_exons' + chrm + ext + user_provided + '.bed'
+        utr_bed_path = os.path.join(beddir, utr_filename)
+    else:
+        utr_filename = os.path.split(region_file)[1]
+        utr_bed_path = os.path.join(beddir, utr_filename)
 
     # if you're not rerunning the annotation, check if file's already there
     if not rerun_annotation_parser:
         if os.path.isfile(utr_bed_path):
             return utr_bed_path
 
-    # Reload genome for any changes
+    ## Reload genome for any changes if asked for
     if rerun_annotation_parser:
         reload(genome)
 
-    # If a utrfile is provided, never re-make from annotation, but shape it to
-    # your needs? This is a bit unfinished.
-    if settings.utrfile_provided:
-        utr_bed_path = shape_provided_bed(utr_bed_path, settings)
+    # If a regionfile is provided, never re-make from annotation, but shape it to
+    if settings.regionfile_provided:
+        utr_bed_path = shape_provided_bed(utr_bed_path, settings, region_file)
 
-    # If utrfile is not provided, get it yourself from a provided annotation
-    if not settings.utrfile_provided:
+        return utr_bed_path
+
+    # If regionfile is not provided, get it yourself from a provided annotation
+    if not settings.regionfile_provided:
         if settings.chr1:
             settings.annotation_path_chr1 = get_chr1_annotation(settings, beddir)
 
@@ -1538,15 +1695,16 @@ def get_chr1_annotation(settings, beddir):
 
     return outpath
 
-def shape_provided_bed(utr_bed_path, settings):
+def shape_provided_bed(utr_bed_path, settings, region_file):
     """
     Go through provided bedfile and shape it to confirm with internal standards
     in the program. Save in the bed-file directory.
     """
 
     outfile = open(utr_bed_path, 'wb')
+    region_path = os.path.join(settings.region_dir, region_file)
 
-    for line in open(settings.utrfile_provided, 'rb'):
+    for line in open(region_path, 'rb'):
         (chrm, beg, end, name, val, strand) = line.split()[:6]
 
         end = int(end)
@@ -1558,15 +1716,8 @@ def shape_provided_bed(utr_bed_path, settings):
                 continue
 
         # Skip short utrs
-        if end - beg < settings.utrlen:
+        if end - beg < settings.min_utrlen:
             continue
-
-        # Extend by the nr of nucleotides specified
-        if settings.extendby:
-            if strand == '+':
-                end = end + settings.extendby
-            if strand == '-':
-                beg = beg - settings.extendby
 
         outfile.write('\t'.join([chrm, str(beg), str(end), name, val,
                                  strand])+'\n')
@@ -1597,6 +1748,7 @@ def get_rpkm(reads, utrfile_path, total_reads, utrs, extendby, dset_id):
     # Length of UTR
     # # of reads landing in the UTR.
     rpkm = {}
+
     # If the bed-file has been extended, we need to unextend it. HOWEVER, we
     # should ONLY un-extend the 3' exons of the UTR. Internal exons have not
     # been extended and should not be touched.
@@ -1609,27 +1761,15 @@ def get_rpkm(reads, utrfile_path, total_reads, utrs, extendby, dset_id):
             (chrm, beg, end, utr_id, val, strand) = line.split()
 
             # Reverse the extensions so you get correct RPKM!
-            # Only extend those that were extended in the first place!
-            #ENSG00000078369_1_2	2	-
-            # This means UTR number 1 from this gene, exon number 2 from this
-            # UTR, and there are 2 utrs in total.
+            # Those that are extended have a val= 1+1000 to show that they are
+            # extended. Those that are nto extened have a 1+0
 
-            this_ex_nr = int(utr_id.split('_')[-1])
-            tot_exnr = int(val)
+            extended_by = int(val.split('+')[1])
 
-            if this_ex_nr == tot_exnr == 1:
-                if strand == '+':
-                    end = int(end) - extendby
-                if strand == '-':
-                    beg = int(beg) + extendby
-
-            if this_ex_nr == tot_exnr > 1:
-                if strand == '+':
-                    end = int(end) - extendby
-
-            if (tot_exnr > 1) and (this_ex_nr == 1):
-                if strand == '-':
-                    beg = int(beg) + extendby
+            if strand == '+':
+                end = int(end) - extended_by
+            if strand == '-':
+                beg = int(beg) + extended_by
 
             temp_handle.write('\t'.join([chrm, str(beg), str(end), utr_id, val,
                                          strand]) + '\n')
@@ -1701,7 +1841,6 @@ def map_reads(processed_reads, avrg_read_len, settings):
     mapped_reads = os.path.splitext(processed_reads)[0]+'_mapped'
 
     # Naming the final output
-    base_dir = os.path.dirname(os.path.split(mapped_reads)[0])
     polybed_path = os.path.splitext(processed_reads)[0] + '_mapped.bed'
 
     # How many mismatches depend on read length
@@ -1745,7 +1884,8 @@ def map_reads(processed_reads, avrg_read_len, settings):
 
     return polybed_path
 
-def get_bed_reads(dset_reads, dset_id, read_limit, tempdir, polyA):
+def get_bed_reads(dset_reads, dset_id, read_limit, tempdir, polyA, get_length,
+                  polyA_path):
     """
     Get reads from file. Determine file-type. If gem, extract from gem and
     convert to bed. If .bed, concatenate the bedfiles and convert them to the
@@ -1754,8 +1894,6 @@ def get_bed_reads(dset_reads, dset_id, read_limit, tempdir, polyA):
 
     # Path of .bed output
     out_path = os.path.join(tempdir, 'reads_'+dset_id+'.bed')
-    # Define the path of the polyA file
-    polyA_path = os.path.join(tempdir, 'polyA_reads_'+dset_id+'.fa')
 
     # allowed suffixes:
     # [gem, map, gz]
@@ -1764,7 +1902,6 @@ def get_bed_reads(dset_reads, dset_id, read_limit, tempdir, polyA):
     # [bed.gz]
     ok_sufx = ['gem', 'map', 'gz', 'bed']
 
-    nr_files = len(dset_reads)
     # Building a suffix: Start with a '.' separated list of
     # the file name. Proceed backwards, adding to reverese_suffix if the entry
     # is in the allowed group.
@@ -1778,7 +1915,7 @@ def get_bed_reads(dset_reads, dset_id, read_limit, tempdir, polyA):
         print('Obtaining reads from mapping for {0} ...\n'.format(dset_id))
         # Get only the uniquely mapped reads (up to 2 mismatches)
         total_reads = zcat_wrapper(dset_reads, read_limit, out_path, polyA,
-                                   polyA_path)
+                                   polyA_path, get_length)
 
     # If in bed-format, also run zcat -f on all the files to make one big
     # bedfile. How to restrict reads in this case?? No restriction?
@@ -1922,22 +2059,21 @@ def cluster_loop(ends):
     # Return the clusters and their average
     return (averages_cluster, clusters)
 
-def cluster_polyAs(utr_polyAs, utrs, polyA):
+def cluster_polyAs(settings, utr_polyAs, utrs, polyA):
     """
     For each UTR, save the clustered poly(A)-reads from both strands. For
     double-stranded reads, it is known that the poly(A) reads map to the
-    opposite side of the strand it came from. This information is helpful in
-    estimating the false positive rate.
+    opposite side of the strand it came from. You count the number of reads
+    landing in different strands and use the ratio as a false-positive rate. You
+    also count the number of identical reads in both strands as a measure of how
+    many on the self-strand are genuine!
     """
 
-    # Ff there are no polyA reads or polyA is false: return empty lists 
+    # If there are no polyA reads or polyA is false: return empty lists 
     if utr_polyAs == {} or polyA == False:
         polyA_reads = dict((utr_id, {'this_strand':[[],[]], 'other_strand':[[], []]})
                            for utr_id in utrs)
-        return polyA_reads
-
-    plus_values = {'+': [], '-':[]}
-    minus_values = {'+': [], '-':[]}
+        return polyA_reads, {}
 
     polyA_reads = {}
 
@@ -1945,28 +2081,44 @@ def cluster_polyAs(utr_polyAs, utrs, polyA):
         utr_info = utrs[utr_id]
         real_strand = utr_info[3]
 
-        if real_strand == '+':
-            other_strand_ends = sorted([tup[2] for tup in polyAs if tup[5] == '-'])
-            this_strand_ends = sorted([tup[1] for tup in polyAs if tup[5] == '+'])
+        # separate into two if pair-end reads
+        if settings.pairend:
+            if real_strand == '+':
+                other_strand_ends = sorted([tup[2] for tup in polyAs
+                                            if tup[5] == '-'])
+                this_strand_ends = sorted([tup[1] for tup in polyAs
+                                           if tup[5] == '+'])
 
-        if real_strand == '-':
-            other_strand_ends = sorted([tup[1] for tup in polyAs if tup[5] == '+'])
-            this_strand_ends = sorted([tup[2] for tup in polyAs if tup[5] == '-'])
+            if real_strand == '-':
+                other_strand_ends = sorted([tup[1] for tup in polyAs
+                                            if tup[5] == '+'])
+                this_strand_ends = sorted([tup[2] for tup in polyAs
+                                           if tup[5] == '-'])
 
-        # Getting the actual clusters
+        # if not, throw all reads into 'other_strand'
+        else:
+            other_strand_ends = sorted([tup[2] for tup in polyAs
+                                        if tup[5] == '-'])
+            this_strand_ends = sorted([tup[1] for tup in polyAs
+                                       if tup[5] == '+'])
+
+            other_strand_ends = sorted(this_strand_ends + other_strand_ends)
+
+            this_strand_ends = []
+
         polyA_reads[utr_id] = {'this_strand': cluster_loop(this_strand_ends),
                                'other_strand': cluster_loop(other_strand_ends)}
 
     # For those utr_id that don't have a cluster, give them an empty list; ad hoc
     for utr_id in utrs:
         if utr_id not in polyA_reads:
-            polyA_reads[utr_id] = {'this_strand':[[],[]], 'other_strand':[[],[]]}
+            polyA_reads[utr_id] = {'this_strand': [[],[]], 'other_strand': [[],[]]}
 
     return polyA_reads
 
 
 def pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs, settings,
-             annotation, DEBUGGING):
+             annotation, DEBUGGING, polyA_cache, here):
     """
     Get reads, get polyA reads, cluster polyA reads, get coverage, combine it in
     a 3UTr object, do calculations on the object attributes, write calculation
@@ -1978,25 +2130,54 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs, settings,
     extendby = settings.extendby
     read_limit = settings.read_limit
     polyA = settings.polyA
+    get_length = settings.get_length
+    utr_exons = annotation.utr_exons
+
     # Define utr_polyAs in case polyA is false
     utr_polyAs = {}
 
     t0 = time.time()
 
-    # IF DEBUGGING AND READS IN BED FORMAT ARE SUPPLIED
-    # If both the bedfiles of the reads and the bedfiles of the polyA files are
-    # submitted for debugging purposes, don't get reads anew
-    if DEBUGGING and (type(settings.bed_reads) == str) and (type(polyA) == str):
-        bed_reads = settings.bed_reads
-        total_nr_reads = sum(1 for line in open(bed_reads, 'rb'))
-        p_polyA_bed = polyA
+    # Define the path of the polyA file
+    just_dset = '_'.join(dset_id.split('_')[:-1])
+    polyA_path = os.path.join(tempdir, 'polyA_reads_'+just_dset+'.fa')
 
-    # Get the normal reads (in bed format). Get the polyA reads if this option is set.
-    # As well get the total number of reads for calculating the RPKM later.
-    # p_polyA_bed stands for putative polyA reads
-    else:
-        (bed_reads, p_polyA_bed, total_nr_reads) = get_bed_reads(dset_reads, dset_id,
-                                                          read_limit, tempdir, polyA)
+    # if the poly(A) reads have already been mapped and saved to poly(A) cache,
+    # don't get them again
+
+    if polyA_cache:
+
+        if DEBUGGING:
+            here = os.path.join(here, 'DEBUGGING')
+
+        cache_dir = os.path.join(here, 'polyA_cache')
+
+        if not os.path.isdir(cache_dir):
+            os.makedirs(cache_dir)
+
+        # TODO make the cache region-independent. It should only depend on the
+        # dataset. ffs. fer fex sake. ffs. 
+        polydone_path = os.path.splitext(os.path.split(polyA_path)[1])[0]
+        polyA_cached_path = os.path.join(cache_dir, polydone_path+\
+                                         '_processed_mapped.bed')
+
+        cache_path = os.path.join(cache_dir, polyA_cached_path)
+
+        # If the file exists, make this the poly(A) path
+        if os.path.isfile(cache_path):
+            polyA = cache_path
+
+    # Get the normal reads (in bed format), if this option is set. Get the polyA
+    # reads if this option is set. As well get the total number of reads for
+    # calculating the RPKM later. p_polyA_bed stands for putative polyA reads
+    # If length is false: don't get normal reads.
+
+    all_reads = get_bed_reads(dset_reads, dset_id, read_limit, tempdir,
+                              polyA, get_length, polyA_path)
+
+    # Extract from all_reads. polyA might have been modified from True to
+    # 'some_path' if cached polyA reads have been found
+    (bed_reads, p_polyA_bed, total_nr_reads) = all_reads
 
     # If polyA is a string, it is a path of a bedfile with to polyA sequences
     if type(polyA) == str:
@@ -2004,18 +2185,23 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs, settings,
         # Get a dictionary for each utr_id with its overlapping polyA reads
         utr_polyAs = get_polyA_utr(polyA_bed_path, utrfile_path)
 
-    # If polyA is True, trim the extracte polyA reads, remap them, and save the
-    # uniquely mappign ones to bed format
+    # If polyA is True, trim the extracted polyA reads, remap them, and save the
+    # uniquely mapping ones to bed format
     elif polyA == True:
         # PolyA pipeline: remove low-quality reads, remap, and -> .bed-format:
 
         # 1) Process reads by removing those with low-quality, and removing the
         #    leading Ts and/OR trailing As.
-        print('Processing poly(A) reads for {0}...'.format(dset_id))
+        print('Processing and remapping poly(A)-reads for {0}...'.format(dset_id))
         processed_reads, avrg_read_len = process_reads(p_polyA_bed)
 
         # 2) Map the surviving reads to the genome and return unique ones
         polyA_bed_path = map_reads(processed_reads, avrg_read_len, settings)
+
+        # 3) If caching is on, save the polyA_bed_path to the cache dir
+        #if polyA_cache and read_limit == False:
+        if polyA_cache:
+            shutil.copyfile(polyA_bed_path, cache_path)
 
         # Get a dictionary for each utr_id with its overlapping polyA reads
         utr_polyAs = get_polyA_utr(polyA_bed_path, utrfile_path)
@@ -2023,33 +2209,368 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs, settings,
     # Cluster the poly(A) reads for each utr_id. If polyA is false or no polyA
     # reads were found, return a placeholder, since this variable is assumed to
     # exist in downstream code.
-    polyA_reads = cluster_polyAs(utr_polyAs, annotation.utr_exons, polyA)
+    # If reads are not paired ended, poly(A) reads from both strands will be
+    # merged to one strand. Only with paried ended reads can we know the
+    # strandedness of the transcript.
+    polyA_reads = cluster_polyAs(settings, utr_polyAs, utr_exons, polyA)
 
-    # Get the RPKM
-    print('Obtaining RPKM for {0} ...\n'.format(dset_id))
-    rpkm = get_rpkm(bed_reads, utrfile_path, total_nr_reads, annotation.utr_exons,
-                    extendby, dset_id)
+    # If polyA is true, write the polyA-statistics file!
+    if polyA:
+        output_path = os.path.join(output_dir, dset_id+'_polyA_statistics')
+        write_polyA_stats(polyA_reads, utr_exons, output_path, settings)
 
-    # Cover the 3UTRs with the reads
-    print('Getting read-coverage for the 3UTRs for {0} ...\n'.format(dset_id))
-    options = '-d'
-    coverage_path = coverage_wrapper(dset_id, bed_reads, utrfile_path, options)
+    if get_length:
+        # Get RPKM, coverage, and write to file
 
-    # Collect read coverage for each 3UTR exon, join the multi-exon 3UTRs, and
-    # write to file the parameters you calculate
-    print('Writing output files... {0} ...\n'.format(dset_id))
-    output_files = output_writer(dset_id, coverage_path, annotation, utr_seqs,
-                                 rpkm, extendby, polyA_reads, settings,
-                                 total_nr_reads, output_dir)
+        # Get the RPKM, if you get lengths
+        print('Obtaining RPKM for {0} ...\n'.format(dset_id))
+        rpkm = get_rpkm(bed_reads, utrfile_path, total_nr_reads, utr_exons,
+                        extendby, dset_id)
+
+        # Cover the 3UTRs with the reads, if you get lengths
+        print('Getting read-coverage for the 3UTRs for {0} ...\n'.format(dset_id))
+        coverage_path = coverage_wrapper(dset_id, bed_reads, utrfile_path)
+
+        # Collect read coverage for each 3UTR exon, join the multi-exon 3UTRs,
+        # and write to file the parameters you calculate
+        print('Writing output files... {0} ...\n'.format(dset_id))
+        output_files = output_writer(dset_id, coverage_path, annotation,
+                                     utr_seqs, rpkm, polyA_reads, settings,
+                                     total_nr_reads, output_dir, polyA)
+
+        # Get the paths to the two output files explicitly
+        (polyA_output, length_output) = output_files
+
+        # Return a dictionary with the file paths of the output files
+        return {dset_id: {'coverage': coverage_path, 'length': length_output,
+                          'polyA':polyA_output}}
+    else:
+        # Just get the poly(A) output
+        only_pA = only_polyA_writer(dset_id, annotation, utr_seqs, polyA_reads,
+                                    settings, total_nr_reads, output_dir)
+
+        return {dset_id: {'only_polyA': only_pA}}
 
     print('Total time for {0}: {1}\n'.format(dset_id, time.time() - t0))
 
-    # Get the paths to the two output files explicitly
-    (polyA_output, length_output) = output_files
 
-    # Return a dictionary with the file paths of the output files
-    return {dset_id: {'coverage': coverage_path, 'length': length_output,
-                      'polyA':polyA_output}}
+def write_polyA_stats(polyA_reads, utr_exons, output_path, settings):
+    """
+    File for outputting basic polyA statistics. These statistics make most sense
+    in 3UTR regions, because we know the orientation of the transcripts. In
+    other regions, they don't make sense at all, because you don't know the
+    direction of the transcripts. However, if in some region you find that the
+    ratio is enriched for one strand, it is likely that this region has true
+    poly(A) sites.
+
+    1) Estimated false-positive rate (this_strand/other_strand)
+
+    2) Estimated false-negative rate (common to both strands) (but these are
+    actually added to the poly(A)-read pool)
+
+    3) PAS/annotation rate of the so called false-negatives? Is it the same as
+    for the others?
+
+    4) distribution of ratio of unique_reads/total_reads for each cluster site
+
+    5) distribution of standard deviations about the cluster mean.
+
+    6) distribution of the number of unique reads for each cluster
+
+    7) number of 3UTRs with poly(A) reads detected. useful for comparing to the
+    number which have read coverage ... an estimate of how many of the 3UTRs you
+    manage to reach. Number should improve by using both biological replicates.
+
+    8) Distribution of reads from the other strand -- do they arrive in
+    clusters? How does this look compared to other_strand?
+
+    IDEA: get the distribution of the unique reads about the center. This should
+    reflect the cleavage process.
+    """
+
+    # If you don't have any reads, you can do nothing here 
+    if polyA_reads == {}:
+        handle = open(output_path, 'wb')
+        handle.write('No poly(A) reads mapped')
+        handle.close()
+        return
+
+    this_strand_count = 0
+    other_strand_count = 0
+    both_strand_count = 0
+
+    both_by_chance = 0
+
+    # Lists of unique vs. total reads for each utr for each strand
+    distributions = {'this_strand': {'unique_reads': [], 'total_reads': [],
+                                  'spread': []},
+                     'other_strand': {'unique_reads': [], 'total_reads': [],
+                                   'spread': []}}
+
+
+    # Get the data for the false positive and negative from the
+    # polyA_statistics, which does not have any moving from one strand to the
+    # other
+
+    for utr, strand_stats in polyA_reads.items():
+        # Skip those without poly(A) reads
+        if strand_stats == {'other_strand': [[], []], 'this_strand': [[], []]}:
+            continue
+
+        this_strand_reads = sum(strand_stats['this_strand'][1], [])
+        other_strand_reads = sum(strand_stats['other_strand'][1], [])
+
+        other_strand_clstrs = strand_stats['other_strand'][0]
+
+        this_strand_count += len(this_strand_reads)
+        other_strand_count += len(other_strand_reads)
+
+        movers = 0
+
+        # Getting those that are in both strands. Method: see if any of the
+        # this_reads are close to cluster_centers
+        if this_strand_reads != [] and other_strand_reads != []:
+            for thi_end in this_strand_reads:
+                for oth_cls in other_strand_clstrs:
+                    if int(oth_cls)-15 < int(thi_end) < int(oth_cls)+15:
+                        both_strand_count += 1
+                        movers += 1
+
+            # Estimating the chance of moving strands by chance
+
+            # length of this exon
+            exon_len = utr_exons[utr][2]-utr_exons[utr][1]
+
+            # Number of clustersClusters in 
+            cls_nr = len(other_strand_clstrs)
+
+            # size of +/- 15 about those clusters
+            target_size = cls_nr*30
+
+            # probl of one of the movers hitting the target size
+            # prob of landing in target size for 1 mover
+            targ_land = target_size/exon_len
+
+            # prob for all movers, assuming independence
+            both_by_chance += targ_land*movers
+
+    handle = open(output_path, 'wb')
+
+    #0) The numbers themselves
+    handle.write('This_strand_count\t{0}\n'.format(this_strand_count))
+    handle.write('Other_strand_count\t{0}\n'.format(other_strand_count))
+    handle.write('Both_strands_count\t{0}\n'.format(both_strand_count))
+    handle.write('Both strands by chance\t{0}\n'.format(both_by_chance))
+
+    #1) Estimated false-positive rate (this_strand/other_strand)
+    if other_strand_count > 0:
+        fals_pos = this_strand_count/other_strand_count
+    else:
+        fals_pos = 'NA'
+
+    # I call it false positive because you can assume that the same rate of
+    # reads will land in 
+    explanation = 'Reads in opposite strand divided by reads in this strand'
+    handle.write('"False positive"-rate\t{0}\n'.format(fals_pos, '.4f'))
+
+    #2) Estimated false-negative rate (common to both strands) (but these are
+    # actually added to the poly(A)-read pool!)
+    if other_strand_count > 0:
+        fals_neg = both_strand_count/other_strand_count
+    else:
+        fals_neg = 'NA'
+
+    explanation = 'Reads common to both strands divided by reads in other strand'
+    handle.write('"False negative"-rate\t{0}\n'.format(fals_neg, '.4f'))
+
+    # Get distributions of the poly(A) reads you actually use
+    for utr, strand_stats in polyA_reads.items():
+        for keyw in ['this_strand', 'other_strand']:
+            # Add total and unique reads for the clusters
+            (cls_centers, cls_all_reads) = strand_stats[keyw]
+            for cls_center, cls_reads in zip(cls_centers, cls_all_reads):
+                distributions[keyw]['total_reads'].append(len(cls_reads))
+                distributions[keyw]['unique_reads'].append(len(set(cls_reads)))
+                std = math.sqrt(sum([(cls_center-cls_pos)**2 for cls_pos in
+                           cls_reads])/len(cls_reads))
+                distributions[keyw]['spread'].append(std)
+
+    # Calculate key statistics from the this_strand and other_strand variables
+    for strand_way, dist in distributions.items():
+
+        ## 1) average and std of the spread
+        #spread_mean = sum(dist['spread'])/len(dist['spread'])
+        #spread_std = math.sqrt(sum([(spread_mean-spread)**2 for spread in
+                          #dist['spread']])/(len(dist['spread'])))
+        #handle.write('Mean cluster spread in nt {0}\t{1}\n'.format(strand_way,
+                                                                   #spread_mean))
+        #handle.write('Std cluster spread in nt {0}\t{1}\n'.format(strand_way,
+                                                                  #spread_std))
+
+        # 2) average, std, and sum of total reads
+        total_sum = sum(dist['total_reads'])
+        if len(dist['total_reads']) > 0:
+            total_mean = total_sum/len(dist['total_reads'])
+            total_std = math.sqrt(sum([(tot-total_mean)**2 for tot in
+                                       dist['total_reads']])/len\
+                                  (dist['total_reads']))
+        else:
+            total_mean = 0
+            total_std = 0
+
+        #handle.write('Sum total number of reads {0}\t{1}\n'.format(strand_way,
+                                                             #total_sum))
+        handle.write('{0} Average total reads in clusters\t{1}\n'\
+                     .format(strand_way, total_mean))
+        handle.write('{0} Std total reads in clusters\t{1}\n'.format(strand_way,
+                                                             total_std))
+
+        # 3) average, std, sum of unique reads
+        unique_sum = sum(dist['unique_reads'])
+        if len(dist['unique_reads']) > 0:
+            unique_mean = unique_sum/len(dist['unique_reads'])
+            unique_std = math.sqrt(sum([(tot-unique_mean)**2 for tot in
+                                       dist['unique_reads']])/len\
+                                   (dist['unique_reads']))
+        else:
+            unique_mean = 0
+            unique_std = 0
+
+        handle.write('{0} Sum unique reads\t{1}\n'.format(strand_way,
+                                                             unique_sum))
+        handle.write('{0} Average unique reads in clusters\t{1}\n'.format(strand_way,
+                                                             unique_mean))
+        handle.write('{0} Std uniuqe reads in clusters\t{1}\n'.format(strand_way,
+                                                                  unique_std))
+        # 4) average, std, and sum of unique/total ratio reads
+        #utot = []
+        #for ind, tot in enumerate(dist['total_reads']):
+            #utot.append(dist['unique_reads'][ind]/tot)
+
+        #utot_mean = sum(utot)/len(utot)
+        #utot_std = math.sqrt(sum([(ut-utot_mean)**2 for ut in utot])/len(utot))
+
+        #handle.write('Average unique/total number of reads {0}\t{1}\n'\
+                     #.format(strand_way, utot_mean))
+        #handle.write('Std uniuqe/total number of reads {0}\t{1}\n'.\
+                     #format(strand_way, utot_std))
+
+    handle.close()
+
+def only_polyA_writer(dset_id, annotation, utr_seqs, polyA_reads, settings,
+                      total_nr_reads, output_dir):
+    """ If only poly(A) is asked for, skip the footprint-heavy "output_writer"
+    and use this special method for just writing poly(A) output.
+
+    Thus you must remove the coverage and RPKM parameters from the
+    length-output.
+
+    NOTE: when running poly(A) checks on non-3UTR regions, you need to accept
+    poly(A) reads from both strands. When running in 3UTR regions you should
+    accept those from the other strand if they do overlap. Count the remainder
+    as a crude measure of error rate?
+
+    You probably shouldn't concatenate the exons from multi-exon 3UTRs.
+    Therefore you will not get exactly the same output as in the other output
+    writer. for example, polyA_number will go away.
+    """
+
+    output_order = ['chrm',
+                    'beg',
+                    'end',
+                    'utr_ID',
+                    'strand',
+                    'polyA_coordinate',
+                    'annotated_polyA_distance',
+                    'nearby_PAS',
+                    'PAS_distance',
+                    'number_supporting_reads',
+                    'number_unique_supporting_reads',
+                    'unique_reads_spread']
+
+    # list of PAS hexamers
+    PAS_sites = ['AATAAA', 'ATTAAA', 'TATAAA', 'AGTAAA', 'AAGAAA', 'AATATA',
+                 'AATACA', 'CATAAA', 'GATAAA', 'AATGAA', 'TTTAAA', 'ACTAAA',
+                 'AATAGA']
+
+    pas_patterns = [re.compile(pas) for pas in PAS_sites]
+
+    # Get dict with annotated poly(A) sites and dict with utr exons
+    a_polyA_sites_dict = annotation.a_polyA_sites_dict
+    utr_exons = annotation.utr_exons
+
+    # 3) TODO Can you check the nucleotide sequence for poly(A/T) runs? It's a
+    # conjace, but people will ask for it ...
+
+    polyA_outpath = os.path.join(output_dir, 'onlypolyA_'+dset_id)
+    polyA_outfile = open(polyA_outpath, 'wb')
+
+    # Write header to the columns
+    polyA_outfile.write('\t'.join(output_order)+'\n')
+
+    # If the region is not with annotated strand: write poly(A) sites from both
+    # strands. Should I do this here or at the end? If I do it here, I will
+    # double-write those that are common (they will be very few, of course).
+    # Keep in mind that this is all for the analysis. Other uses will have other
+    # demands. For the users, you should respect the strands they give you. You
+    # need a flag for this. like settings non_stranded.
+
+    for utr_id, polyA_dict in polyA_reads.iteritems():
+        # Skip those that don't have any reads in them (or keep them but make
+        # them empty? then it's easy to know how many you have that are actually
+        # covered by poly(A) reads. eg: XXXX total genes, XXXX total UTRs from
+        # XXXX genes. XXXX were expressed, and of the expressed we found XXXXXX
+        # poly(A) reads in XXXXXX of them. Here is the story about those poly(A)
+        # reads.) For now skip them.
+        if polyA_dict == {'other_strand': [[], []], 'this_strand': [[], []]}:
+            continue
+
+        (chrm, beg, end, strand) = utr_exons[utr_id]
+        annotated_pA_sites = a_polyA_sites_dict[utr_id]
+        sequence = utr_seqs[utr_id]
+
+        # loop through each 3UTR cluster and write at the end
+        for cls_center, cls_reads in zip(*polyA_dict['other_strand']):
+            polyA_coordinate = cls_center
+            annotated_polyA_distance = annotation_dist(cls_center,
+                                                       annotated_pA_sites,
+                                                       strand)
+
+            rpoint = cls_center - beg
+            # getting PAS. If annotation exists, look at the annotated strand.
+            # If not, look at the "other strand" than the poly(A) read maps to.
+            debug()
+            (nearby_PAS, PAS_distance) = get_pas_and_distance(rpoint,
+                                                              pas_patterns,
+                                                              sequence, settings)
+            if nearby_PAS != 'NA':
+                nearby_PAS = ' '.join(nearby_PAS)
+                PAS_distance = ' '.join([str(di) for di in PAS_distance])
+
+            number_supporting_reads = len(cls_reads)
+            number_unique_supporting_reads = len(set(cls_reads))
+            unique_reads_spread = math.sqrt(sum([(cls_center-cls_pos)**2 for
+                                                 cls_pos in
+                                                 cls_reads])/len(cls_reads))
+
+            output_dict = {'chrm':chrm, 'beg': str(beg), 'end': str(end),
+                       'utr_ID': utr_id, 'strand': strand,
+                       'polyA_coordinate': str(polyA_coordinate),
+                       'annotated_polyA_distance': str(annotated_polyA_distance),
+                       'nearby_PAS': nearby_PAS, 'PAS_distance': PAS_distance,
+                       'number_supporting_reads': str(number_supporting_reads),
+                       'number_unique_supporting_reads':\
+                       str(number_unique_supporting_reads),
+                       'unique_reads_spread':\
+                       str(unique_reads_spread) .format('.2f')}
+
+            output = [output_dict[keyw] for keyw in output_order]
+
+            polyA_outfile.write('\t'.join(output) + '\n')
+
+    polyA_outfile.close()
+
+    return polyA_outpath
 
 def make_directories(here, dirnames, DEBUGGING):
     """
@@ -2494,15 +3015,24 @@ def main():
     """
     This method is called if script is run as __main__.
     """
+
+    # TODO compare K562 with HUVEC or H1. HUVEC and H1 are not a cancer cell
+    # line. Does K562 have shorter 3UTRs compared to HUVEC? Can we see this, if
+    # not in length, then in poly(A) reads relative usage? IDEA: if you don't
+    # find any differences, this is also a result! Because so many people have
+    # published differences, it seems like they're a dime a dozen, while in fact
+    # they're not that many.
+
     # Set debugging mode. This affects the setting that are in the debugging
     # function (called below). It also affects the 'temp' and 'output'
     # directories, respectively.
 
-    #DEBUGGING = True
-    DEBUGGING = False
+    DEBUGGING = True
+    #DEBUGGING = False
 
-    rerun_annotation_parser = False # you will have a conflict here...
-    #rerun_annotation_parser = True # you will have a conflict here...
+    # with this option, always remake the bedfiles
+    rerun_annotation_parser = False
+    #rerun_annotation_parser = True
 
     # The path to the directory the script is located in
     here = os.path.dirname(os.path.realpath(__file__))
@@ -2515,10 +3045,10 @@ def main():
     # Location of settings file
     settings_file = os.path.join(here, 'UTR_SETTINGS')
 
-    ########################XXX###################################
+    ########################XXX###############################
     ###### TESTING Pedro's old annotation settings
     #settings_file = os.path.join(here, 'OLD_ENCODE_SETTINGS')
-    ########################XXX###################################
+    ########################XXX###############################
 
     # Create the settings object from the settings file
     settings = Settings(*read_settings(settings_file))
@@ -2526,7 +3056,6 @@ def main():
     # You can chose to not simulate. Only purpose is to make bigwigs.
     #simulate = False
     simulate = True
-    #settings.bigwig = False
 
     # This option should be set only in case of debugging. It makes sure you
     # just run chromosome 1 and only extract a tiny fraction of the total reads.
@@ -2538,32 +3067,56 @@ def main():
     print('Reading settings ...\n')
     annotation = Annotation(settings.annotation_path, settings.annotation_format)
 
+    # XXX DEBUGGING: only the first two regions
+    #settings.region_files = settings.region_files[:2]
+    # XXX REMOVE LATER
+
+    # loop through all regions supplied (often this will be just 1 -- the 3UTR)
+    for region_file in settings.region_files:
+        # update the region bedfile for each run
+
+        piperunner(settings, annotation, simulate, DEBUGGING, beddir, tempdir,
+                   output_dir, rerun_annotation_parser, here, region_file)
+
+def piperunner(settings, annotation, simulate, DEBUGGING, beddir, tempdir,
+               output_dir, rerun_annotation_parser, here, region_file):
+
     # Check if 3UTRfile has been made or provided; if not, get it from annotation
     annotation.utrfile_path = get_utr_path(settings, beddir,
-                                           rerun_annotation_parser)
+                                           rerun_annotation_parser, region_file)
 
     # Get dictionary with (chrm, beg, end, strand) values for each 3utr-exon key
     # NOTE: for the 3'terminal exons, the beg/end is the extended value. For
     # internal exons, the beg/end are not extended.
-    print('Making 3UTR data structures ...\n')
+    print('Making data structures ...\n')
     annotation.utr_exons = annotation.get_utrdict()
 
     # You extract all annotated polyA sites into a bedfile: a_polyA_sites_path
     annotation.a_polyA_sites_path = get_a_polyA_sites_path(settings, beddir)
-    # TODO this step is not annotation-independent. What happens if the
-    # genome-region bedfile does not intersect a single annotated 3UTR?
 
     # You intersect the annotated polyA files with the 3UTR bedfile you got from
     # the annotation. Put the intersected annotated polyA sites in a dictionary.
     print('Making data structures for annotated poly(A) sites ...\n')
     annotation.a_polyA_sites_dict = annotation.get_polyA_dict()
 
+    # If this is true, the poly(A) reads will be saved after getting them. That
+    # will save all that reading. Only save them if you run with no restriction
+    # in reads.
+    polyA_cache = True
+
+    # Extract the name of the bed-region you are checking for poly(A) reads
+    # you might have to extract it differently, because 'intergenic' doesn't
+    # have any exon or intron part to it.
+    region = os.path.basename(annotation.utrfile_path).split('_')[0]
+    # ad hoc hack for intergenic region
+
+    debug()
     ##################################################################
     if simulate:
         # For all 3UTR exons, get the genomic sequence. The sequence is needed
         # to look for PAS sites.
         tx = time.time() # time the operation
-        print('Fetching the sequences of the annotated 3UTRs ...')
+        print('Fetching the sequences of the supplied genomic regions ...')
         utr_seqs = genome.get_seqs(annotation.utr_exons, settings.hgfasta_path)
         print('\tTime to get sequences: {0}\n'.format(time.time() - tx))
 
@@ -2577,23 +3130,25 @@ def main():
         # dset_id and dset_reads are as given in UTR_SETTINGS
         for dset_id, dset_reads in settings.datasets.items():
 
+            #update dset_id to contain region information (3UTR, CSDEXON, etc)
+            dset_id = dset_id + '_' + region
+
             # The arguments needed for the pipeline
             arguments = (dset_id, dset_reads, tempdir, output_dir, utr_seqs,
-                         settings, annotation, DEBUGGING)
+                         settings, annotation, DEBUGGING, polyA_cache, here)
 
-            #### FOR DEBUGGING #######
-            akk = pipeline(*arguments)
-            #########################
+            ###### FOR DEBUGGING ######
+            #akk = pipeline(*arguments)
+            ###########################
 
-            #result = my_pool.apply_async(pipeline, arguments)
-            #results.append(result)
+            result = my_pool.apply_async(pipeline, arguments)
+            results.append(result)
 
-        debug()
-        # Wait for all procsses to finish
+        #debug()
         my_pool.close()
         my_pool.join()
 
-        # Get the paths from the final output
+         #Get the paths from the final output
         outp = [result.get() for result in results]
 
         # Print the total elapsed time
@@ -2602,8 +3157,12 @@ def main():
         # create output dictionaries
         coverage, final_outp_length, final_outp_polyA = {}, {}, {}
 
-        # Fill the dicts with paths
+        # Now copy over the output that was in temp-files but that you want to
+        # have in output files
         for line in outp:
+            # If this is a only-polyA-run, don't move stuff
+            if 'only_polyA' in line[line.keys()[0]].keys():
+                break
             for key, value in line.items():
                 coverage[key] = value['coverage']
                 final_outp_polyA[key] = value['polyA']
@@ -2622,30 +3181,9 @@ def main():
 if __name__ == '__main__':
     main()
 
-# XXX NOTE TO SELF XXX
-# Before the holiday you updated a lot of docstrings and you started with the
-# documentation  (see doc folder). You had a meeting with Roderic: see message
-# below.
 
-# TODO change order of final output to confer with BED format
-
-# TODO: the path to the gem-mapper index... if people are going to use this,
-# they need to provide the path in the SETTINGS file. If you do this yourself,
-# it will be easier to switch to an index file on your own hard disk, makign
-# loading the index into memory much faster.
 # TODO: go through the entire program and improve documentation.
-# TODO: write external documentation file for the program
 # TODO: the two below should be part of the final analysis script; one button!
-# TODO: make a function that returns all regions (5UTR, intron, CDS)
-# unoverlapping other regions.
-
-# TODO Roderic ideas:
-    # 1) Run without annotation: you can create bed-file from sections around the
-    # polyA reads. This would be awsome to try out.
-    # 2) Must be able to run without outputting to 'length' file. In this way,
-    # the program can be run to output info about length from an annotation,
-    # polyA reads from annotation or not, or just polyA reads without an
-    # annotation. This will require some re-writing, but not awfully much.
 
 # TODO: Roderic conclusion:
     # next time he wants some basic statistics. The program seems ready, so it's

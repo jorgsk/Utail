@@ -1,4 +1,8 @@
 [DATASETS]
+# Set if your rna-seq reads are pair-ended or not. If they are pair-ended, we
+# can find the strand of the poly(A) reads.
+pairend = True
+
 # Provide paths to the RNA-seq read files. The files must be either gem-files,
 # zipped gem-files, bed-files, or zipped bedfiles. The extensions must thus be
 # either of: .map.gz, .gem.map.gz, .bed, or .bed.gz.
@@ -23,40 +27,40 @@
 #
 carrie = /users/rg/projects/NGS/Projects/ENCODE/hg19main/GingerasCarrie
 
-# # IDEA: use the chromatin and nucleoplasm! 
-# Ging025CH	K562	CHROMATIN	TOTAL	3
-# Ging025NLtotal	K562	NUCLEOLUS	TOTAL	3
-# Ging025NPtotal	K562	NUCLEOPLASM	TOTAL	3
-# Ging026CH	K562	CHROMATIN	TOTAL	4
-# Ging026NLtotal	K562	NUCLEOLUS	TOTAL	4
-# Ging026NPtotal	K562	NUCLEOPLASM	TOTAL	4
-
-# # IDEA: use the biological replicates!!! Even combine them all for super-high
-# # coverage!!!!!!!!!!!!!!!!!!!1111111111111122222222222
-# Ging002C	K562	CYTOSOL	LONGPOLYA	2
-# Ging002CMinus	K562	CYTOSOL	LONGNONPOLYA	2
-# Ging002N	K562	NUCLEUS	LONGPOLYA	2
-# Ging002NMinus	K562	NUCLEUS	LONGNONPOLYA	2
-# Ging002WC	K562	CELL	LONGPOLYA	2
-# Ging002WCMinus	K562	CELL	LONGNONPOLYA	2
-
 #### POLYA MINUS CONTROLS
 # K562_CytoplasmMinus = %(carrie)s/001CMinus/genome/LID18545_FC62JRWAAXX_6_1.gem.map.gz:%(carrie)s/001CMinus/genome/LID18545_FC62JRWAAXX_6_2.gem.map.gz:%(carrie)s/001CMinus/genome/LID18545_FC62JRWAAXX_7_1.gem.map.gz:%(carrie)s/001CMinus/genome/LID18545_FC62JRWAAXX_7_2.gem.map.gz:%(carrie)s/001CMinus/genome/LID18545_FC62JRWAAXX_8_1.gem.map.gz:%(carrie)s/001CMinus/genome/LID18545_FC62JRWAAXX_8_2.gem.map.gz
 
+# K562_CytoplasmMinusReplicate = %(carrie)s/002CMinus/genome/LID18546_FC62JL0AAXX_5_1.gem.map.gz:%(carrie)s/002CMinus/genome/LID18546_FC62JL0AAXX_5_2.gem.map.gz:%(carrie)s/002CMinus/genome/LID18546_FC62JPTAAXX_5_1.gem.map.gz:%(carrie)s/002CMinus/genome/LID18546_FC62JPTAAXX_5_2.gem.map.gz:%(carrie)s/002CMinus/genome/LID18546_FC62N70AAXX_5_1.gem.map.gz:%(carrie)s/002CMinus/genome/LID18546_FC62N70AAXX_5_2.gem.map.gz
+
 # K562_NucleusMinus = %(carrie)s/001NMinus/genome/LID9195_FC625PLAAXX_6_1.gem.map.gz:%(carrie)s/001NMinus/genome/LID9195_FC625PLAAXX_6_2.gem.map.gz:%(carrie)s/001NMinus/genome/LID9195_FC625PLAAXX_7_1.gem.map.gz:%(carrie)s/001NMinus/genome/LID9195_FC625PLAAXX_7_2.gem.map.gz:%(carrie)s/001NMinus/genome/LID9195_FC625PLAAXX_8_1.gem.map.gz:%(carrie)s/001NMinus/genome/LID9195_FC625PLAAXX_8_2.gem.map.gz
 
+# K562_NucleusMinusReplicate = %(carrie)s/002NMinus/genome/LID9196_FC625T2AAXX_1_1.gem.map.gz:%(carrie)s/002NMinus/genome/LID9196_FC625T2AAXX_1_2.gem.map.gz:%(carrie)s/002NMinus/genome/LID9196_FC625T2AAXX_2_1.gem.map.gz:%(carrie)s/002NMinus/genome/LID9196_FC625T2AAXX_2_2.gem.map.gz:%(carrie)s/002NMinus/genome/LID9196_FC625T2AAXX_3_1.gem.map.gz:%(carrie)s/002NMinus/genome/LID9196_FC625T2AAXX_3_2.gem.map.gz
+
 # K562_Whole_CellMinus = %(carrie)s/001WCMinus/genome/LID8659_FC61FGUAAXX_1_1.gem.map.gz:%(carrie)s/001WCMinus/genome/LID8659_FC61FGUAAXX_1_2.gem.map.gz:%(carrie)s/001WCMinus/genome/LID8659_FC61FKBAAXX_1_1.gem.map.gz:%(carrie)s/001WCMinus/genome/LID8659_FC61FKBAAXX_1_2.gem.map.gz:%(carrie)s/001WCMinus/genome/LID8659_FC61FM9AAXX_1_1.gem.map.gz:%(carrie)s/001WCMinus/genome/LID8659_FC61FM9AAXX_1_2.gem.map.gz
-####
+
+# K562_Whole_CellMinusReplicate = %(carrie)s/002WCMinus/genome/LID8660_FC61FGUAAXX_2_1.gem.map.gz:%(carrie)s/002WCMinus/genome/LID8660_FC61FGUAAXX_2_2.gem.map.gz:%(carrie)s/002WCMinus/genome/LID8660_FC61FKBAAXX_2_1.gem.map.gz:%(carrie)s/002WCMinus/genome/LID8660_FC61FKBAAXX_2_2.gem.map.gz:%(carrie)s/002WCMinus/genome/LID8660_FC61FM9AAXX_2_1.gem.map.gz:%(carrie)s/002WCMinus/genome/LID8660_FC61FM9AAXX_2_2.gem.map.gz
 
 K562_Whole_Cell = %(carrie)s/001WC/genome/LID16627_FC61U30AAXX_2_2.gem.map.gz:%(carrie)s/001WC/genome/LID16627_FC61U30AAXX_1_2.gem.map.gz:%(carrie)s/001WC/genome/LID16627_FC61U30AAXX_3_1.gem.map.gz:%(carrie)s/001WC/genome/LID16627_FC61U30AAXX_3_2.gem.map.gz:%(carrie)s/001WC/genome/LID16627_FC61U30AAXX_2_1.gem.map.gz:%(carrie)s/001WC/genome/LID16627_FC61U30AAXX_1_1.gem.map.gz
 
+# K562_Whole_CellReplicate = %(carrie)s/002WC/genome/LID16628_FC61U30AAXX_4_1.gem.map.gz:%(carrie)s/002WC/genome/LID16628_FC61U30AAXX_4_2.gem.map.gz:%(carrie)s/002WC/genome/LID16628_FC61U30AAXX_5_1.gem.map.gz:%(carrie)s/002WC/genome/LID16628_FC61U30AAXX_5_2.gem.map.gz:%(carrie)s/002WC/genome/LID16628_FC61U30AAXX_6_1.gem.map.gz:%(carrie)s/002WC/genome/LID16628_FC61U30AAXX_6_2.gem.map.gz
+
 # K562_Cytoplasm = %(carrie)s/001C/genome/LID8465_FC61LTAAAXX_5_1.gem.map.gz:%(carrie)s/001C/genome/LID8465_FC61LTAAAXX_5_2.gem.map.gz:%(carrie)s/001C/genome/LID8465_FC61LTAAAXX_6_1.gem.map.gz:%(carrie)s/001C/genome/LID8465_FC61LTAAAXX_6_2.gem.map.gz:%(carrie)s/001C/genome/LID8465_FC61LTAAAXX_7_1.gem.map.gz:%(carrie)s/001C/genome/LID8465_FC61LTAAAXX_7_2.gem.map.gz
 
+# K562_CytoplasmReplicate = %(carrie)s/002C/genome/LID8466_FC61DG2AAXX_1_1.gem.map.gz:%(carrie)s/002C/genome/LID8466_FC61DG2AAXX_1_2.gem.map.gz:%(carrie)s/002C/genome/LID8466_FC61DG2AAXX_2_1.gem.map.gz:%(carrie)s/002C/genome/LID8466_FC61DG2AAXX_2_2.gem.map.gz:%(carrie)s/002C/genome/LID8466_FC61LTAAAXX_8_1.gem.map.gz:%(carrie)s/002C/genome/LID8466_FC61LTAAAXX_8_2.gem.map.gz
+# #
 # K562_Nucleus = %(carrie)s/001N/genome/LID8556_FC62067AAXX_1_2.gem.map.gz:%(carrie)s/001N/genome/LID8556_FC62067AAXX_3_2.gem.map.gz:%(carrie)s/001N/genome/LID8556_FC62067AAXX_2_1.gem.map.gz:%(carrie)s/001N/genome/LID8556_FC62067AAXX_1_1.gem.map.gz:%(carrie)s/001N/genome/LID8556_FC62067AAXX_2_2.gem.map.gz:%(carrie)s/001N/genome/LID8556_FC62067AAXX_3_1.gem.map.gz
+
+# K562_NucleusReplicate = %(carrie)s/002N/genome/LID8557_FC62067AAXX_4_1.gem.map.gz:%(carrie)s/002N/genome/LID8557_FC62067AAXX_4_2.gem.map.gz:%(carrie)s/002N/genome/LID8557_FC62067AAXX_5_1.gem.map.gz:%(carrie)s/002N/genome/LID8557_FC62067AAXX_5_2.gem.map.gz:%(carrie)s/002N/genome/LID8557_FC62067AAXX_6_1.gem.map.gz:%(carrie)s/002N/genome/LID8557_FC62067AAXX_6_2.gem.map.gz
 
 # K562_Nucleoplasm = %(carrie)s/025NPtotal/genome/LID9189_FC61WW5AAXX_5_1.gem.map.gz:%(carrie)s/025NPtotal/genome/LID9189_FC61WW5AAXX_5_2.gem.map.gz:%(carrie)s/025NPtotal/genome/LID9189_FC61WW5AAXX_6_1.gem.map.gz:%(carrie)s/025NPtotal/genome/LID9189_FC61WW5AAXX_6_2.gem.map.gz:%(carrie)s/025NPtotal/genome/LID9189_FC61WW5AAXX_7_1.gem.map.gz:%(carrie)s/025NPtotal/genome/LID9189_FC61WW5AAXX_7_2.gem.map.gz
 
+# knplm2 = %(carrie)s/026NPtotal/genome
+# K562_NucleoplasmReplicate = %(knplm2)s/LID9190_FC61WU1AAXX_1_1.gem.map.gz:%(knplm2)s/LID9190_FC61WU1AAXX_1_2.gem.map.gz:%(knplm2)s/LID9190_FC61WU1AAXX_2_1.gem.map.gz:%(knplm2)s/LID9190_FC61WU1AAXX_2_2.gem.map.gz:%(knplm2)s/LID9190_FC61WW5AAXX_8_1.gem.map.gz:%(knplm2)s/LID9190_FC61WW5AAXX_8_2.gem.map.gz
+
 # K562_Chromatin = %(carrie)s/025CH/genome/LID9185_FC61RV8AAXX_1_1.gem.map.gz:%(carrie)s/025CH/genome/LID9185_FC61RV8AAXX_1_2.gem.map.gz:%(carrie)s/025CH/genome/LID9185_FC61RV8AAXX_2_1.gem.map.gz:%(carrie)s/025CH/genome/LID9185_FC61RV8AAXX_2_2.gem.map.gz:%(carrie)s/025CH/genome/LID9185_FC61RV8AAXX_3_1.gem.map.gz:%(carrie)s/025CH/genome/LID9185_FC61RV8AAXX_3_2.gem.map.gz
+
+# kch2 = %(carrie)s/026CH/genome
+# K562_ChromatinReplicate = %(kch2)s/LID9186_FC61RV8AAXX_4_1.gem.map.gz:%(kch2)s/LID9186_FC61RV8AAXX_4_2.gem.map.gz:%(kch2)s/LID9186_FC61RV8AAXX_5_1.gem.map.gz:%(kch2)s/LID9186_FC61RV8AAXX_5_2.gem.map.gz:%(kch2)s/LID9186_FC61RV8AAXX_6_1.gem.map.gz:%(kch2)s/LID9186_FC61RV8AAXX_6_2.gem.map.gz
 
 # HeLa-S3_Cytoplasm = %(carrie)s/011C/genome/LID8469_FC61AHAAAXX_1_2.gem.map.gz:%(carrie)s/011C/genome/LID8469_FC61AHAAAXX_3_2.gem.map.gz:%(carrie)s/011C/genome/LID8469_FC61AHAAAXX_3_1.gem.map.gz:%(carrie)s/011C/genome/LID8469_FC61AHAAAXX_2_2.gem.map.gz:%(carrie)s/011C/genome/LID8469_FC61AHAAAXX_2_1.gem.map.gz:%(carrie)s/011C/genome/LID8469_FC61AHAAAXX_1_1.gem.map.gz
 
@@ -70,17 +74,38 @@ K562_Whole_Cell = %(carrie)s/001WC/genome/LID16627_FC61U30AAXX_2_2.gem.map.gz:%(
 
 # GM12878_Whole_Cell = %(carrie)s/003WC/genome/LID16629_FC61U2UAAXX_1_2.gem.map.gz:%(carrie)s/003WC/genome/LID16629_FC61U2UAAXX_2_2.gem.map.gz:%(carrie)s/003WC/genome/LID16629_FC61U2UAAXX_2_1.gem.map.gz:%(carrie)s/003WC/genome/LID16629_FC61U2UAAXX_3_1.gem.map.gz:%(carrie)s/003WC/genome/LID16629_FC61U2UAAXX_1_1.gem.map.gz:%(carrie)s/003WC/genome/LID16629_FC61U2UAAXX_3_2.gem.map.gz
 
-
 [ANNOTATION]
-# The annotation should be in the gencode format.
-# Put annotation_path = false if you don't want
-# to use an annotation.
+# Put annotation_path = false if you don't want to use an annotation.
 # Supported annotation formats: GENCODE, ENSEMBL
+# If you want a stranded analysis, use 'stranded = true'. Use this if you
+# supply genomic regions where you know that the strands of the genomic regions
+# are factual. Use 'stranded = false' if you're just investigting general
+# 'exonic' regions for example. If you supply both regional bedfiles and an
+# annotation, the bedfiles will take presedence.
+
 # annotation_path = false
 # annotation_path = /users/rg/jskancke/phdproject/3UTR/gencode5/gencode5_annotation.gtf
-# annotation_format = GENCODE
-annotation_format = ENSEMBL
-annotation_path = /users/rg/jskancke/phdproject/3UTR/Annotations/Mus_musculus.NCBIM37.62.gtf 
+annotation_path = /users/rg/jskancke/phdproject/3UTR/gencode7/gencode7_annotation.gtf
+annotation_format = GENCODE
+# annotation_format = ENSEMBL
+# annotation_path = /users/rg/jskancke/phdproject/3UTR/Annotations/Mus_musculus.NCBIM37.62.gtf 
+
+
+[SUPPLIED_3UTR_BEDFILE]
+# If you supply more than one bedfile, the pipeline will be run for
+# each region successively. If you supply both regional bedfiles and an
+# annotation, the bedfiles will take presedence.
+
+utr_bed_path = false
+#
+# regdir = /users/rg/jskancke/phdproject/3UTR/the_project/genomic_regions_hg19
+
+# utr_bed_path = %(regdir)s/3UTR-exonic_non_stranded.bed:%(regdir)s/3UTR-intronic_non_stranded.bed:%(regdir)s/5UTR-exonic_non_stranded.bed:%(regdir)s/5UTR-intronic_non_stranded.bed:%(regdir)s/CDS-exonic_non_stranded.bed:%(regdir)s/CDS-intronic_non_stranded.bed:%(regdir)s/Intergenic_non_stranded.bed:%(regdir)s/Nocoding-exonic_non_stranded.bed:%(regdir)s/Noncoding-intronic_non_stranded.bed
+
+# utr_bed_path = /users/rg/pferreira/desktop/motifsapa/data/bedannotation/hg19/3utr_hg19.selectedcases.bed
+# Is the strand in the .bed files true? Specify if the strand is known (true)
+# or not (false)
+strand = true
 
 [CHROMOSOME1]
 # only_chr1 = true:
@@ -89,20 +114,26 @@ annotation_path = /users/rg/jskancke/phdproject/3UTR/Annotations/Mus_musculus.NC
 # chromosome 1 entries from the annotation file above will be filtered out to a
 # separate file.
 #
-# only_chr1 = false:
-# run with all chromosomes
 only_chr1 = false
-
+# run with all chromosomes
+# only_chr1 = true
 
 [MIN_3UTR_LENGTH]
 # When extracting 3UTRs from the annotation, ignore those smaller than this
 # value. Setting should never be below 100 nt.
 min3utrlen = 200
 
+[GET_LENGTH]
+# length = true
+length = false
+# if you don't care about the length of the 3UTRs, but only want their poly(A)
+# sites, set 'length = false'. If you do this, you must have polya = true,
+# otherwise Utail will do very little indeed ...
+
 
 [POLYA_READS]
 polya = true
-# polya = true:
+# polya = false
 # the program will attempt to get poly(A) reads from the gem-mapped-reads. Only
 # use this option if your gem-mapped reads have not been trimmed.
 #
@@ -116,12 +147,14 @@ polya = true
 # If you set polya = true, supply the path to the gem-mapper index file
 # NOTE: leve out the suffix of the index file!!
 gem_mapper_index = /users/rg/atanzer/DATA/GEM_indices/Genomes/H.sapiens.genome.hg19.main
+# # MAKE IT LOACL! loads faster into memory?
+# gem_mapper_index = /home/jskancke/hg19/gem_index/H.sapiens.genome.hg19.main
 
 
 [CPU_CORES]
 # Set how many cores you wish to use. default uses system_max minus 1. For
 # example, with two processors that have two cores each, default is 4-1 = 3.
-max_cores = 5
+max_cores = 4
 # max_cores = default
 
 
@@ -133,20 +166,12 @@ max_cores = 5
 restrict_reads = false
 
 
-[SUPPLIED_3UTR_BEDFILE]
-# If you don't want to extract 3UTRs from the annotation, or if you wish in
-# investigate some other genomic region than the 3UTR, you can supply a bedfile
-# yourself.
-utr_bed_path = false
-# utr_bed_path = /users/rg/pferreira/desktop/motifsapa/data/bedannotation/hg19/3utr_hg19.selectedcases.bed
-
-
 [EXTEND]
 # The pipeline can extend the 3UTR beyond their annotated end. This is useful
 # for discovering those 3UTRs that are longer than what is reported in the
 # annotation.
 # When investigating annotated 3UTRs, it is recommended to let the default
-# setting (1000) stay. If the genomic region is something else than 3'UTR,
+# setting (500) stay. If the genomic region is something else than 3'UTR,
 # extendby can be set to 0.
 extend_by = 100
 
@@ -211,8 +236,8 @@ url = http://genome.crg.es/~jskancke/bigWigs
 #
 # From this information distributions and distances can be generated for tuning
 # the 99.5% value.
-tuning = true
-# tuning = false
+# tuning = true
+tuning = false
 
 
 [PLOTTING]
@@ -224,7 +249,27 @@ tuning = true
 # These datasets must at a previous point have been analyzed.
 # datasets = 
 # datasets = K562_Cytoplasm:K562_Whole_Cell:K562_Nucleus:HeLa-S3_Cytoplasm:HeLa-S3_Whole_Cell:HeLa-S3_Nucleus:GM12878_Cytoplasm:GM12878_Whole_Cell:GM12878_Nucleus
-datasets = GM12878_Cytoplasm:GM12878_Whole_Cell:GM12878_Nucleus:K562_Cytoplasm:K562_Whole_Cell:K562_Nucleus
+# datasets = GM12878_Cytoplasm:GM12878_Whole_Cell:GM12878_Nucleus:K562_Cytoplasm:K562_Whole_Cell:K562_Nucleus
 # datasets = GM12878_Cytoplasm:GM12878_Whole_Cell:GM12878_Nucleus
-# datasets = K562_Cytoplasm:K562_Whole_Cell:K562_Nucleus
-# datasets = HeLa-S3_Cytoplasm:K562_Nucleus
+# datasets = K562_Cytoplasm:K562_Whole_Cell:K562_Nucleus:K562_Nucleoplasm:K562_Chromatin
+# datasets = K562_Cytoplasm:K562_Whole_Cell:K562_CytoplasmReplicate:K562_Whole_CellReplicate
+# datasets = K562_CytoplasmMinus:K562_Whole_CellMinus:K562_NucleusMinus:K562_Cytoplasm:K562_Whole_Cell:K562_Nucleus:K562_Nucleoplasm:K562_Chromatin
+#
+# datasets = K562_Whole_CellMinus:K562_Whole_CellMinusReplicate:K562_Whole_Cell:K562_Whole_CellReplicate:K562_Cytoplasm:K562_CytoplasmReplicate:K562_CytoplasmMinus:K562_CytoplasmMinusReplicate:K562_NucleusMinus:K562_Nucleus:K562_NucleusMinusReplicate:K562_NucleusReplicate
+# datasets = K562_Nucleoplasm:K562_NucleoplasmReplicate:K562_Chromatin:K562_ChromatinReplicate
+datasets = K562_Whole_CellMinus:K562_Whole_CellMinusReplicate:K562_Whole_Cell:K562_Whole_CellReplicate
+# datasets = K562_Whole_Cell:K562_Whole_CellReplicate
+# datasets = K562_Nucleoplasm:K562_NucleoplasmReplicate:K562_Chromatin:K562_ChromatinReplicate
+
+
+# datasets = K562_Cytoplasm:K562_Nucleus:K562_Nucleoplasm:K562_Chromatin:K562_Whole_Cell
+
+# set length to false if you don't want to read the length files when plotting
+length = false
+
+# give a list of genomic regions you are investigating
+# regions = 3UTRs
+regions = 3UTR-exonic
+# regions = 3UTR-exonic:3UTR-intronic
+# regions = 3UTR-exonic:3UTR-intronic:5UTR-exonic:5UTR-intronic
+# regions = 3UTR-exonic:3UTR-intronic:5UTR-exonic:5UTR-intronic:CDS-exonic:CDS-intronic:Intergenic

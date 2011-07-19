@@ -1,5 +1,6 @@
 *.pyc
 *~
+DEBUGGING/
 temp_files/
 source_bedfiles/
 doc/_build/

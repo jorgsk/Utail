@@ -1,0 +1,161 @@
+.. _utr_finder_manual:
+
+This is a manual documentation of utr_finder.py
+
+Input
+-----
+* GENCODE annotation or a .bed file with the genomic regions of interest
+* RNA-seq reads (must be Gem-mapped) or bed-files with aready mapped reads
+* Fasta file of human genome
+* File with the size of each chromosome in the genome::
+
+    chr1	249250621
+    chr2	243199373
+    ...
+    chr21	48129895
+    chrM	16571
+
+* A file called *UTR_SETTINGS* where the parameters of the pipeline are set
+
+Output
+------
+* UTR-length file with the estimated length of the 3UTR and associated
+  variables
+Optional output
+---------------
+* Poly(A) file with location and size of polyadenlyation site clusters. 
+   To get this file, set *polya = True* in *UTR_SETTINGS*
+* bigWig files for the read-coverage and the poly(A) reads coverage,
+   and bed-files for the poly(A) clusters. 
+   To get this file, *set bigwig = true* in *UTR_SETTINGS*
+
+Dependencies
+============
+- >= Python 2.6.4
+- *bedTools*
+ 
+Optional
+-----------
+For remapping the poly(A) reads:
+- *gem-mapper* + index file for the mapper
+
+Included packages
+-----------------
+- *pyFasta*, a Python module for extracting genomic sequences fast
+- *bedGraphToBigWig*, a program for converting from bedGraph to bigWig
+
+The Pipeline in brief
+---------------------
+1) Read the settings file, 'UTR_SETTINGS', and create a *settings* object for
+   downstream code.
+2) Create bedfile for region (3UTRs) or use a provided one.
+3) Get all annotated polyA sites, if annotation is provided (THIS IS TODO)
+4) Get the sequences of the 3UTRs using pyfasta
+5) run the *pipeline* on all datasets:
+    1) Read the gem-mapped reads and sort them into
+        - uniquely mapped (up to 2 mismatches)
+            - convert to .bed format for later use
+        - (with polyA = true) unmapped, and therefore potentially poly(A) reads
+            - run poly(A)-read trim-and-remap mini-pipeline 
+    2) Get RPKM for the 3UTRs.
+    3) Get the read coverage of the 3UTRs using coveageBed with option '-d'
+    4) Read the read-coverage file to get the coverage of each 3UTR:
+        - Calculate the 3UTR output parameters from the read coverage and the
+          polyadenylation clusters
+        - Write to the 'length' output file (parameters for epsilon-length)
+        - Write to the 'polyA' output file (if parameter was set)
+
+9) Copy the two output files from the 'temp' directory to the 'outpu'
+   directory
+
+
+The Pipeline in detail
+----------------------
+
+.. note::
+    I describe the steps from a 3UTR perspective, but it should also be possible to
+    run the pipeline for any genomic region. Two regions stand clear to me as of
+    interest:
+
+    1) Non-overlapping extended regions downstream the annotated 3UTR ends (looking
+       for 3UTRs that are longer than the annotation)
+    2) All other non-overlapping genomic regions (looking for poly(A) clusters in
+       unknown places)
+
+The pipeline:
+
+1) Create the directories 'temp_files', 'source_bedfiles', 'output' in the
+   directory the script is run from, if they don't already exist
+2) Read the settings file, 'UTR_SETTINGS', and create a *settings* object that
+   contain all the settings as its attributes. Thus, by passing the settings
+   object to downstream code, you have easy access to the settings file.
+3) Check if a bed-file of genomic regions has been provided; if not, create one
+   from the provided GENCODE annotation. If that file has been created before,
+   use the one that was already there, as it takes a while to generate the
+   file. To generate the file you use the 'get_3utr_bed_all_exons' method in
+   'annotation_parser.py'. See the docs for that module for more information.
+   Briefly, you get out non-overlapping 3UTRs, both single and multi-exon,
+   named by the gene from whence they come.
+4) Get a dictionary of all 3UTR exons from step 3). Useful to have at hand. All
+   subsequent calculations will be done on these individual 3UTR exons. If a
+   3UTR has more than one exon, these exons will be joined only at the very end
+   of the pipeline.
+5) Get all annotated polyA sites from the GENCODE annotation. See
+   'get_a_polyA_sites_bed' in the docs for 'annotation_parser.py' for details.
+6) Get the sequences of the 3UTRs using py_fasta (see 'annotation_parser')
+7) Start a process pool with the maximum number of processes as determined in
+   the settings-file. (The pipeline runs one process per dataset. Thus you only
+   benefit if you have more than 1 dataset to run)
+8) run the *pipeline* method on all the information you have gathered in steps
+   1 to 6. This is where the real action starts. If you have multiple datasets,
+   this pipeline is run independently for each of them:
+    1) Read the gem-mapped reads and sort them into
+        1) uniquely mapped (up to 2 mismatches)
+            - The uniquely mapped reads are put into .bed format
+        2) unmapped (could be poly(A) reads). These reads are treated to their
+           own pipeline if *polya = true* in the settings file.
+            - remove low-quality reads and strip leading Ts and/OR trailing As
+            - map the remaining poly(A) reads to the genome
+            - return only the uniquely mapping ones (nr. of mismatches depends on
+              the poly(A) read length, see the code. 2 mismatches for >50 reads)
+            - cluster the poly(A) reads to create poly(A) clusters. The information
+              you keep is the location of the cluster and the number of poly(A)
+              reads contributing to the cluster.
+    2) Get RPKM for the 3UTRs. This is done simply by counting the number of
+       reads that fall in each 3UTR exon and using the RPKM formula.
+    3) Get the read coverage of the 3UTRs. You run coveageBed with option '-d'
+       on the reads-bedfile and the 3UTR-bedfile. The output is a bedfile where
+       each nucleotide in the 3UTR bedfile has a read-count.
+    4) Iterate through the read-coverage file, constructing 3UTR objects as you
+       go along. A new 3UTR-object is created when the utr_id-field in the
+       read-coverage-file changes. At the same time, you process and write to
+       file the previous 3UTR-object, which now has got all the information it
+       needs:
+        - Specifically, the epsilon-end of each 3UTR is calculated by getting
+          the cumulative coverage of the 3UTR. First you get the coverage, then
+          you normalize it, and then you get the cumulative normalized
+          coverage. The nucleotide at which this cumulated normalized coverage
+          is less than epsilon (0.998 for example), you define as the
+          epsilon-end.
+        - These values are calculated for the non-extended 3UTR,
+          in order to stay  true to the annotation. Only if a 3UTR is defined
+          as having its end very close up to the annotated end, an output
+          variable 'epsilon_covrg_beyond_aTTS' is calculated that goes into the
+          extended region of the 3UTR. This is in order to determine if this
+          3UTR goes beyond the annotation.
+        - The poly(A) clusters that are saved to file are as of 24.05.11 ONLY
+          the clusters from the OPPOSITE strand of the annoated 3UTR.
+9) When the read-coverage file has been iterated through all the way, you copy
+   the output files to the output-directory. The files in the temp-directory
+   can in theory be deleted, but if you want to make bigWig files for viewing
+   the coverage in a genome browser, you have to keep them until you make the
+   bigwigs.
+
+The output files
+================
+There are two output files. One details the lengths of the 3UTRs as defined by
+the epsilon parameter (typically 0.998). This I will refer to as the 'length'
+output file. The second deals with the poly(A) clusters. I will refer to this
+file as the 'polyA cluster' output file. If polyA = false is set, this file
+will be empty except for the header. 
+
