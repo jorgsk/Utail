@@ -1,6 +1,6 @@
 """
-**Module for representing GENCODE transcripts as class objects and performing
-calculations on them.**
+**Module for reading genome annotations and representing transcripts  as class
+objects and performing calculations on them.**
 """
 def run_from_ipython():
     try:
@@ -445,6 +445,7 @@ def make_transcripts(annotation, file_format='GENCODE'):
     # Go through all the damn transcripts and their damn exons, utrs, and cds,
     # and sort them.
     for (ts_id, ts_obj) in transcripts.iteritems():
+        ts_obj.exons.sort()
         ts_obj.five_utr.exons.sort()
         ts_obj.cds.exons.sort()
         ts_obj.three_utr.exons.sort()
@@ -1267,40 +1268,68 @@ def get_seqs(utr_dict, hgfasta):
                                           'strand':strand}).upper()
     return seq_dict
 
+def write_circular(transcripts, output_file):
+    """ For each transcript, write a bedfile with the first and last 100 nt of
+    the transcript. 
+    """
+    target = open(output_file, 'wb')
+    for ts_id, ts in transcripts.iteritems():
+        # chrbm, beg, end, 'transcript_type', 'ts_id', strand
+        # Skip empty exons
+        if ts.exons == []:
+            continue
+
+        frst_beg = ts.exons[0][1]
+        frst_end = frst_beg + 3
+
+        scnd_end = ts.exons[-1][2]
+        scnd_beg = scnd_end - 3
+
+        # write first 100
+        target.write('\t'.join([ts.chrm, str(frst_beg), str(frst_end),
+                                ts.t_type, ts.ts_id])+'\n')
+
+        # write last 100
+        target.write('\t'.join([ts.chrm, str(scnd_beg), str(scnd_end),
+                                ts.t_type, ts.ts_id])+'\n')
+    target.close()
+
+
 def main():
     t1 = time.time()
 
-    chr1 = True
+    #chr1 = True
 
-    #chr1 = False
+    chr1 = False
 
     #annotation = '/users/rg/jskancke/phdproject/3UTR/'\
             #'gencode5/gencode5_annotation.gtf'
-    annotation = '/users/rg/jskancke/phdproject/3UTR/Annotations/'\
-            'Mus_musculus.NCBIM37.62.gtf'
+    #annotation = '/users/rg/jskancke/phdproject/3UTR/Annotations/'\
+            #'Mus_musculus.NCBIM37.62.gtf'
+    annotation = '/home/jorgsk/work/gencode7/gencode.v7.annotation.gtf'
+
     if chr1:
         #annotation = '/users/rg/jskancke/phdproject/3UTR/'\
                 #'gencode5/gencode5_annotation_chr1.gtf'
-        annotation = '/users/rg/jskancke/phdproject/3UTR/Annotations/'\
-                'Mus_musculus.NCBIM37.62_chr1.gtf'
+        #annotation = '/users/rg/jskancke/phdproject/3UTR/Annotations/'\
+                #'Mus_musculus.NCBIM37.62_chr1.gtf'
+        annotation = '/home/jorgsk/work/gencode7/gencode.v7.annotation_chr1.gtf'
 
     an_frmt = 'GENCODE'
-    an_frmt = 'ENSEMBL'
+    #an_frmt = 'ENSEMBL'
 
     #algo = get_3utr_bed_all_exons(annotation, 'somewhere')
     ### TESTING START
 
     (transcripts, genes) = make_transcripts(annotation, an_frmt)
 
-    #debug()
-
+    outputfile = '/home/jorgsk/work/circular.bed'
+    write_circular(transcripts, outputfile)
 
     ### TESTING OVER
 
     debug()
 
-    all_begends = [(ts.chrm, ts.beg, ts.end) for ts in transcripts.values()]
-    set_begends = set(all_begends)
     print time.time() - t1
     #transcripts = []
 
