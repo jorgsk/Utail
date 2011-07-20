@@ -255,12 +255,12 @@ tuning = false
 # datasets = K562_Cytoplasm:K562_Whole_Cell:K562_CytoplasmReplicate:K562_Whole_CellReplicate
 # datasets = K562_CytoplasmMinus:K562_Whole_CellMinus:K562_NucleusMinus:K562_Cytoplasm:K562_Whole_Cell:K562_Nucleus:K562_Nucleoplasm:K562_Chromatin
 #
-# datasets = K562_Whole_CellMinus:K562_Whole_CellMinusReplicate:K562_Whole_Cell:K562_Whole_CellReplicate:K562_Cytoplasm:K562_CytoplasmReplicate:K562_CytoplasmMinus:K562_CytoplasmMinusReplicate:K562_NucleusMinus:K562_Nucleus:K562_NucleusMinusReplicate:K562_NucleusReplicate
+datasets = K562_Whole_CellMinus:K562_Whole_CellMinusReplicate:K562_Whole_Cell:K562_Whole_CellReplicate:K562_Cytoplasm:K562_CytoplasmReplicate:K562_CytoplasmMinus:K562_CytoplasmMinusReplicate:K562_NucleusMinus:K562_Nucleus:K562_NucleusMinusReplicate:K562_NucleusReplicate:K562_Nucleoplasm:K562_NucleoplasmReplicate:K562_Chromatin:K562_ChromatinReplicate
+# datasets = K562_NucleusMinus:K562_Nucleus:K562_NucleusMinusReplicate:K562_NucleusReplicate:K562_Nucleoplasm:K562_NucleoplasmReplicate
 # datasets = K562_Nucleoplasm:K562_NucleoplasmReplicate:K562_Chromatin:K562_ChromatinReplicate
-datasets = K562_Whole_CellMinus:K562_Whole_CellMinusReplicate:K562_Whole_Cell:K562_Whole_CellReplicate
+# datasets = K562_Whole_CellMinus:K562_Whole_CellMinusReplicate:K562_Whole_Cell:K562_Whole_CellReplicate
 # datasets = K562_Whole_Cell:K562_Whole_CellReplicate
 # datasets = K562_Nucleoplasm:K562_NucleoplasmReplicate:K562_Chromatin:K562_ChromatinReplicate
-
 
 # datasets = K562_Cytoplasm:K562_Nucleus:K562_Nucleoplasm:K562_Chromatin:K562_Whole_Cell
 
@@ -269,7 +269,7 @@ length = false
 
 # give a list of genomic regions you are investigating
 # regions = 3UTRs
-regions = 3UTR-exonic
+# regions = 3UTR-exonic
 # regions = 3UTR-exonic:3UTR-intronic
-# regions = 3UTR-exonic:3UTR-intronic:5UTR-exonic:5UTR-intronic
-# regions = 3UTR-exonic:3UTR-intronic:5UTR-exonic:5UTR-intronic:CDS-exonic:CDS-intronic:Intergenic
+# regions = 3UTR-exonic:3UTR-intronic:CDS-exonic:CDS-intronic
+regions = 3UTR-exonic:3UTR-intronic:5UTR-exonic:5UTR-intronic:CDS-exonic:CDS-intronic:Intergenic

@@ -1,6 +1,6 @@
 """
-**Module for representing GENCODE transcripts as class objects and performing
-calculations on them.**
+**Module for reading genome annotations and representing transcripts  as class
+objects and performing calculations on them.**
 """
 from __future__ import division
 
@@ -448,6 +448,7 @@ def make_transcripts(annotation, file_format='GENCODE'):
 
     # Sort all exons of all transcripts
     for (ts_id, ts_obj) in transcripts.iteritems():
+        ts_obj.exons.sort()
         ts_obj.five_utr.exons.sort()
         ts_obj.cds.exons.sort()
         ts_obj.three_utr.exons.sort()
@@ -1523,6 +1524,29 @@ def get_seqs(utr_dict, hgfasta):
                                           'strand':strand}).upper()
     return seq_dict
 
+def main():
+    t1 = time.time()
+
+    #chr1 = True
+
+    chr1 = False
+
+    #annotation = '/users/rg/jskancke/phdproject/3UTR/'\
+            #'gencode5/gencode5_annotation.gtf'
+    #annotation = '/users/rg/jskancke/phdproject/3UTR/Annotations/'\
+            #'Mus_musculus.NCBIM37.62.gtf'
+    annotation = '/home/jorgsk/work/gencode7/gencode.v7.annotation.gtf'
+
+    if chr1:
+        #annotation = '/users/rg/jskancke/phdproject/3UTR/'\
+                #'gencode5/gencode5_annotation_chr1.gtf'
+        #annotation = '/users/rg/jskancke/phdproject/3UTR/Annotations/'\
+                #'Mus_musculus.NCBIM37.62_chr1.gtf'
+        annotation = '/home/jorgsk/work/gencode7/gencode.v7.annotation_chr1.gtf'
+
+    an_frmt = 'GENCODE'
+    #an_frmt = 'ENSEMBL'
+
 def split_annotation(transcripts, chr1):
 
     # Create bed-files for introns and exons in 3-5 utr and cds
@@ -1541,6 +1565,7 @@ def split_annotation(transcripts, chr1):
 
     for stranded in [False, True]:
     #for stranded in [False]:
+>>>>>>> 923cc153755aa72d0978b86d8bac323068ae0a77
 
         opts = (merge, extend, no_overlapping, chr1, skipsize, stranded)
 
@@ -1556,14 +1581,9 @@ def main():
         annotation = '/users/rg/jskancke/phdproject/3UTR/'\
                 'gencode7/gencode7_annotation.gtf'
 
-        #annotation = '/users/rg/jskancke/phdproject/3UTR/Annotations/'\
-                #'Mus_musculus.NCBIM37.62.gtf'
         if chr1:
             annotation = '/users/rg/jskancke/phdproject/3UTR/'\
                     'gencode7/gencode7_annotation_chr1.gtf'
-
-            #annotation = '/users/rg/jskancke/phdproject/3UTR/Annotations/'\
-                    #'Mus_musculus.NCBIM37.62_chr1.gtf'
 
         an_frmt = 'GENCODE'
         #an_frmt = 'ENSEMBL'

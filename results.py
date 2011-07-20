@@ -15,6 +15,7 @@ import matplotlib.pyplot as plt
 from matplotlib import lines
 
 plt.ion() # turn on the interactive mode so you can play with plots
+#plt.ioff() # turn on the interactive mode so you can play with plots
 
 from operator import attrgetter
 from operator import itemgetter
@@ -1559,331 +1560,179 @@ class Plotter(object):
         #fig.subplots_adjust(wspace=adj)
         debug()
 
-    def region_comparer(self, dsets, everything, settings):
-        """ For each region, for each cell type, compute the read counts etc as in
-        'everything' for poly(A) minus and for replicates. Make one multi-plot per
-        region.
+    def region_figure(self, plot_clusters, normlized, dsets, everything,
+                      settings, clr_type):
+        """ Create the poly(A) reads/clusters-inregions figure!
         """
 
-        # NEW PLAN! GET all regions in one file. Simply use the average of the
-        # replicas (this gives you the variation there) and put the polyA+ next
-        # to the polyA- (this gives you that difference). A final bonus is to
-        # put the actual numbers on the top of each bar.
-
-        #repl = {'replicate': True, 'not_replicate': False}
-        #polyplus = {'poly_plus': True, 'poly_minus': False}
-
-        ## finally, add all to this:
-        #    everything[region][cl][realcomp][replicate][polyMinus] = mdict
         reg_nr = len(everything)
 
-        # TODO: get the relative size thing to work, a
+        if reg_nr < 3:
+            #(fig, axes) = plt.subplots(int(math.ceil(reg_nr/2))+1, 2, sharey=True)
+            (fig, axes) = plt.subplots(int(math.ceil(reg_nr/2))+1, 2)
+        else:
+            #(fig, axes) = plt.subplots(int(math.ceil(reg_nr/2)), 2, sharey=True)
+            (fig, axes) = plt.subplots(int(math.ceil(reg_nr/2)), 2)
 
-        for plot_clusters in [True, False]:
-            #for relative in [True, False]:
-            relative = False
-            get_the_figure(plot_clusters, relative, reg_nr, dsets, everything,
-                           settings)
+        if plot_clusters:
+            if clr_type == 'all':
+                clreads = 'all clusters'
+            if clr_type == '2+':
+                clreads = 'clusters with 2+ reads or annotated'
+        else:
+            clreads = 'reads'
 
-def get_the_figure(plot_clusters, relative, reg_nr, dsets, everything, settings):
-    # Create the figure!
-    if reg_nr < 3:
-        (fig, axes) = plt.subplots(int(math.ceil(reg_nr/2))+1, 2, sharey=True)
-    else:
-        (fig, axes) = plt.subplots(int(math.ceil(reg_nr/2)), 2, sharey=True)
+        if normlized:
+            reltv = ', normalized to region size. '
+        else:
+            reltv = ''
 
-    if relative:
-        fig.suptitle('Poly(A) reads in PolyA+ and polyA- samples for '\
-                     ' different genomic regions. Normalized to region '\
-                     'size ', size=23)
-    else:
-        fig.suptitle('Poly(A) reads in PolyA+ and polyA- samples for '\
-                     ' different genomic regions', size=23)
+        fig.suptitle('Poly(A) {0} in PolyA+ and polyA- samples for '\
+                     ' different '\
+                     ' genomic regions{1}{2}'.format(clreads, reltv, ' K562'),
+                     size=23)
 
-    for reg_ind, (region, reg_dict) in enumerate(sorted(everything.items())):
+        # The order in which you wish to plot the data. This list will be reduced if
+        # not all datasets are present
+        plot_order = ['Chromatin', 'Nucleoplasm', 'Nucleus PolyA-', 'Nucleus',
+                      'PolyA+', 'Cytoplasm PolyA-', 'Cytoplasm PolyA+']
 
-        for cell_line, cl_dict in reg_dict.items():
-            # get compartments in the sorted order you want
-            compartments = [comp for comp in sorted(cl_dict.keys())]
-            colors = ['b', 'g', 'c', 'm', 'y', 'r']
+        item_sum = dict()
 
-            color_map = dict(zip(compartments, colors))
-            cols = colors[:len(color_map)]
+        # the max y, so that the plots are comparable
+        ymax = 0
 
-            bar_cl_nr = len(compartments)
-            #bar_nr = bar_cl_nr*2
-            x_arr = np.arange(1, bar_cl_nr+1) # bar at 1, 2, 3, etc
-
-            # where you keep the height of the bars
-            read_dict = {'polyA_plus': dict((rep, []) for rep in
-                           ['replicate', 'not_replicate']),
-                     'polyA_minus': dict((rep, []) for rep in
-                           ['replicate', 'not_replicate'])}
-
-            # where you keep the RELATIVe height of the bar
-            rel_read_dict = {'polyA_plus': dict((rep, []) for rep in
-                           ['replicate', 'not_replicate']),
-                     'polyA_minus': dict((rep, []) for rep in
-                           ['replicate', 'not_replicate'])}
-
-            # sorting keeps the order of replic
-            for compartment, comp_dict in sorted(cl_dict.items()):
-
-                # Get values for the bars for the different plots
-                for replicate, rep_dict in comp_dict.items():
-                    for polypl, polyA_statistics in rep_dict.items():
-
-                        if not get_sites:
-                            treads = polyA_statistics['total_reads']
-                        if get_sites:
-                            treads = polyA_statistics['total_sites']
-
-                        if not get_sites:
-                            relreads =\
-                            polyA_statistics['total_reads_region_normalized']
-
-                        if get_sites:
-                            relreads =\
-                            polyA_statistics['total_sites_normalized']
-
-                        # 1) Absolute nr of reads
-                        read_dict[polypl][replicate].append(treads)
-                        # 2) nr of reads relative to region size
-                        rel_read_dict[polypl][replicate].append(relreads)
-
-            # Get the axis
-            column = reg_ind % 2
-            row = int(math.ceil(reg_ind//2))
-            ax = axes[row, column]
-
-            ax.set_title(region, size=17)
-            bar_width = 0.25
-            # make the plots for COMPARING POLYA + AND -
-            for ind, polyPM in enumerate(['polyA_plus', 'polyA_minus']):
-
-                # if relative size
-                if relative:
-                    repl = rel_read_dict[polyPM]['replicate']
-                    norepl = rel_read_dict[polyPM]['not_replicate']
-                    # this is for nucleus and nucleoplasm that dont have
-                    # minus fractions
-                    if (repl == []) and (norepl == []):
-                        repl = np.zeros(len(compartments)).tolist()
-                        norepl = np.zeros(len(compartments)).tolist()
-
-                # if standard count
-                else:
-                    repl = read_dict[polyPM]['replicate']
-                    norepl = read_dict[polyPM]['not_replicate']
-                    # this is for nucleus and nucleoplasm that dont have
-                    # minus fractions
-                    if (repl == []) and (norepl == []):
-                        repl = np.zeros(len(compartments)).tolist()
-                        norepl = np.zeros(len(compartments)).tolist()
-
-                #repl = [1,3,4,5,56,6]
-                #norepl = [3,5,66,57,67] 
-                # you need the mean and std of each
-                joiner = np.array([np.array(repl), np.array(norepl)])
-                mean = joiner.mean(axis=0)
-                std = joiner.std(axis=0)
-
-                if ind == 0:
-                    ax.bar(x_arr-0.25, mean, width=bar_width, yerr=std, color =
-                           cols)
-                    ax.set_ylabel('Poly(A) reads', size=15)
-
-                if ind == 1:
-                    ax.bar(x_arr, mean, width=bar_width, yerr=std, color =
-                           cols, alpha=0.5, edgecolor = 'k')
-
-                ax.yaxis.grid(True)
-                ax.set_xticks(x_arr)
-                ax.set_xticklabels(compartments)
-                ax.set_xlim((min(x_arr)-0.5, max(x_arr)+0.5))
-
-    plt.setp([a.get_yticklabels() for a in axes[:,1]], visible=False)
-    fig.subplots_adjust(wspace=0.1)
-    fig.subplots_adjust(hspace=0.5)
-
-    # Fine-tune: remove space between subplots
-    #fig.subplots_adjust(hspace=adj)
-    plt.draw()
-
-
-    def region_comparer_old(self, dsets, everything, settings):
-        """ For each region, for each cell type, compute the read counts etc as in
-        'everything' for poly(A) minus and for replicates. Make one multi-plot per
-        region.
-        """
-
-        # 1) For all exonic regions, plot the poly(A) + read count, absolute and
-        # relative. Then do it for intronic regions. In the plot, use whole cell.
-        # Repeat for whole cell replica. TODO eh, do this? Make many different
-        # versions? one for poly(A)+ and one for poly(A) minus? Ugh? I think you
-        # must make many different varieties. First, just make it as you had
-        # planned. One big plot per region. Later you can summarize this in the way
-        # that you think is best. Maybe it's easier to summarize too when you have
-        # all the data in front of you.
-
-        #repl = {'replicate': True, 'not_replicate': False}
-        #polyplus = {'poly_plus': True, 'poly_minus': False}
-
-        ## finally, add all to this:
-        #    everything[region][cl][realcomp][replicate][polyMinus] = mdict
-        for region, reg_dict in everything.items():
-            #fig = plt.figure()
+        for reg_ind, (region, reg_dict) in enumerate(sorted(everything.items())):
 
             for cell_line, cl_dict in reg_dict.items():
-                # get compartments in the sorted order you want
-                compartments = [comp for comp in sorted(cl_dict.keys())]
-
-                colors = ['b', 'g', 'c', 'm', 'y', 'r']
-
-                color_map = dict(zip(compartments, colors))
-
-                cols = colors[:len(color_map)]
-
-                (fig, axes) = plt.subplots(2, 2, sharey=True)
-                bar_cl_nr = len(compartments)
-                #bar_nr = bar_cl_nr*2
-                bar_width = 0.25
-                x_arr = np.arange(1, bar_cl_nr+1) # bar at 1, 2, 3, etc
 
                 # where you keep the height of the bars
-                read_dict = {'polyA_plus': dict((rep, []) for rep in
-                               ['replicate', 'not_replicate']),
-                         'polyA_minus': dict((rep, []) for rep in
-                               ['replicate', 'not_replicate'])}
+                height_dict = AutoVivification()
 
-                # sorting keeps the order of replic
-                for compartment, comp_dict in sorted(cl_dict.items()):
+                for compartment, comp_dict in cl_dict.items():
 
                     # Get values for the bars for the different plots
                     for replicate, rep_dict in comp_dict.items():
                         for polypl, polyA_statistics in rep_dict.items():
 
-                            treads = polyA_statistics['total_reads']
-                            # 1) Compare biological replicates
-                            read_dict[polypl][replicate].append(treads)
+                            if plot_clusters:
+                                if normlized:
+                                    treads = polyA_statistics['total_sites_normalized']
+                                else:
+                                    if clr_type == 'all':
+                                        treads = polyA_statistics['total_sites']
+                                    if clr_type == '2+':
+                                        treads = polyA_statistics['total_sites2']
+                            else:
+                                if normlized:
+                                    treads = polyA_statistics['total_reads_region_normalized']
+                                else:
+                                    treads = polyA_statistics['total_reads']
 
-                # make the plots for COMPARING REPLICAETES
-                for ind, (polypm, pmdict) in enumerate(read_dict.items()):
-                    ax = axes[0,ind]
+                            key = ':'.join([compartment, polypl])
 
-                    ax.set_title('Comparing read count for {0}'.format(polypm,
-                                                                       size=20))
-                    origs = pmdict['not_replicate']
-                    ax.bar(x_arr-0.25, origs, width=bar_width, color = cols)
+                            # 1) Absolute nr of reads
+                            height_dict[key][replicate] = treads
+                            # 2) sum the total number of treads
+                            if key in item_sum:
+                                item_sum[key] += treads
+                            else:
+                                item_sum[key] = treads
 
-                    repls = pmdict['replicate']
-                    ax.bar(x_arr, repls, width=bar_width, alpha=0.7, color =
-                          cols)
+                # crop plot order according to the datasets that you actually have
+                for item in plot_order[:]:
+                    if len(item.split()) == 1:
+                        key = ':'.join([item, 'PolyA+'])
+                    else:
+                        key = ':'.join(item.split())
 
-                    ax.yaxis.grid(True)
+                    if key not in height_dict.keys():
+                        plot_order.remove(item)
 
-                # make the plots for COMPARING POLYA + AND -
-                ax = axes[1,0]
-                for ind, polyPM in enumerate(['polyA_plus', 'polyA_minus']):
-                    ax.set_title('Comparing read count for poly(A)+ and poly(A)-')
+                # Note: it would be best if each compartment had the same color; you
+                # separate poly(A) + and - with alpha = 0.5
+                colors = ['b', 'g', 'c', 'm', 'y', 'r']
 
-                    repl = read_dict[polyPM]['replicate']
-                    norepl = read_dict[polyPM]['not_replicate']
+                color_map = dict(zip(plot_order, colors))
+                cols = colors[:len(color_map)]
 
-                    #repl = [1,3,4,5,56,6]
-                    #norepl = [3,5,66,57,67] 
-                    # you need the mean and std of each
-                    joiner = np.array([np.array(repl), np.array(norepl)])
-                    mean = joiner.mean(axis=0)
-                    std = joiner.std(axis=0)
+                bar_cl_nr = len(plot_order)
+                #bar_nr = bar_cl_nr*2
+                x_arr = np.arange(1, bar_cl_nr+1) # bar at 1, 2, 3, etc
 
-                    if ind == 0:
-                        ax.bar(x_arr-0.25, mean, width=bar_width, yerr=std, color =
-                               cols)
+                # Get the axis
+                column = reg_ind % 2
+                row = int(math.ceil(reg_ind//2))
+                ax = axes[row, column]
 
-                    if ind == 1:
-                        ax.bar(x_arr, mean, width=bar_width, yerr=std, color =
-                               cols, alpha=0.5, edgecolor = 'k')
+                ax.set_title(region, size=16)
+                bar_width = 0.25
 
-                    ax.yaxis.grid(True)
+                means = []
+                stds = []
 
-                for ax in axes[0,:]:
-                    ax.set_xticks(x_arr)
-                    ax.set_xticklabels(compartments)
-                    ax.set_xlabel('Compartments and their replicates', size=20)
+                # loop through the data in the order you like
+                for position, data_name in enumerate(plot_order):
+                    # chromatin and nucleoplasm don't have polyA+/-. use + as dummy.
+                    if len(data_name.split()) == 1:
+                        key = ':'.join([data_name, 'PolyA+'])
+                    else:
+                        key = ':'.join(data_name.split())
 
-                for ax in axes[1,:]:
-                    ax.set_xticks(x_arr)
-                    ax.set_xticklabels(compartments)
-                    ax.set_xlabel('Compartments in poly(A)+ and poly(A)-', size=20)
+                    repl_dict = height_dict[key]
 
-                # set ylabel only for the left one
-                axes[0,0].set_ylabel('Number of poly(A) reads', size=20)
-                axes[1,0].set_ylabel('Number of poly(A) reads', size=20)
-                plt.setp([a.get_yticklabels() for a in axes[:,1]], visible=False)
-                fig.subplots_adjust(wspace=0.1)
-                fig.subplots_adjust(hspace=1.4)
+                    # Add the mean and std of the replicates
+                    means.append(np.mean([repl_dict['replicate'],
+                                          repl_dict['not_replicate']]))
+                    stds.append(np.std([repl_dict['replicate'],
+                                          repl_dict['not_replicate']]))
 
-                # Fine-tune: remove space between subplots
-                #fig.subplots_adjust(hspace=adj)
-                plt.draw()
+                ax.bar(x_arr, means, width=bar_width, yerr=stds, color =
+                       cols, alpha=0.9, edgecolor = 'k')
 
-                debug()
+                ax.yaxis.grid(True)
+                ax.set_xticks(x_arr)
+                ax.set_xticklabels(plot_order, rotation=15, size=10)
+                ax.set_xlim((min(x_arr)-0.5, max(x_arr)+0.5))
 
+                ymax = max(ymax, ax.get_ylim()[1])
 
-            #ax_list.append(ax.bar(ind, pairw_matrix[0, :, 0], facecolor=cols[1],
-                                  #width=bar_width))
+        # finally, set ymax again for all windows
+        for axpair in axes:
+            for ax in axpair:
+                ax.set_ylim((0, ymax))
 
-            ## 1) Plot the first bars: the all_clusters ones.
+        # Finally, plot some summary statistics for each compartment: how many
+        # poly(A) reads do we find and how many clusters do we find.
+        if reg_nr >= 3:
+            lastax = axes[-1][-1]
+            sums = []
+            maxy = 0
+            for position, data_name in enumerate(plot_order):
+                # chromatin and nucleoplasm don't have polyA+/-. use + as dummy.
+                if len(data_name.split()) == 1:
+                    key = ':'.join([data_name, 'PolyA+'])
+                else:
+                    key = ':'.join(data_name.split())
 
-            ## Total number of bars in each complex
-            #bar_nr = len(pairw_matrix[:,0,0]) # actually =  + all_cl and - union
-            ## Set width of bars
-            #bar_width = 0.6 # total width of bar-cluster = wid*bar_nr
-            ## Get the width of the whole bar-compled
-            #complex_width = bar_width*bar_nr
-            ## Set how much space should be between the bar-complexes
-            #complex_interspace = complex_width/2
-            ## Total number of complexes is cutoff. Get the last x-coordinate.
-            #final_x = math.ceil((complex_width + complex_interspace)*cutoff)
+                sums.append(item_sum[key])
+                maxy = max(item_sum[key], maxy)
 
-            ## Set your x-axis so that it will be wide enough for all complexes
-            ## this will be the leftmost x-position of the first bar
-            #ind = np.arange(1, final_x+1, complex_width+complex_interspace)
-            ## Shorten to make sure that this is as long as the data-points
-            #ind = ind[:cutoff]
+            lastax.bar(x_arr, sums, width=bar_width, color = cols, edgecolor = 'k')
+            lastax.set_ylim((0, maxy+maxy*0.2))
+            lastax.yaxis.grid(True)
+            lastax.set_xticks(x_arr)
+            lastax.set_xticklabels(plot_order, rotation=15, size=10)
+            lastax.set_xlim((min(x_arr)-0.5, max(x_arr)+0.5))
 
-            ## Get max height of bars
-            #max_height = counter[dset_ind].max() # original clusters always highest
+            lastax.set_title('Sum of {0} for whole genome'.format(clreads), size=13)
 
-            ## Plot the cluster counts (keep axis objects for later)
-            #ax_list = [ax.bar(ind, counter[dset_ind], facecolor=cols[0],
-                          #width=bar_width)]
-            ## Plot the union-counts on top of the cluster counts
-            #ax_list.append(ax.bar(ind, pairw_matrix[0, :, 0], facecolor=cols[1],
-                                  #width=bar_width))
+        # remove y-axis except for the last one
+        plt.setp([a.get_yticklabels() for a in axes[:-1,1]], visible=False)
+        fig.subplots_adjust(wspace=0.1)
+        fig.subplots_adjust(hspace=0.7)
 
-            ## Plot the rest of the bars.
-            #for int_ind in range(1, bar_nr):
-
-                #array = pairw_matrix[int_ind,:,0] # absolute numbers has dim 0
-                #clr = cols[int_ind+2]
-                ## ind+bar_width*(int_ind+1) adjusts the bars one 'bar_width' on the
-                ## x-axis
-                #ll = ax.bar(ind+bar_width*(int_ind), array, facecolor=clr,
-                            #width=bar_width)
-                #ax_list.append(ll)
-
-            ## format the union percentages nicely
-            #form_perc = [[format(el*100, '.0f')+'%' for el in pairw_matrix[ind,:,1]]
-                         #for ind in range(bar_nr)]
-
-
-            ## get the plot
-            #(fig, ax) = plt.subplots()
-
-
-        # 1) Compare replicates for each dataset.
+        return (fig, axes)
 
 
 def pairwise_intersect(in_terms_of, dset_dict, cutoff):
@@ -4754,14 +4603,18 @@ def polyA_summary(dsets, super_3utr, polyAstats, settings):
 
             for comp, comp_dict in cl_dict.items():
 
-                minus[comp] = {'Tot pA':0, 'Annot pA':0, 'PAS pA':0, 'read_nr':0,
-                               'both_an_and_PAS':0}
+                minus[comp] = {'Cls nr':0, 'Annot pA':0, 'PAS pA':0, 'read_nr':0,
+                               'both_an_and_PAS':0, 'Cls min2':0}
 
                 for utr_id, utr in comp_dict.iteritems():
                     if utr.clusters != []:
                         for cls in utr.clusters:
-                            minus[comp]['Tot pA'] += 1
+                            minus[comp]['Cls nr'] += 1
                             minus[comp]['read_nr'] += cls.nr_support_reads
+
+                            # if more than 1 read supporting
+                            if cls.nr_support_reads > 1 or cls.annotated_polyA_distance != 'NA':
+                                minus[comp]['Cls min2'] += 1
 
                             if cls.annotated_polyA_distance != 'NA':
                                 minus[comp]['Annot pA'] += 1
@@ -4774,7 +4627,8 @@ def polyA_summary(dsets, super_3utr, polyAstats, settings):
                                 minus[comp]['both_an_and_PAS'] += 1
 
         for (comp, count_dict) in minus.items():
-            total = count_dict['Tot pA']
+            total = count_dict['Cls nr']
+            total2 = count_dict['Cls min2']
 
             annot = count_dict['Annot pA']
             annot_frac = format(annot/total, '.2f')
@@ -4786,6 +4640,7 @@ def polyA_summary(dsets, super_3utr, polyAstats, settings):
             read_per_site = format(read_nr/total, '.2f')
 
             anYpas = count_dict['both_an_and_PAS']
+
             if annot == 0:
                 anYpas_rate = 'NA'
             else:
@@ -4797,16 +4652,11 @@ def polyA_summary(dsets, super_3utr, polyAstats, settings):
             this_readnr = polyAstats[region][cl][comp]['This_strand_count']
             both_readnr = polyAstats[region][cl][comp]['Both_strands_count']
 
-            ## XXX NOTE XXX when you get from the non-3UTRs, remember to take
-            #reads from both strands!!!!!!!!!!! by default you only report some
-            #of those. NOTE: this means that you have to change the part that
-            #reports polyA reads in utail. You must know if you're dealing with
-            # well-stranded annotated regions, or non-annotated regions.
-
             print cl
             print comp
-            print("Total poly(A) sites: {0} ".format(total))
-            print("Total poly(A) reads (per site): {0} ({1}) ".format(read_nr,
+            print("Total poly(A) sites: {0}".format(total))
+            print("Total poly(A) sites with 2+ reads or annotated: {0}".format(total2))
+            print("Total poly(A) reads (per site): {0} ({1})".format(read_nr,
                                                                       read_per_site))
             print("Annotated poly(A) sites: {0} ({1})".format(annot, annot_frac))
             print("poly(A) sites with PAS: {0} ({1})".format(pas, pas_frac))
@@ -4825,14 +4675,15 @@ def polyA_summary(dsets, super_3utr, polyAstats, settings):
                 replicate = 'not_replicate'
 
             if 'Minus' in comp:
-                polyMinus = 'polyA_minus'
+                polyMinus = 'PolyA-'
                 realcomp = realcomp.partition('Minus')[0]
             else:
-                polyMinus = 'polyA_plus'
+                polyMinus = 'PolyA+'
 
             mdict = {}
 
             mdict['total_sites'] = total
+            mdict['total_sites2'] = total2 # sits with 2+ reads or annotated
             mdict['total_reads'] = read_nr
 
             # How many reads normalized by region size?
@@ -4856,10 +4707,24 @@ def polyA_summary(dsets, super_3utr, polyAstats, settings):
         print("Total unique poly(A) sites for {1}: {0}".format(total_unique,
                                                                region))
 
-    # HO HO HO !!!!!!!! PLOT THE EVERYTHING STATS!!!
     p = Plotter()
-    #p.region_comparer_old(dsets, everything, settings)
-    p.region_comparer(dsets, everything, settings)
+    #For each region, for each cell type, compute the read counts etc as in
+    #'everything' for poly(A) minus and for replicates. Make one multi-plot per
+    #region.
+    #p.region_figure(True, False, dsets, everything, settings, 'all')
+
+    #debug()
+    for plot_clusters in [True, False]:
+        #for normlized in [True, False]:
+        normlized = False
+
+        if plot_clusters:
+            for clr_type in ['all', '2+']:
+                p.region_figure(plot_clusters, normlized, dsets, everything,
+                                settings, clr_type)
+        else:
+            p.region_figure(plot_clusters, normlized, dsets, everything,
+                            settings, 'all')
 
 def get_polyA_stats(settings):
     """ Return a dictionary that for each [region][cell_line][compartment]
@@ -4924,13 +4789,14 @@ def main():
 
     # for the onlypolyA files
     # you now have an additional level: the "region" (often the 3UTR)
-    pickfile = 'super_pickle'
+    #pickfile = 'super_pickle'
 
-    if not os.path.isfile(pickfile):
-        dsets, super_3utr = super_falselength(settings, speedrun=False, svm=False)
-        pickle.dump((dsets, super_3utr), open(pickfile, 'wb'))
-    else:
-        (dsets, super_3utr) = pickle.load(open(pickfile))
+    #if not os.path.isfile(pickfile):
+        #pickle.dump((dsets, super_3utr), open(pickfile, 'wb'), protocol=2)
+    #else:
+        #(dsets, super_3utr) = pickle.load(open(pickfile))
+    dsets, super_3utr = super_falselength(settings, speedrun=False, svm=False)
+    #dsets, super_3utr = super_falselength(settings, speedrun=True, svm=False)
 
     # Get the basic poly(A) stat file that is output with each run. It gives
     # statistics on the number of reads that fall in which strand and so forth.
