@@ -1579,13 +1579,13 @@ class Plotter(object):
 
         # TODO: get the relative size thing to work, a
 
-        for get_sites in [True, False]:
+        for plot_clusters in [True, False]:
             #for relative in [True, False]:
             relative = False
-            get_the_figure(get_sites, relative, reg_nr, dsets, everything,
+            get_the_figure(plot_clusters, relative, reg_nr, dsets, everything,
                            settings)
 
-def get_the_figure(get_sites, relative, reg_nr, dsets, everything, settings):
+def get_the_figure(plot_clusters, relative, reg_nr, dsets, everything, settings):
     # Create the figure!
     if reg_nr < 3:
         (fig, axes) = plt.subplots(int(math.ceil(reg_nr/2))+1, 2, sharey=True)
