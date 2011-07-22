@@ -29,8 +29,6 @@ epsilon_upstream_covrg       Average coverage 50nt upstream the epsilon site
 annotation_distance          Distance in nucleotides from annotated 3UTR end
                              (within +/- 100 nucleotides; if distance is more
                              than that, 'NA' is set)
-annotation_downstream_covrg  The same as for epsilon, but for the annotated end
-annotation_upstream_covrg    The same as for epsilon, but for the annotated end 
 epsilon_PAS_type             Space-separated list of PASe found within 40nt
                              downstream the site. 'NA' if none
 epsilon_PAS_distance         Space-separated list of distances to those PAS.

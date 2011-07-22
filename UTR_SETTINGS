@@ -40,7 +40,7 @@ carrie = /users/rg/projects/NGS/Projects/ENCODE/hg19main/GingerasCarrie
 
 # K562_Whole_CellMinusReplicate = %(carrie)s/002WCMinus/genome/LID8660_FC61FGUAAXX_2_1.gem.map.gz:%(carrie)s/002WCMinus/genome/LID8660_FC61FGUAAXX_2_2.gem.map.gz:%(carrie)s/002WCMinus/genome/LID8660_FC61FKBAAXX_2_1.gem.map.gz:%(carrie)s/002WCMinus/genome/LID8660_FC61FKBAAXX_2_2.gem.map.gz:%(carrie)s/002WCMinus/genome/LID8660_FC61FM9AAXX_2_1.gem.map.gz:%(carrie)s/002WCMinus/genome/LID8660_FC61FM9AAXX_2_2.gem.map.gz
 
-# K562_Whole_Cell = %(carrie)s/001WC/genome/LID16627_FC61U30AAXX_2_2.gem.map.gz:%(carrie)s/001WC/genome/LID16627_FC61U30AAXX_1_2.gem.map.gz:%(carrie)s/001WC/genome/LID16627_FC61U30AAXX_3_1.gem.map.gz:%(carrie)s/001WC/genome/LID16627_FC61U30AAXX_3_2.gem.map.gz:%(carrie)s/001WC/genome/LID16627_FC61U30AAXX_2_1.gem.map.gz:%(carrie)s/001WC/genome/LID16627_FC61U30AAXX_1_1.gem.map.gz
+K562_Whole_Cell = %(carrie)s/001WC/genome/LID16627_FC61U30AAXX_2_2.gem.map.gz:%(carrie)s/001WC/genome/LID16627_FC61U30AAXX_1_2.gem.map.gz:%(carrie)s/001WC/genome/LID16627_FC61U30AAXX_3_1.gem.map.gz:%(carrie)s/001WC/genome/LID16627_FC61U30AAXX_3_2.gem.map.gz:%(carrie)s/001WC/genome/LID16627_FC61U30AAXX_2_1.gem.map.gz:%(carrie)s/001WC/genome/LID16627_FC61U30AAXX_1_1.gem.map.gz
 
 # K562_Whole_CellReplicate = %(carrie)s/002WC/genome/LID16628_FC61U30AAXX_4_1.gem.map.gz:%(carrie)s/002WC/genome/LID16628_FC61U30AAXX_4_2.gem.map.gz:%(carrie)s/002WC/genome/LID16628_FC61U30AAXX_5_1.gem.map.gz:%(carrie)s/002WC/genome/LID16628_FC61U30AAXX_5_2.gem.map.gz:%(carrie)s/002WC/genome/LID16628_FC61U30AAXX_6_1.gem.map.gz:%(carrie)s/002WC/genome/LID16628_FC61U30AAXX_6_2.gem.map.gz
 

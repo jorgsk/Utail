@@ -1820,10 +1820,12 @@ def get_intersection_matrix(pair_names, unions_names, cutoff, dset_dict):
         sub_cls[-1] = sum(sub_cls[-1], [])
 
         # Get number of intersections 
-        isect_nrs = [len(set.intersection(set(main_cls[count]), set(sub_cls[count])))
-                                      for count in range(0, cutoff)]
+        isect_nrs = [len(set.intersection(set(main_cls[count]),
+                                          set(sub_cls[count]))) for count in
+                     range(0, cutoff)]
 
-        # Get percent of intersection relative to 'main' dataset (will be all or annot)
+        # Get percent of intersection relative to 'main' dataset (will be all or
+        # annot)
         isect_pcnt = []
         for (indx, isect_nr) in enumerate(isect_nrs):
 
@@ -1856,8 +1858,9 @@ def get_intersection_matrix(pair_names, unions_names, cutoff, dset_dict):
 
     # Get number of intersections 
     # (using main_cls from the previous for-loop -- dirty :S)
-    all_isect_nrs = [len(set.intersection(set(main_cls[count]), set(all_cls[count])))
-                                  for count in range(0, cutoff)]
+    all_isect_nrs = [len(set.intersection(set(main_cls[count]),
+                                          set(all_cls[count]))) for count in
+                     range(0, cutoff)]
 
     # Get percent of intersection relative to 'main' dataset (will be all or annot)
     all_isect_pcnt = []

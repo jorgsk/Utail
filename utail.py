@@ -93,15 +93,15 @@ class Settings(object):
         self.chr1 = True
         #self.chr1 = False
         self.read_limit = False
-        #self.read_limit = 20000000
+        self.read_limit = 20000000
         self.max_cores = 3
         self.get_length = False
         #self.get_length = True
         self.extendby = 100
         #self.polyA = True
         #self.polyA = False
-        self.polyA = '/users/rg/jskancke/phdproject/3UTR/the_project/polyA_files'\
-                '/polyA_reads_K562_Whole_Cell_processed_mapped.bed'
+        #self.polyA = '/users/rg/jskancke/phdproject/3UTR/the_project/polyA_files'\
+                #'/polyA_reads_K562_Whole_Cell_processed_mapped.bed'
         #self.polyA = '/users/rg/jskancke/phdproject/3UTR/the_project/polyA_files'\
                 #'/polyA_reads_K562_Cytoplasm_processed_mapped.bed'
         #self.bed_reads = '/users/rg/jskancke/phdproject/3UTR/the_project/temp_files'\
@@ -888,9 +888,11 @@ def get_pas_and_distance(rpoint, pas_patterns, sequence, settings):
     sequence must also be relative to UTR-beg (3->5 direction)
 
     If settings.pairend == False, consider both the sequence and its reverse
-    complement.
+    complement in the other direction.
     """
 
+    # TODO update the other 'get pas' methods too. damnable -- there should only
+    # be one method for this.
     if settings.pairend:
         pas_seq = sequence[rpoint-40:rpoint]
 
@@ -910,7 +912,6 @@ def get_pas_and_distance(rpoint, pas_patterns, sequence, settings):
             else:
                 (has_pas, pas_dist) = zip(*has_pas)
 
-            debug()
             #(('GATAAA', 'AATGAA'), (22, 28))
             # This is what you return.
             return (has_pas, pas_dist)
@@ -920,17 +921,19 @@ def get_pas_and_distance(rpoint, pas_patterns, sequence, settings):
             return ('NA', 'NA')
     else:
 
-        pas_seq = sequence[rpoint-40:rpoint]
-
         pases = []
         # check both strands -- this is not a good, but it's the best you've
-        # got. poly(A) reads would help -- you check the opposite strand.
+        # got. no no no. you don't know the strand.
+        # TODO get the reverse complement in the other direction
+        # you don't know if this is correct or not.
         for turn in ['norm', 'reversecomp']:
 
             if turn == 'norm':
+                pas_seq = sequence[rpoint-40:rpoint]
                 pass
 
             if turn == 'reversecomp':
+                pas_seq = sequence[rpoint:rpoint+40]
                 pas_seq = reverseComplement(pas_seq)
 
             # special case if the polya read is is early in the sequence
@@ -2071,8 +2074,10 @@ def cluster_polyAs(settings, utr_polyAs, utrs, polyA):
 
     # If there are no polyA reads or polyA is false: return empty lists 
     if utr_polyAs == {} or polyA == False:
-        polyA_reads = dict((utr_id, {'this_strand':[[],[]], 'other_strand':[[], []]})
+        polyA_reads = dict((utr_id, {'this_strand':[[],[]],
+                                     'other_strand':[[], []]})
                            for utr_id in utrs)
+
         return polyA_reads, {}
 
     polyA_reads = {}
@@ -2155,8 +2160,6 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs, settings,
         if not os.path.isdir(cache_dir):
             os.makedirs(cache_dir)
 
-        # TODO make the cache region-independent. It should only depend on the
-        # dataset. ffs. fer fex sake. ffs. 
         polydone_path = os.path.splitext(os.path.split(polyA_path)[1])[0]
         polyA_cached_path = os.path.join(cache_dir, polydone_path+\
                                          '_processed_mapped.bed')
@@ -2516,12 +2519,7 @@ def only_polyA_writer(dset_id, annotation, utr_seqs, polyA_reads, settings,
     # need a flag for this. like settings non_stranded.
 
     for utr_id, polyA_dict in polyA_reads.iteritems():
-        # Skip those that don't have any reads in them (or keep them but make
-        # them empty? then it's easy to know how many you have that are actually
-        # covered by poly(A) reads. eg: XXXX total genes, XXXX total UTRs from
-        # XXXX genes. XXXX were expressed, and of the expressed we found XXXXXX
-        # poly(A) reads in XXXXXX of them. Here is the story about those poly(A)
-        # reads.) For now skip them.
+        # Skip those that don't have any reads in them 
         if polyA_dict == {'other_strand': [[], []], 'this_strand': [[], []]}:
             continue
 
@@ -3023,6 +3021,9 @@ def main():
     # published differences, it seems like they're a dime a dozen, while in fact
     # they're not that many.
 
+    # IDEA: are some poly(A) cluster's enormous count the result of PCR
+    # amplification gone awry? Compare the biological replicates!
+
     # Set debugging mode. This affects the setting that are in the debugging
     # function (called below). It also affects the 'temp' and 'output'
     # directories, respectively.
@@ -3045,10 +3046,10 @@ def main():
     # Location of settings file
     settings_file = os.path.join(here, 'UTR_SETTINGS')
 
-    ########################XXX###############################
+    #######################################################
     ###### TESTING Pedro's old annotation settings
     #settings_file = os.path.join(here, 'OLD_ENCODE_SETTINGS')
-    ########################XXX###############################
+    #######################################################
 
     # Create the settings object from the settings file
     settings = Settings(*read_settings(settings_file))
@@ -3067,9 +3068,9 @@ def main():
     print('Reading settings ...\n')
     annotation = Annotation(settings.annotation_path, settings.annotation_format)
 
-    # XXX DEBUGGING: only the first two regions
+    # DEBUGGING: only the first two regions
     #settings.region_files = settings.region_files[:2]
-    # XXX REMOVE LATER
+    # REMOVE LATER
 
     # loop through all regions supplied (often this will be just 1 -- the 3UTR)
     for region_file in settings.region_files:
@@ -3181,13 +3182,6 @@ def piperunner(settings, annotation, simulate, DEBUGGING, beddir, tempdir,
 if __name__ == '__main__':
     main()
 
-
-# TODO: go through the entire program and improve documentation.
-# TODO: the two below should be part of the final analysis script; one button!
-
-# TODO: Roderic conclusion:
-    # next time he wants some basic statistics. The program seems ready, so it's
-    # time to do some numbers on the output.
 
 # NOTES:
     # Time for transcription < 10 minutes
