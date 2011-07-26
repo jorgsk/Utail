@@ -90,15 +90,16 @@ class Settings(object):
         debugging!
         """
 
-        self.chr1 = True
-        #self.chr1 = False
-        self.read_limit = False
-        self.read_limit = 20000000
-        self.max_cores = 3
+        #self.chr1 = True
+        self.chr1 = False
+        #self.read_limit = False
+        self.read_limit = 50000000
+        self.max_cores = 5
         self.get_length = False
         #self.get_length = True
-        self.extendby = 100
-        #self.polyA = True
+        self.extendby = 10
+        #self.extendby = 100
+        self.polyA = True
         #self.polyA = False
         #self.polyA = '/users/rg/jskancke/phdproject/3UTR/the_project/polyA_files'\
                 #'/polyA_reads_K562_Whole_Cell_processed_mapped.bed'
@@ -600,6 +601,7 @@ class FullLength(object):
         #"""
         #Return all close-by PAS and their distances.
         #"""
+        # TODO update something
 
         if this_utr.strand == '+':
             rel_pos = this_utr.rel_pos
@@ -981,7 +983,8 @@ def reverseComplement(sequence):
     complement = {'A':'T','C':'G','G':'C','T':'A','N':'N'}
     return "".join([complement[nt] for nt in sequence[::-1]])
 
-def zcat_wrapper(bed_reads, read_limit, out_path, polyA, polyA_path, get_length):
+def zcat_wrapper(dset_id, bed_reads, read_limit, out_path, polyA, polyA_path,
+                 get_length):
     """
     Wrapper around zcat. Call on gem-mapped reads. Write uniquely mapped
     reads (up to 2 mismatches) to .bed file.
@@ -1003,6 +1006,7 @@ def zcat_wrapper(bed_reads, read_limit, out_path, polyA, polyA_path, get_length)
 
     # Accept up to two mismatches. Make as set for speedup.
     acceptable = set(('1:0:0', '0:1:0', '0:0:1'))
+
     # Make regular expression for getting read-start
     start_re = re.compile('[0-9]*')
     trail_A = re.compile('A{5,}') # must be used on reversed string
@@ -1023,16 +1027,16 @@ def zcat_wrapper(bed_reads, read_limit, out_path, polyA, polyA_path, get_length)
     cmd = ['zcat', '-f'] + bed_reads
     f = Popen(cmd, stdout=PIPE)
 
-    if read_limit:
-        count = 0
+    count = 0
 
     for map_line in f.stdout:
         (ID, seq, quality, mapinfo, position) = map_line.split('\t')
 
-        if read_limit: # If short, only get up to 'limit' of reads
-            count +=1
-            if count > read_limit:
-                break
+        count +=1
+
+        # If short, only get up to 'limit' of reads
+        if read_limit and count > read_limit:
+            break
 
         # Acceptable and poly(A) reads are mutually exclusive.
         if mapinfo in acceptable and get_length == True:
@@ -1060,18 +1064,20 @@ def zcat_wrapper(bed_reads, read_limit, out_path, polyA, polyA_path, get_length)
 
                 # Check for putative poly(A)-tail. Remove tail and write to file.
                 if (seq[-5:] == 'AAAAA') or (seq[-7:].count('A') >=6):
-                    polyA_file.write(strip_tailA(seq, trail_A, non_A) + '\n')
+                    polyA_file.write(strip_tailA(seq, trail_A, non_A) + ' A\n')
                     acount += 1
 
                 if (seq[:5] == 'TTTTT') or (seq[:7].count('T') >=6):
-                    polyA_file.write(strip_tailT(seq, lead_T, non_T) + '\n')
+                    polyA_file.write(strip_tailT(seq, lead_T, non_T) + ' T\n')
                     tcount +=1
 
     out_file.close()
     polyA_file.close()
 
-    print acount, ' acount'
-    print tcount, ' tcount'
+    print()
+    print('{0}: Nr. of total reads: {1}'.format(dset_id, count))
+    print('{0}: Nr. of readsReads with poly(A)-tail: {1}'.format(dset_id, acount))
+    print('{0}: Nr. of readsReads with poly(T)-tail: {1}'.format(dset_id, tcount))
 
     return total_reads
 
@@ -1082,7 +1088,7 @@ def strip_tailA(seq, trail_A, non_A):
 
     if seq[-5:] == 'AAAAA':
         # Remove all trailing As on reverse sequence; then reverse
-        # again
+        # again. rexexp only works from the beginning
         seq = strip_tailA(trail_A.sub('', seq[::-1], count=1)[::-1], trail_A,
                            non_A)
 
@@ -1808,7 +1814,7 @@ def process_reads(pA_reads_path):
 
     for line in open(pA_reads_path, 'rb'):
         # add lines until there are 2 entries in linepair
-        seq = line.rstrip()
+        (seq, at) = line.split()
         seqlen = len(seq)
         if seqlen > 25:
             As = seq.count('A')
@@ -1818,7 +1824,7 @@ def process_reads(pA_reads_path):
                 length_sum += seqlen
                 tot_reads += 1
                 # trim the title
-                outfile.write('>read\n'+line)
+                outfile.write('>{0}\n'.format(at)+line)
 
     if tot_reads > 0:
         avrg_len = length_sum/float(tot_reads)
@@ -1917,7 +1923,7 @@ def get_bed_reads(dset_reads, dset_id, read_limit, tempdir, polyA, get_length,
     if suffix in ['gem.map.gz', 'gem.map']:
         print('Obtaining reads from mapping for {0} ...\n'.format(dset_id))
         # Get only the uniquely mapped reads (up to 2 mismatches)
-        total_reads = zcat_wrapper(dset_reads, read_limit, out_path, polyA,
+        total_reads = zcat_wrapper(dset_id, dset_reads, read_limit, out_path, polyA,
                                    polyA_path, get_length)
 
     # If in bed-format, also run zcat -f on all the files to make one big
@@ -2078,7 +2084,7 @@ def cluster_polyAs(settings, utr_polyAs, utrs, polyA):
                                      'other_strand':[[], []]})
                            for utr_id in utrs)
 
-        return polyA_reads, {}
+        return polyA_reads
 
     polyA_reads = {}
 
@@ -2167,6 +2173,8 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs, settings,
         cache_path = os.path.join(cache_dir, polyA_cached_path)
 
         # If the file exists, make this the poly(A) path
+        # TODO: I think there is a bug if the file exists but it is empty: it
+        # holds no reads.
         if os.path.isfile(cache_path):
             polyA = cache_path
 
@@ -2203,7 +2211,7 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs, settings,
 
         # 3) If caching is on, save the polyA_bed_path to the cache dir
         #if polyA_cache and read_limit == False:
-        if polyA_cache:
+        if polyA_cache and read_limit == False:
             shutil.copyfile(polyA_bed_path, cache_path)
 
         # Get a dictionary for each utr_id with its overlapping polyA reads
@@ -2309,7 +2317,6 @@ def write_polyA_stats(polyA_reads, utr_exons, output_path, settings):
                                   'spread': []},
                      'other_strand': {'unique_reads': [], 'total_reads': [],
                                    'spread': []}}
-
 
     # Get the data for the false positive and negative from the
     # polyA_statistics, which does not have any moving from one strand to the
@@ -2528,7 +2535,14 @@ def only_polyA_writer(dset_id, annotation, utr_seqs, polyA_reads, settings,
         sequence = utr_seqs[utr_id]
 
         # loop through each 3UTR cluster and write at the end
-        for cls_center, cls_reads in zip(*polyA_dict['other_strand']):
+        # TODO SUPER-TODO poly(A) reads must be mapped as 'this_strand' while
+        # poly(T) reads must be mapped to 'other_strand'. You need to keep this
+        # information after trimming. Possibly in the future, with same insert
+        # size but longer read lengths (150nt) there will be many more genuine
+        # poly(A) reads. For now just do the same stuff with 'this_strand'.
+
+        #for cls_center, cls_reads in zip(*polyA_dict['other_strand']):
+        for cls_center, cls_reads in zip(*polyA_dict['this_strand']):
             polyA_coordinate = cls_center
             annotated_polyA_distance = annotation_dist(cls_center,
                                                        annotated_pA_sites,
@@ -2537,7 +2551,6 @@ def only_polyA_writer(dset_id, annotation, utr_seqs, polyA_reads, settings,
             rpoint = cls_center - beg
             # getting PAS. If annotation exists, look at the annotated strand.
             # If not, look at the "other strand" than the poly(A) read maps to.
-            debug()
             (nearby_PAS, PAS_distance) = get_pas_and_distance(rpoint,
                                                               pas_patterns,
                                                               sequence, settings)
@@ -3111,7 +3124,6 @@ def piperunner(settings, annotation, simulate, DEBUGGING, beddir, tempdir,
     region = os.path.basename(annotation.utrfile_path).split('_')[0]
     # ad hoc hack for intergenic region
 
-    debug()
     ##################################################################
     if simulate:
         # For all 3UTR exons, get the genomic sequence. The sequence is needed

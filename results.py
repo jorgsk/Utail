@@ -4689,12 +4689,20 @@ def polyA_summary(dsets, super_3utr, polyAstats, settings):
             mdict['total_sites2'] = total2 # sits with 2+ reads or annotated
             mdict['total_reads'] = read_nr
 
+            # ad hoc solution: when you run 3UTR only (from the careful stuff)
             # How many reads normalized by region size?
-            mdict['total_reads_region_normalized'] =\
-            read_nr*(1-(region_sizes[region]/tot_size))
-            mdict['total_sites_normalized'] =\
-            total*(1-(region_sizes[region]/tot_size))
-            mdict['sites_with_pas_fraction'] = pas_frac
+            if region == '3UTR':
+                mdict['total_reads_region_normalized'] =\
+                read_nr*(1-(region_sizes['3UTR-exonic']/tot_size))
+                mdict['total_sites_normalized'] =\
+                total*(1-(region_sizes['3UTR-exonic']/tot_size))
+                mdict['sites_with_pas_fraction'] = pas_frac
+            else:
+                mdict['total_reads_region_normalized'] =\
+                read_nr*(1-(region_sizes[region]/tot_size))
+                mdict['total_sites_normalized'] =\
+                total*(1-(region_sizes[region]/tot_size))
+                mdict['sites_with_pas_fraction'] = pas_frac
 
             # finally, add all to this:
             everything[region][cl][realcomp][replicate][polyMinus] = mdict
@@ -4704,8 +4712,12 @@ def polyA_summary(dsets, super_3utr, polyAstats, settings):
             total_unique += len(utr.super_cover)
 
         unique_sites[region]['Total_poly(A)_sites'] = total_unique
-        unique_sites[region]['Total_normalized_poly(A)_sites'] =\
-                total_unique/region_sizes[region]
+        if region == '3UTR':
+            unique_sites[region]['Total_normalized_poly(A)_sites'] =\
+                    total_unique/region_sizes['3UTR-exonic']
+        else:
+            unique_sites[region]['Total_normalized_poly(A)_sites'] =\
+                    total_unique/region_sizes[region]
 
         print("Total unique poly(A) sites for {1}: {0}".format(total_unique,
                                                                region))
