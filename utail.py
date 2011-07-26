@@ -90,12 +90,13 @@ class Settings(object):
         debugging!
         """
 
-        #self.chr1 = True
-        self.chr1 = False
+        self.chr1 = True
+        #self.chr1 = False
         #self.read_limit = False
-        self.read_limit = 50000000
+        self.read_limit = 1000000
         self.max_cores = 5
-        self.get_length = False
+        #self.get_length = False
+        self.get_length = True
         #self.get_length = True
         self.extendby = 10
         #self.extendby = 100
@@ -214,8 +215,8 @@ class UTR(object):
         self.strand = strand
         self.rpkm = rpkm
         self.sequence = sequence
-        self.polyA_reads = polyA_reads # the polyA reads
-        self.a_polyA_sites = [int(site[1]) for site in a_polyA_sites] # annotated sites
+        self.polyA_reads = polyA_reads
+        self.a_polyA_sites = [int(site[1]) for site in a_polyA_sites] # annotated
         self.rel_pos = 'NA' # it might not be updated
         self.epsilon_coord = 'NA'
         self.avrg_coverage = 'NA' # the average coverage -- competing with RPKM!
@@ -335,20 +336,17 @@ class UTR(object):
         self.begends_nonext.append((new_exon.beg_nonext, new_exon.end_nonext))
 
         # Update polyA_reads if any
-        if new_exon.polyA_reads[0] != []:
-            # If only one new polyA read
-            if len(new_exon.polyA_reads[0]) == 1:
-                self.polyA_reads[0].append(new_exon.polyA_reads[0][0])
-                self.polyA_reads[1].append(new_exon.polyA_reads[1][0])
+        for side in ('plus_strand', 'minus_strand'):
+            if new_exon.polyA_reads[side][0] != []:
+                # NOTE you're not sure if the below code works as you think.
+                # this is because of the format you put the polyA reads into is
+                # different if you have reads there or not ...
 
-            else:
-                # If more than one cluster, be smart about it
-                # This code possibly also works for == 1, but too lazy to check
-                avrges = new_exon.polyA_reads[0]
-                supprt = new_exon.polyA_reads[1]
+                avrges = new_exon.polyA_reads[side][0]
+                supprt = new_exon.polyA_reads[side][1]
                 for (pA_site, pA_support) in zip(avrges, supprt):
-                    self.polyA_reads[0].append(pA_site)
-                    self.polyA_reads[1].append(pA_support)
+                    self.polyA_reads[side][0].append(pA_site)
+                    self.polyA_reads[side][1].append(pA_support)
 
         # Update annotated polyA sites
         for site in new_exon.a_polyA_sites:
@@ -679,6 +677,7 @@ class PolyAReads(object):
                     ('polyA_number', frmt(polA_nr)),
                     ('strand', this_utr.strand),
                     ('polyA_coordinate', frmt(pAcoord)),
+                    ('polyA_coordinate_strand', self.pAcoord_strand),
                     ('number_supporting_reads', frmt(nr_supp_pA)),
                     ('coverage_50nt_downstream', frmt(ds_covr)),
                     ('coverage_50nt_upstream', frmt(us_covr)),
@@ -700,6 +699,7 @@ class PolyAReads(object):
         polyA_number
         strand
         polyA_coordinate
+        polyA_coordinate_strand
         number_supporting_reads
         coverage_50nt_downstream
         coverage_50nt_upstream
@@ -709,16 +709,17 @@ class PolyAReads(object):
         3utr_RPKM
         """.split()
 
-    def write_output(self, outobject, this_utr):
+    def writeA_output(self, outobject, this_utr, side):
         """
         Write the output in the order determined in 'header_order()'. For each
         UTR, there might be several polyA clusters. Each cluster gets a line in
         the output file.
         """
 
-        # Don't write for utrs without polyA-reads
-        if self.polyRead_sites == 'NA':
-            return
+        if side == 'plus_strand':
+            self.pAcoord_strand = '+'
+        else:
+            self.pAcoord_strand = '-'
 
         # The column-order in which the output should be printed
         output_order = self.header_order()
@@ -727,7 +728,7 @@ class PolyAReads(object):
         for indx, site in enumerate(self.polyRead_sites):
             polAnr = indx + 1
             rel_polyA_site = self.rel_polyRead_sites[indx]
-            nr_supp_pA = len(this_utr.polyA_reads[1][indx])
+            nr_supp_pA = len(this_utr.polyA_reads[side][1][indx])
 
             ds_covrg = self.ds_covrg[indx]
             us_covrg = self.us_covrg[indx]
@@ -750,8 +751,7 @@ class PolyAReads(object):
 
             outobject.write('\t'.join(output) + '\n')
 
-
-    def calculate_output(self, pas_patterns, this_utr):
+    def calculateA_output(self, pas_patterns, this_utr, side):
         """
         Calculate the following output:
             # The relative position of the cluster to non-extended UTR beg
@@ -760,13 +760,7 @@ class PolyAReads(object):
               40 nt.
             # The distance and type of PAS, if closer than 40 nt.
         """
-        if this_utr.is_empty():
-            return
-
-        self.polyRead_sites = this_utr.polyA_reads[0]
-        # If there are no polyA reads in the UTR, pass on
-        if self.polyRead_sites == []:
-            return
+        self.polyRead_sites = this_utr.polyA_reads[side][0]
         # Get the relative to EXTENDED utr(!) location of the polyA sites,
         # because it's from the extended utr we take the coverage values.
         self.rel_polyRead_sites = [pos-this_utr.beg_ext for pos in
@@ -788,36 +782,44 @@ class PolyAReads(object):
                 left_covrg.append(sum(this_utr.covr_vector[p-50:p])/float(50))
 
         # Find upstream/downstream from left/right depending on strand
-        if this_utr.strand == '+':
+        if side == 'plus_strand':
             self.ds_covrg = right_covrg
             self.us_covrg = left_covrg
 
-        if this_utr.strand == '-':
+        if side == 'minus_strand':
             self.ds_covrg = left_covrg
             self.us_covrg = right_covrg
 
         #2) Is there an annotated polyA site nearby?
         # Report if there is one within +/- 40 nt and report the distance. Also
-        # report if no distance is found.
-        self.annotation_support = self.read_annotation_support(this_utr)
+        # report if no distance is found. the list of found/notfound corresponds
+        # to the elements in self.polyRead_sites
+        self.annotation_support = self.read_annot_support(this_utr.a_polyA_sites,
+                                                          side)
 
         #3) If there is a PAS nearby? all_PAS hold all the PAS and their
         #distances for all the polyA read clusters in the 3UTR
-        self.all_PAS = self.get_pas(pas_patterns, this_utr.sequence)
+        self.all_PAS = self.get_pas(pas_patterns, this_utr.sequence, side)
 
-    def get_pas(self, pas_patterns, sequence):
+    def get_pas(self, pas_patterns, sequence, side):
         """
         go through the -40 from the polya read average. collect pas and distance
-        as you find them.
+        as you find them. if side is negative, get the reverse complement
         """
 
         all_pas = {}
         for rpoint in self.rel_polyRead_sites:
-            pas_seq = sequence[rpoint-40:rpoint]
+            if side == 'plus_strand':
+                pas_seq = sequence[rpoint-40:rpoint]
 
-            # special case if the polya read is is early in the sequence
-            if rpoint < 40:
-                pas_seq = sequence[:rpoint]
+                # special case if the polya read is is early in the sequence
+                if rpoint < 40:
+                    pas_seq = sequence[:rpoint]
+
+            # if negative strand, take the reverse complement 
+            if side == 'minus_strand':
+                pas_seq = sequence[rpoint:rpoint+40]
+                pas_seq = reverseComplement(pas_seq)
 
             temp_pas = []
             for pas_exp in pas_patterns:
@@ -833,23 +835,23 @@ class PolyAReads(object):
 
                 all_pas[rpoint] = (has_pas, pas_dist)
 
-            # in case no pas are found, return 'na'
+            # in case no pas are found, return 'NA'
             else:
-                all_pas[rpoint] = ('na', 'na')
+                all_pas[rpoint] = ('NA', 'NA')
 
         return all_pas
 
-    def read_annotation_support(self, this_utr):
+    def read_annot_support(self, annotated_polyA_sites, side):
         """
         Check if the polyA cluster has an annotated polyA site nearby.
         """
         supp = []
         for rpoint in self.polyRead_sites:
             found = False
-            for apoint in this_utr.a_polyA_sites:
+            for apoint in annotated_polyA_sites:
                 if rpoint-40 < apoint < rpoint+40:
                     found = True
-                    if this_utr.strand == '+':
+                    if side == 'plus_strand':
                         found_distance = rpoint-apoint + 1
                     else:
                         found_distance = rpoint-apoint
@@ -883,100 +885,62 @@ def annotation_dist(rpoint, annotated_polyA_sites, strand):
     # If you get here, you didn't find any annotated distances
     return 'NA'
 
-def get_pas_and_distance(rpoint, pas_patterns, sequence, settings):
+def get_pas_and_distance(rpoint, pas_patterns, sequence, settings, pm_strand):
     """
     Go through the -40 from the polya read average. Collect PAS and distance
     as you find them. Must supply poly(A) sites relative to UTR-beg. The
     sequence must also be relative to UTR-beg (3->5 direction)
-
-    If settings.pairend == False, consider both the sequence and its reverse
-    complement in the other direction.
     """
 
-    # TODO update the other 'get pas' methods too. damnable -- there should only
-    # be one method for this.
-    if settings.pairend:
+    pases = []
+
+    if pm_strand == 'plus_strand':
         pas_seq = sequence[rpoint-40:rpoint]
 
         # special case if the polya read is is early in the sequence
         if rpoint < 40:
             pas_seq = sequence[:rpoint]
 
-        temp_pas = []
-        for pas_exp in pas_patterns:
-            temp_pas.append([(m.group(), m.start()) for m in
-                            pas_exp.finditer(pas_seq)])
+    # if negative strand, take the reverse complement 
+    if pm_strand == 'minus_strand':
+        pas_seq = sequence[rpoint:rpoint+40]
+        pas_seq = reverseComplement(pas_seq)
 
-        if sum(temp_pas, []) != []:
-            has_pas = sum(temp_pas, [])
-            if len(has_pas) == 1:
-                (has_pas, pas_dist) = ([has_pas[0][0]], [has_pas[0][1]])
-            else:
-                (has_pas, pas_dist) = zip(*has_pas)
+    temp_pas = []
+    for pas_exp in pas_patterns:
+        temp_pas.append([(m.group(), m.start()) for m in
+                        pas_exp.finditer(pas_seq)])
 
-            #(('GATAAA', 'AATGAA'), (22, 28))
-            # This is what you return.
-            return (has_pas, pas_dist)
-
-        # in case no pas are found, return 'na'
+    if sum(temp_pas, []) != []:
+        has_pas = sum(temp_pas, [])
+        if len(has_pas) == 1:
+            (has_pas, pas_dist) = ((has_pas[0][0],), (has_pas[0][1],))
         else:
-            return ('NA', 'NA')
+            (has_pas, pas_dist) = zip(*has_pas)
+
+        #(('GATAAA', 'AATGAA'), (22, 28))
+        # This is what you return.
+        pases.append((has_pas, pas_dist))
+
+    # in case no pas are found, return 'na'
     else:
+        # If both were 'NA', return it
+        pases.append(('NA', 'NA'))
 
-        pases = []
-        # check both strands -- this is not a good, but it's the best you've
-        # got. no no no. you don't know the strand.
-        # TODO get the reverse complement in the other direction
-        # you don't know if this is correct or not.
-        for turn in ['norm', 'reversecomp']:
+    # Join the pases together. if the length is 1, it means that both are
+    # 'NA', 'NA'. Just return one of them.
+    if len(set(pases)) == 1:
+        return(pases[0])
 
-            if turn == 'norm':
-                pas_seq = sequence[rpoint-40:rpoint]
-                pass
-
-            if turn == 'reversecomp':
-                pas_seq = sequence[rpoint:rpoint+40]
-                pas_seq = reverseComplement(pas_seq)
-
-            # special case if the polya read is is early in the sequence
-            if rpoint < 40:
-                pas_seq = sequence[:rpoint]
-
-            temp_pas = []
-            for pas_exp in pas_patterns:
-                temp_pas.append([(m.group(), m.start()) for m in
-                                pas_exp.finditer(pas_seq)])
-
-            if sum(temp_pas, []) != []:
-                has_pas = sum(temp_pas, [])
-                if len(has_pas) == 1:
-                    (has_pas, pas_dist) = ((has_pas[0][0],), (has_pas[0][1],))
-                else:
-                    (has_pas, pas_dist) = zip(*has_pas)
-
-                #(('GATAAA', 'AATGAA'), (22, 28))
-                # This is what you return.
-                pases.append((has_pas, pas_dist))
-
-            # in case no pas are found, return 'na'
-            else:
-                # If both were 'NA', return it
-                pases.append(('NA', 'NA'))
-
-        # Join the pases together. if the length is 1, it means that both are
-        # 'NA', 'NA'. Just return one of them.
-        if len(set(pases)) == 1:
-            return(pases[0])
-
-        # If not, join the two together. A zip perhaps? If one of them is 'NA',
-        # remove it, and return the other
-        else:
-            try:
-                pases.remove(('NA', 'NA'))
-                return pases[0]
-            except ValueError:
-                zipases = zip(*pases)
-                return (sum(zipases[0], ()), sum(zipases[1], ()))
+    # If not, join the two together. A zip perhaps? If one of them is 'NA',
+    # remove it, and return the other
+    else:
+        try:
+            pases.remove(('NA', 'NA'))
+            return pases[0]
+        except ValueError:
+            zipases = zip(*pases)
+            return (sum(zipases[0], ()), sum(zipases[1], ()))
 
 
 def reverseComplement(sequence):
@@ -1064,12 +1028,16 @@ def zcat_wrapper(dset_id, bed_reads, read_limit, out_path, polyA, polyA_path,
 
                 # Check for putative poly(A)-tail. Remove tail and write to file.
                 if (seq[-5:] == 'AAAAA') or (seq[-7:].count('A') >=6):
-                    polyA_file.write(strip_tailA(seq, trail_A, non_A) + ' A\n')
-                    acount += 1
+                    a_strip = strip_tailA(seq, trail_A, non_A)
+                    if len(a_strip) > 25:
+                        polyA_file.write(a_strip + ' A\n')
+                        acount += 1
 
                 if (seq[:5] == 'TTTTT') or (seq[:7].count('T') >=6):
-                    polyA_file.write(strip_tailT(seq, lead_T, non_T) + ' T\n')
-                    tcount +=1
+                    t_strip = strip_tailT(seq, lead_T, non_T)
+                    if len(t_strip) > 25:
+                        polyA_file.write(t_strip + ' T\n')
+                        tcount +=1
 
     out_file.close()
     polyA_file.close()
@@ -1199,7 +1167,7 @@ def output_writer(dset_id, coverage, annotation, utr_seqs, rpkm, polyA_reads,
 
     # Create a UTR-instance
     this_utr = UTR(chrm, beg, end, strand, val, utr_ID, rpkm[utr_ID], covr,
-                   utr_seqs[utr_ID], polyA_reads[utr_ID]['other_strand'],
+                   utr_seqs[utr_ID], polyA_reads[utr_ID],
                    a_polyA_sites_dict[utr_ID])
 
     # Create instances for writing to two output files
@@ -1235,7 +1203,6 @@ def output_writer(dset_id, coverage, annotation, utr_seqs, rpkm, polyA_reads,
 
         # if not, this is the first line of a new UTR-exon
         else:
-
             calculate_and_write = True
 
             # check if the previous utr-exon was part of a multi-exon utr
@@ -1265,13 +1232,29 @@ def output_writer(dset_id, coverage, annotation, utr_seqs, rpkm, polyA_reads,
 
             if calculate_and_write:
 
-                # Calculate output values like 99.5% length, cumulative coverage, etc
+                # Calculate output values: 99.5% length, cumulative coverage, etc
                 length_output.calculate_output(pas_patterns, this_utr)
-                pAread_output.calculate_output(pas_patterns, this_utr)
-
-                # Save output to files
                 length_output.write_output(length_outfile, this_utr)
-                pAread_output.write_output(polyA_outfile, this_utr)
+
+                # Calculate poly(A) output for pas-clusters on both strands
+
+                # If the utr is empty, skip the poly(A) writing
+                if this_utr.is_empty():
+                    pass
+
+                #if (this_utr.polyA_reads['plus_strand'][0] != []) and \
+                   #(this_utr.polyA_reads['minus_strand'][0] != []):
+
+                for side in ['plus_strand', 'minus_strand']:
+                    # skip if empty
+                    if this_utr.polyA_reads[side][0] == []:
+                        continue
+
+                    # calculate output for this strand
+                    pAread_output.calculateA_output(pas_patterns, this_utr, side)
+
+                    # Save output to files
+                    pAread_output.writeA_output(polyA_outfile, this_utr, side)
 
                 # If tuning, calculate the tuning variables and write to file
                 if settings.cumul_tuning:
@@ -1279,8 +1262,7 @@ def output_writer(dset_id, coverage, annotation, utr_seqs, rpkm, polyA_reads,
 
             # Update to the new utr and start the loop from scratch
             this_utr = UTR(chrm, beg, end, strand, val, utr_ID, rpkm[utr_ID],
-                           covr, utr_seqs[utr_ID],
-                           polyA_reads[utr_ID]['other_strand'],
+                           covr, utr_seqs[utr_ID], polyA_reads[utr_ID],
                            a_polyA_sites_dict[utr_ID])
 
             # If not a multi exon, make output instances for writing to file
@@ -1824,7 +1806,7 @@ def process_reads(pA_reads_path):
                 length_sum += seqlen
                 tot_reads += 1
                 # trim the title
-                outfile.write('>{0}\n'.format(at)+line)
+                outfile.write('>{0}\n'.format(at)+seq+'\n')
 
     if tot_reads > 0:
         avrg_len = length_sum/float(tot_reads)
@@ -1878,7 +1860,7 @@ def map_reads(processed_reads, avrg_read_len, settings):
     reads_file = open(polybed_path, 'wb')
 
     for line in open(mapped_reads + '.0.map', 'rb'):
-        (ID, seq, mapinfo, position) = line.split('\t')
+        (at, seq, mapinfo, position) = line.split('\t')
 
         # Acceptable reads and poly(A) reads are mutually exclusive.
         if mapinfo in acceptable:
@@ -1888,7 +1870,7 @@ def map_reads(processed_reads, avrg_read_len, settings):
             beg = start_re.match(rest[1:]).group()
 
             # Write to file in .bed format
-            reads_file.write('\t'.join([chrom, beg, str(int(beg)+len(seq)), '0',
+            reads_file.write('\t'.join([chrom, beg, str(int(beg)+len(seq)), at,
                                       '0', strand]) + '\n')
 
     return polybed_path
@@ -2080,8 +2062,8 @@ def cluster_polyAs(settings, utr_polyAs, utrs, polyA):
 
     # If there are no polyA reads or polyA is false: return empty lists 
     if utr_polyAs == {} or polyA == False:
-        polyA_reads = dict((utr_id, {'this_strand':[[],[]],
-                                     'other_strand':[[], []]})
+        polyA_reads = dict((utr_id, {'plus_strand':[[],[]],
+                                     'minus_strand':[[], []]})
                            for utr_id in utrs)
 
         return polyA_reads
@@ -2089,41 +2071,35 @@ def cluster_polyAs(settings, utr_polyAs, utrs, polyA):
     polyA_reads = {}
 
     for utr_id, polyAs in utr_polyAs.iteritems():
-        utr_info = utrs[utr_id]
-        real_strand = utr_info[3]
 
-        # separate into two if pair-end reads
-        if settings.pairend:
-            if real_strand == '+':
-                other_strand_ends = sorted([tup[2] for tup in polyAs
-                                            if tup[5] == '-'])
-                this_strand_ends = sorted([tup[1] for tup in polyAs
-                                           if tup[5] == '+'])
+        # you know the strand of the poly(A) reads
 
-            if real_strand == '-':
-                other_strand_ends = sorted([tup[1] for tup in polyAs
-                                            if tup[5] == '+'])
-                this_strand_ends = sorted([tup[2] for tup in polyAs
-                                           if tup[5] == '-'])
+        plus_sites = []
+        minus_sites = []
 
-        # if not, throw all reads into 'other_strand'
-        else:
-            other_strand_ends = sorted([tup[2] for tup in polyAs
-                                        if tup[5] == '-'])
-            this_strand_ends = sorted([tup[1] for tup in polyAs
-                                       if tup[5] == '+'])
+        for tup in polyAs:
 
-            other_strand_ends = sorted(this_strand_ends + other_strand_ends)
+            # it came from the - strand
+            if tup[3] == 'T' and tup[5] == '+':
+                minus_sites.append(tup[1])
 
-            this_strand_ends = []
+            if tup[3] == 'A' and tup[5] == '-':
+                minus_sites.append(tup[1])
 
-        polyA_reads[utr_id] = {'this_strand': cluster_loop(this_strand_ends),
-                               'other_strand': cluster_loop(other_strand_ends)}
+            # it came from the + strand
+            if tup[3] == 'T' and tup[5] == '-':
+                plus_sites.append(tup[2])
+
+            if tup[3] == 'A' and tup[5] == '+':
+                plus_sites.append(tup[2])
+
+        polyA_reads[utr_id] = {'plus_strand': cluster_loop(sorted(plus_sites)),
+                               'minus_strand': cluster_loop(sorted(minus_sites))}
 
     # For those utr_id that don't have a cluster, give them an empty list; ad hoc
     for utr_id in utrs:
         if utr_id not in polyA_reads:
-            polyA_reads[utr_id] = {'this_strand': [[],[]], 'other_strand': [[],[]]}
+            polyA_reads[utr_id] = {'plus_strand': [[],[]], 'minus_strand': [[],[]]}
 
     return polyA_reads
 
@@ -2226,12 +2202,14 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs, settings,
     polyA_reads = cluster_polyAs(settings, utr_polyAs, utr_exons, polyA)
 
     # If polyA is true, write the polyA-statistics file!
+    # TODO next to each poly(A) site you should write the strand of the poly(A)
+    # site
     if polyA:
         output_path = os.path.join(output_dir, dset_id+'_polyA_statistics')
         write_polyA_stats(polyA_reads, utr_exons, output_path, settings)
 
     if get_length:
-        # Get RPKM, coverage, and write to file
+        # Get RPKM and coverage, and write to file
 
         # Get the RPKM, if you get lengths
         print('Obtaining RPKM for {0} ...\n'.format(dset_id))
@@ -2318,22 +2296,23 @@ def write_polyA_stats(polyA_reads, utr_exons, output_path, settings):
                      'other_strand': {'unique_reads': [], 'total_reads': [],
                                    'spread': []}}
 
-    # Get the data for the false positive and negative from the
-    # polyA_statistics, which does not have any moving from one strand to the
-    # other
-
     for utr, strand_stats in polyA_reads.items():
         # Skip those without poly(A) reads
-        if strand_stats == {'other_strand': [[], []], 'this_strand': [[], []]}:
+        if strand_stats == {'plus_strand': [[], []], 'minus_strand': [[], []]}:
             continue
 
-        this_strand_reads = sum(strand_stats['this_strand'][1], [])
-        other_strand_reads = sum(strand_stats['other_strand'][1], [])
+        if utr_exons[utr][3] == '+':
+            this_strand_reads = sum(strand_stats['plus_strand'][1], [])
+            other_strand_reads = sum(strand_stats['minus_strand'][1], [])
+            other_strand_clstrs = strand_stats['minus_strand'][0]
+        else:
+            this_strand_reads = sum(strand_stats['minus_strand'][1], [])
+            other_strand_reads = sum(strand_stats['plus_strand'][1], [])
+            other_strand_clstrs = strand_stats['plus_strand'][0]
 
-        other_strand_clstrs = strand_stats['other_strand'][0]
 
         this_strand_count += len(this_strand_reads)
-        other_strand_count += len(other_strand_reads)
+        other_strand_count +=len(other_strand_reads)
 
         movers = 0
 
@@ -2367,37 +2346,47 @@ def write_polyA_stats(polyA_reads, utr_exons, output_path, settings):
     handle = open(output_path, 'wb')
 
     #0) The numbers themselves
-    handle.write('This_strand_count\t{0}\n'.format(this_strand_count))
-    handle.write('Other_strand_count\t{0}\n'.format(other_strand_count))
-    handle.write('Both_strands_count\t{0}\n'.format(both_strand_count))
+    handle.write('Annotated strand count\t{0}\n'.format(this_strand_count))
+    handle.write('Other strand count\t{0}\n'.format(other_strand_count))
+    handle.write('Both strands count\t{0}\n'.format(both_strand_count))
     handle.write('Both strands by chance\t{0}\n'.format(both_by_chance))
 
     #1) Estimated false-positive rate (this_strand/other_strand)
     if other_strand_count > 0:
-        fals_pos = this_strand_count/other_strand_count
+        fals_pos = other_strand_count/this_strand_count
     else:
         fals_pos = 'NA'
 
     # I call it false positive because you can assume that the same rate of
     # reads will land in 
-    explanation = 'Reads in opposite strand divided by reads in this strand'
     handle.write('"False positive"-rate\t{0}\n'.format(fals_pos, '.4f'))
 
-    #2) Estimated false-negative rate (common to both strands) (but these are
-    # actually added to the poly(A)-read pool!)
+    #2) Estimated false-negative rate (common to both strands)
     if other_strand_count > 0:
         fals_neg = both_strand_count/other_strand_count
     else:
         fals_neg = 'NA'
 
-    explanation = 'Reads common to both strands divided by reads in other strand'
     handle.write('"False negative"-rate\t{0}\n'.format(fals_neg, '.4f'))
 
     # Get distributions of the poly(A) reads you actually use
     for utr, strand_stats in polyA_reads.items():
+
         for keyw in ['this_strand', 'other_strand']:
+
             # Add total and unique reads for the clusters
-            (cls_centers, cls_all_reads) = strand_stats[keyw]
+            if utr_exons[utr][3] == '+' and keyw == 'this_strand':
+                (cls_centers, cls_all_reads) = strand_stats['plus_strand']
+
+            if utr_exons[utr][3] == '+' and keyw == 'other_strand':
+                (cls_centers, cls_all_reads) = strand_stats['minus_strand']
+
+            if utr_exons[utr][3] == '-' and keyw == 'this_strand':
+                (cls_centers, cls_all_reads) = strand_stats['minus_strand']
+
+            if utr_exons[utr][3] == '-' and keyw == 'other_strand':
+                (cls_centers, cls_all_reads) = strand_stats['plus_strand']
+
             for cls_center, cls_reads in zip(cls_centers, cls_all_reads):
                 distributions[keyw]['total_reads'].append(len(cls_reads))
                 distributions[keyw]['unique_reads'].append(len(set(cls_reads)))
@@ -2407,15 +2396,6 @@ def write_polyA_stats(polyA_reads, utr_exons, output_path, settings):
 
     # Calculate key statistics from the this_strand and other_strand variables
     for strand_way, dist in distributions.items():
-
-        ## 1) average and std of the spread
-        #spread_mean = sum(dist['spread'])/len(dist['spread'])
-        #spread_std = math.sqrt(sum([(spread_mean-spread)**2 for spread in
-                          #dist['spread']])/(len(dist['spread'])))
-        #handle.write('Mean cluster spread in nt {0}\t{1}\n'.format(strand_way,
-                                                                   #spread_mean))
-        #handle.write('Std cluster spread in nt {0}\t{1}\n'.format(strand_way,
-                                                                  #spread_std))
 
         # 2) average, std, and sum of total reads
         total_sum = sum(dist['total_reads'])
@@ -2428,13 +2408,10 @@ def write_polyA_stats(polyA_reads, utr_exons, output_path, settings):
             total_mean = 0
             total_std = 0
 
-        #handle.write('Sum total number of reads {0}\t{1}\n'.format(strand_way,
-                                                             #total_sum))
         handle.write('{0} Average total reads in clusters\t{1}\n'\
                      .format(strand_way, total_mean))
         handle.write('{0} Std total reads in clusters\t{1}\n'.format(strand_way,
                                                              total_std))
-
         # 3) average, std, sum of unique reads
         unique_sum = sum(dist['unique_reads'])
         if len(dist['unique_reads']) > 0:
@@ -2452,19 +2429,6 @@ def write_polyA_stats(polyA_reads, utr_exons, output_path, settings):
                                                              unique_mean))
         handle.write('{0} Std uniuqe reads in clusters\t{1}\n'.format(strand_way,
                                                                   unique_std))
-        # 4) average, std, and sum of unique/total ratio reads
-        #utot = []
-        #for ind, tot in enumerate(dist['total_reads']):
-            #utot.append(dist['unique_reads'][ind]/tot)
-
-        #utot_mean = sum(utot)/len(utot)
-        #utot_std = math.sqrt(sum([(ut-utot_mean)**2 for ut in utot])/len(utot))
-
-        #handle.write('Average unique/total number of reads {0}\t{1}\n'\
-                     #.format(strand_way, utot_mean))
-        #handle.write('Std uniuqe/total number of reads {0}\t{1}\n'.\
-                     #format(strand_way, utot_std))
-
     handle.close()
 
 def only_polyA_writer(dset_id, annotation, utr_seqs, polyA_reads, settings,
@@ -2491,6 +2455,7 @@ def only_polyA_writer(dset_id, annotation, utr_seqs, polyA_reads, settings,
                     'utr_ID',
                     'strand',
                     'polyA_coordinate',
+                    'polyA_coordinate_strand',
                     'annotated_polyA_distance',
                     'nearby_PAS',
                     'PAS_distance',
@@ -2509,9 +2474,6 @@ def only_polyA_writer(dset_id, annotation, utr_seqs, polyA_reads, settings,
     a_polyA_sites_dict = annotation.a_polyA_sites_dict
     utr_exons = annotation.utr_exons
 
-    # 3) TODO Can you check the nucleotide sequence for poly(A/T) runs? It's a
-    # conjace, but people will ask for it ...
-
     polyA_outpath = os.path.join(output_dir, 'onlypolyA_'+dset_id)
     polyA_outfile = open(polyA_outpath, 'wb')
 
@@ -2527,57 +2489,64 @@ def only_polyA_writer(dset_id, annotation, utr_seqs, polyA_reads, settings,
 
     for utr_id, polyA_dict in polyA_reads.iteritems():
         # Skip those that don't have any reads in them 
-        if polyA_dict == {'other_strand': [[], []], 'this_strand': [[], []]}:
+        if polyA_dict == {'plus_strand': [[], []], 'minus_strand': [[], []]}:
             continue
 
         (chrm, beg, end, strand) = utr_exons[utr_id]
         annotated_pA_sites = a_polyA_sites_dict[utr_id]
         sequence = utr_seqs[utr_id]
 
-        # loop through each 3UTR cluster and write at the end
-        # TODO SUPER-TODO poly(A) reads must be mapped as 'this_strand' while
-        # poly(T) reads must be mapped to 'other_strand'. You need to keep this
-        # information after trimming. Possibly in the future, with same insert
-        # size but longer read lengths (150nt) there will be many more genuine
-        # poly(A) reads. For now just do the same stuff with 'this_strand'.
+        # you need to go through both plus and minus strands and write the
+        # clusters for each. this will change a lot of downstream readings.
+        for pm_strand, cluster_list in polyA_dict.items():
 
-        #for cls_center, cls_reads in zip(*polyA_dict['other_strand']):
-        for cls_center, cls_reads in zip(*polyA_dict['this_strand']):
-            polyA_coordinate = cls_center
-            annotated_polyA_distance = annotation_dist(cls_center,
-                                                       annotated_pA_sites,
-                                                       strand)
+            # Get the strands of the poly(A) cluster
+            if pm_strand == 'minus_strand':
+                pA_coord_strand = '-'
+            if pm_strand == 'plus_strand':
+                pA_coord_strand = '+'
 
-            rpoint = cls_center - beg
-            # getting PAS. If annotation exists, look at the annotated strand.
-            # If not, look at the "other strand" than the poly(A) read maps to.
-            (nearby_PAS, PAS_distance) = get_pas_and_distance(rpoint,
-                                                              pas_patterns,
-                                                              sequence, settings)
-            if nearby_PAS != 'NA':
-                nearby_PAS = ' '.join(nearby_PAS)
-                PAS_distance = ' '.join([str(di) for di in PAS_distance])
+            for cls_center, cls_reads in zip(*cluster_list):
+                polyA_coordinate = cls_center
+                annotated_polyA_distance = annotation_dist(cls_center,
+                                                           annotated_pA_sites,
+                                                           strand)
 
-            number_supporting_reads = len(cls_reads)
-            number_unique_supporting_reads = len(set(cls_reads))
-            unique_reads_spread = math.sqrt(sum([(cls_center-cls_pos)**2 for
-                                                 cls_pos in
-                                                 cls_reads])/len(cls_reads))
+                rpoint = cls_center - beg
 
-            output_dict = {'chrm':chrm, 'beg': str(beg), 'end': str(end),
-                       'utr_ID': utr_id, 'strand': strand,
-                       'polyA_coordinate': str(polyA_coordinate),
-                       'annotated_polyA_distance': str(annotated_polyA_distance),
-                       'nearby_PAS': nearby_PAS, 'PAS_distance': PAS_distance,
-                       'number_supporting_reads': str(number_supporting_reads),
-                       'number_unique_supporting_reads':\
-                       str(number_unique_supporting_reads),
-                       'unique_reads_spread':\
-                       str(unique_reads_spread) .format('.2f')}
+                # getting PAS. If annotation exists, look at the annotated strand.
+                # If not, look at the "other strand" than the poly(A) read maps to.
+                (nearby_PAS, PAS_distance) = get_pas_and_distance(rpoint,
+                                                                  pas_patterns,
+                                                                  sequence,
+                                                                  settings,
+                                                                 pm_strand)
+                if nearby_PAS != 'NA':
+                    nearby_PAS = ' '.join(nearby_PAS)
+                    PAS_distance = ' '.join([str(di) for di in PAS_distance])
 
-            output = [output_dict[keyw] for keyw in output_order]
+                number_supporting_reads = len(cls_reads)
+                number_unique_supporting_reads = len(set(cls_reads))
+                unique_reads_spread = math.sqrt(sum([(cls_center-cls_pos)**2 for
+                                                     cls_pos in
+                                                     cls_reads])/len(cls_reads))
 
-            polyA_outfile.write('\t'.join(output) + '\n')
+                output_dict = {'chrm':chrm, 'beg': str(beg), 'end': str(end),
+                           'utr_ID': utr_id, 'strand': strand,
+                           'polyA_coordinate': str(polyA_coordinate),
+                           'polyA_coordinate_strand': pA_coord_strand,
+                           'annotated_polyA_distance':str(annotated_polyA_distance),
+                           'nearby_PAS': nearby_PAS,
+                           'PAS_distance': PAS_distance,
+                           'number_supporting_reads': str(number_supporting_reads),
+                           'number_unique_supporting_reads':\
+                           str(number_unique_supporting_reads),
+                           'unique_reads_spread':\
+                           str(unique_reads_spread) .format('.2f')}
+
+                output = [output_dict[keyw] for keyw in output_order]
+
+                polyA_outfile.write('\t'.join(output) + '\n')
 
     polyA_outfile.close()
 
@@ -3117,6 +3086,7 @@ def piperunner(settings, annotation, simulate, DEBUGGING, beddir, tempdir,
     # will save all that reading. Only save them if you run with no restriction
     # in reads.
     polyA_cache = True
+    #polyA_cache = False
 
     # Extract the name of the bed-region you are checking for poly(A) reads
     # you might have to extract it differently, because 'intergenic' doesn't
@@ -3151,15 +3121,15 @@ def piperunner(settings, annotation, simulate, DEBUGGING, beddir, tempdir,
                          settings, annotation, DEBUGGING, polyA_cache, here)
 
             ###### FOR DEBUGGING ######
-            #akk = pipeline(*arguments)
+            akk = pipeline(*arguments)
             ###########################
 
-            result = my_pool.apply_async(pipeline, arguments)
-            results.append(result)
+            #result = my_pool.apply_async(pipeline, arguments)
+            #results.append(result)
 
-        #debug()
-        my_pool.close()
-        my_pool.join()
+        debug()
+        #my_pool.close()
+        #my_pool.join()
 
          #Get the paths from the final output
         outp = [result.get() for result in results]
