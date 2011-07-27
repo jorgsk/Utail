@@ -93,10 +93,10 @@ class Settings(object):
         self.chr1 = True
         #self.chr1 = False
         #self.read_limit = False
-        self.read_limit = 1000000
+        self.read_limit = 10000000
         self.max_cores = 5
-        #self.get_length = False
-        self.get_length = True
+        self.get_length = False
+        #self.get_length = True
         #self.get_length = True
         self.extendby = 10
         #self.extendby = 100
@@ -167,7 +167,7 @@ class Annotation(object):
         f = Popen(cmd, stdout=PIPE)
         for line in f.stdout:
 
-            (chrm, beg, end, d, d, strnd, d, d, d, utr_id, d, d) = line.split()
+            (chrm, beg, end, strnd, d, d, d, utr_id, d, d) = line.split()
 
             if utr_id in polyA_dict:
                 polyA_dict[utr_id].append((chrm, beg, end, strnd))
@@ -960,9 +960,14 @@ def zcat_wrapper(dset_id, bed_reads, read_limit, out_path, polyA, polyA_path,
     as a putative poly(A) read.
     """
 
+    # Keep track on the number of reads you get for the sake of RPKM
+    total_reads = 0
+    acount = 0
+    tcount = 0
+
     # if get_length is false AND! polyA is given, return nothing
     if not get_length and polyA != True:
-        return 0
+        return total_reads, acount, tcount
 
     # File objects for writing to
     out_file = open(out_path, 'wb')
@@ -981,25 +986,20 @@ def zcat_wrapper(dset_id, bed_reads, read_limit, out_path, polyA, polyA_path,
     # A dictionary of strands
     getstrand = {'R':'-', 'F':'+'}
 
-    acount = 0
-    tcount = 0
-
-    # Keep track on the number of reads you get for the sake of RPKM
-    total_reads = 0
-
     # Run zcat with -f to act as noram cat if the gem-file is not compressed
     cmd = ['zcat', '-f'] + bed_reads
     f = Popen(cmd, stdout=PIPE)
 
-    count = 0
+    # for speedruns
+    readcount = 0
 
     for map_line in f.stdout:
         (ID, seq, quality, mapinfo, position) = map_line.split('\t')
 
-        count +=1
+        readcount +=1
 
         # If short, only get up to 'limit' of reads
-        if read_limit and count > read_limit:
+        if read_limit and readcount > read_limit:
             break
 
         # Acceptable and poly(A) reads are mutually exclusive.
@@ -1042,12 +1042,11 @@ def zcat_wrapper(dset_id, bed_reads, read_limit, out_path, polyA, polyA_path,
     out_file.close()
     polyA_file.close()
 
-    print()
-    print('{0}: Nr. of total reads: {1}'.format(dset_id, count))
+    print('\n{0}: Nr. of total reads: {1}'.format(dset_id, readcount))
     print('{0}: Nr. of readsReads with poly(A)-tail: {1}'.format(dset_id, acount))
-    print('{0}: Nr. of readsReads with poly(T)-tail: {1}'.format(dset_id, tcount))
+    print('{0}: Nr. of readsReads with poly(T)-tail: {1}\n'.format(dset_id, tcount))
 
-    return total_reads
+    return (total_reads, acount, tcount)
 
 def strip_tailA(seq, trail_A, non_A):
     """
@@ -1905,20 +1904,23 @@ def get_bed_reads(dset_reads, dset_id, read_limit, tempdir, polyA, get_length,
     if suffix in ['gem.map.gz', 'gem.map']:
         print('Obtaining reads from mapping for {0} ...\n'.format(dset_id))
         # Get only the uniquely mapped reads (up to 2 mismatches)
-        total_reads = zcat_wrapper(dset_id, dset_reads, read_limit, out_path, polyA,
+        bundle = zcat_wrapper(dset_id, dset_reads, read_limit, out_path, polyA,
                                    polyA_path, get_length)
+        (total_reads, acount, tcount) = bundle
 
     # If in bed-format, also run zcat -f on all the files to make one big
-    # bedfile. How to restrict reads in this case?? No restriction?
+    # bedfile. How to restrict reads in this case? No restriction?
     elif suffix in ['bed.gz', 'bed']:
         total_reads = concat_bedfiles(dset_reads, out_path, polyA, polyA_path)
+        acount = 0
+        tcount = 0
 
     else:
         print('Non-valid suffix: {0}. Allowed suffixes are .gem.map.gz,\
               .gem.map, .gem.map.gz, .bed.gz, and .bed'.format(suffix))
         sys.exit()
 
-    return (out_path, polyA_path, total_reads)
+    return (out_path, polyA_path, total_reads, acount, tcount)
 
 def concat_bedfiles(dset_reads, out_path, polyA, polyA_path):
     """
@@ -1981,6 +1983,11 @@ def get_polyA_utr(polyAbed, utrfile_path):
     """
     # A dictionary to hold the utr_id -> poly(A)-reads relation
     utr_polyAs = {}
+    amapped = 0
+    tmapped = 0
+
+    amapped_tofeature = 0
+    tmapped_tofeature = 0
 
     # Don't run with -s because we don't know the polyA strand
     cmd = ['intersectBed', '-wb', '-a', polyAbed, '-b', utrfile_path]
@@ -1995,7 +2002,21 @@ def get_polyA_utr(polyAbed, utrfile_path):
         else:
             utr_polyAs[utr_id].append(tuple(polyA))
 
-    return utr_polyAs
+        if polyA[3] == 'T':
+            tmapped += 1
+
+            if polyA[-1] != utr[-1]:
+                tmapped_tofeature += 1
+
+        if polyA[3] == 'A':
+            amapped += 1
+
+            if polyA[-1] == utr[-1]:
+                amapped_tofeature += 1
+
+    at_bundle = (amapped, tmapped, amapped_tofeature, tmapped_tofeature)
+
+    return utr_polyAs, at_bundle
 
 def cluster_loop(ends):
     """
@@ -2134,10 +2155,11 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs, settings,
 
     if polyA_cache:
 
+        chere = here
         if DEBUGGING:
-            here = os.path.join(here, 'DEBUGGING')
+            chere = os.path.join(here, 'DEBUGGING')
 
-        cache_dir = os.path.join(here, 'polyA_cache')
+        cache_dir = os.path.join(chere, 'polyA_cache')
 
         if not os.path.isdir(cache_dir):
             os.makedirs(cache_dir)
@@ -2146,13 +2168,11 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs, settings,
         polyA_cached_path = os.path.join(cache_dir, polydone_path+\
                                          '_processed_mapped.bed')
 
-        cache_path = os.path.join(cache_dir, polyA_cached_path)
-
         # If the file exists, make this the poly(A) path
         # TODO: I think there is a bug if the file exists but it is empty: it
         # holds no reads.
-        if os.path.isfile(cache_path):
-            polyA = cache_path
+        if os.path.isfile(polyA_cached_path):
+            polyA = polyA_cached_path
 
     # Get the normal reads (in bed format), if this option is set. Get the polyA
     # reads if this option is set. As well get the total number of reads for
@@ -2164,13 +2184,20 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs, settings,
 
     # Extract from all_reads. polyA might have been modified from True to
     # 'some_path' if cached polyA reads have been found
-    (bed_reads, p_polyA_bed, total_nr_reads) = all_reads
+    (bed_reads, p_polyA_bed, total_nr_reads, acount, tcount) = all_reads
+
+    # update acount and tcount from saved file if polyAcache is on
+    if polyA_cache:
+        at_count_path = os.path.join(cache_dir,polydone_path+'_atcount')
+
+        if os.path.isfile(at_count_path):
+            (acount, tcount) = open(at_count_path, 'rb').readline().split()
 
     # If polyA is a string, it is a path of a bedfile with to polyA sequences
     if type(polyA) == str:
         polyA_bed_path = polyA
         # Get a dictionary for each utr_id with its overlapping polyA reads
-        utr_polyAs = get_polyA_utr(polyA_bed_path, utrfile_path)
+        utr_polyAs, at_numbers = get_polyA_utr(polyA_bed_path, utrfile_path)
 
     # If polyA is True, trim the extracted polyA reads, remap them, and save the
     # uniquely mapping ones to bed format
@@ -2186,12 +2213,18 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs, settings,
         polyA_bed_path = map_reads(processed_reads, avrg_read_len, settings)
 
         # 3) If caching is on, save the polyA_bed_path to the cache dir
-        #if polyA_cache and read_limit == False:
         if polyA_cache and read_limit == False:
-            shutil.copyfile(polyA_bed_path, cache_path)
+            shutil.copyfile(polyA_bed_path, polyA_cached_path)
+
+            # also save the acount and tcount
+            at_count_path = os.path.join(cache_dir,polydone_path+'_atcount')
+
+            outhandle = open(at_count_path, 'wb')
+            outhandle.write('{0}\t{1}'.format(acount, tcount))
+            outhandle.close()
 
         # Get a dictionary for each utr_id with its overlapping polyA reads
-        utr_polyAs = get_polyA_utr(polyA_bed_path, utrfile_path)
+        utr_polyAs, at_numbers = get_polyA_utr(polyA_bed_path, utrfile_path)
 
     # Cluster the poly(A) reads for each utr_id. If polyA is false or no polyA
     # reads were found, return a placeholder, since this variable is assumed to
@@ -2201,12 +2234,10 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs, settings,
     # strandedness of the transcript.
     polyA_reads = cluster_polyAs(settings, utr_polyAs, utr_exons, polyA)
 
-    # If polyA is true, write the polyA-statistics file!
-    # TODO next to each poly(A) site you should write the strand of the poly(A)
-    # site
     if polyA:
         output_path = os.path.join(output_dir, dset_id+'_polyA_statistics')
-        write_polyA_stats(polyA_reads, utr_exons, output_path, settings)
+        write_polyA_stats(polyA_reads, acount, tcount, at_numbers,
+                          utr_exons, output_path, settings)
 
     if get_length:
         # Get RPKM and coverage, and write to file
@@ -2243,7 +2274,8 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs, settings,
     print('Total time for {0}: {1}\n'.format(dset_id, time.time() - t0))
 
 
-def write_polyA_stats(polyA_reads, utr_exons, output_path, settings):
+def write_polyA_stats(polyA_reads, acount, tcount, at_numbers, utr_exons,
+                      output_path, settings):
     """
     File for outputting basic polyA statistics. These statistics make most sense
     in 3UTR regions, because we know the orientation of the transcripts. In
@@ -2283,6 +2315,7 @@ def write_polyA_stats(polyA_reads, utr_exons, output_path, settings):
         handle.write('No poly(A) reads mapped')
         handle.close()
         return
+
 
     this_strand_count = 0
     other_strand_count = 0
@@ -2344,6 +2377,18 @@ def write_polyA_stats(polyA_reads, utr_exons, output_path, settings):
             both_by_chance += targ_land*movers
 
     handle = open(output_path, 'wb')
+
+    (amapped, tmapped, amapped_tofeature, tmapped_tofeature) = at_numbers
+
+    #-1) A/T reads statistics
+    handle.write('Nr of trailing A reads total\t{0}\n'.format(acount))
+    handle.write('Nr of leading T reads total\t{0}\n'.format(tcount))
+    handle.write('Nr of trailing A reads mapped\t{0}\n'.format(amapped))
+    handle.write('Nr of leading T reads mapped\t{0}\n'.format(tmapped))
+    handle.write('Nr of trailing A reads mapped to annotated object\t{0}\n'\
+                 .format(amapped_tofeature))
+    handle.write('Nr of leading T reads mapped to annotated object\t{0}\n'\
+                 .format(tmapped_tofeature))
 
     #0) The numbers themselves
     handle.write('Annotated strand count\t{0}\n'.format(this_strand_count))
@@ -3010,8 +3055,8 @@ def main():
     # function (called below). It also affects the 'temp' and 'output'
     # directories, respectively.
 
-    DEBUGGING = True
-    #DEBUGGING = False
+    #DEBUGGING = True
+    DEBUGGING = False
 
     # with this option, always remake the bedfiles
     rerun_annotation_parser = False
@@ -3075,7 +3120,16 @@ def piperunner(settings, annotation, simulate, DEBUGGING, beddir, tempdir,
     annotation.utr_exons = annotation.get_utrdict()
 
     # You extract all annotated polyA sites into a bedfile: a_polyA_sites_path
-    annotation.a_polyA_sites_path = get_a_polyA_sites_path(settings, beddir)
+
+    # Note: you have a better one now. The merger of the poly(A) DB with the
+    # GENCODE annotatted polyA sites.
+    #annotation.a_polyA_sites_path = get_a_polyA_sites_path(settings, beddir)
+    a_path = os.path.join(beddir, 'annotated_polyAdb_gencode_merged.bed')
+    if settings.chr1 == True:
+        a_path = os.path.join(beddir, 'annotated_polyAdb_gencode_merged_chr1.bed')
+
+    #annotation.a_polyA_sites_path = get_a_polyA_sites_path(settings, beddir)
+    annotation.a_polyA_sites_path = a_path
 
     # You intersect the annotated polyA files with the 3UTR bedfile you got from
     # the annotation. Put the intersected annotated polyA sites in a dictionary.
@@ -3083,8 +3137,8 @@ def piperunner(settings, annotation, simulate, DEBUGGING, beddir, tempdir,
     annotation.a_polyA_sites_dict = annotation.get_polyA_dict()
 
     # If this is true, the poly(A) reads will be saved after getting them. That
-    # will save all that reading. Only save them if you run with no restriction
-    # in reads.
+    # will save all that reading. They will only be saved if you run with no
+    # restriction in reads.
     polyA_cache = True
     #polyA_cache = False
 
@@ -3121,15 +3175,15 @@ def piperunner(settings, annotation, simulate, DEBUGGING, beddir, tempdir,
                          settings, annotation, DEBUGGING, polyA_cache, here)
 
             ###### FOR DEBUGGING ######
-            akk = pipeline(*arguments)
+            #akk = pipeline(*arguments)
             ###########################
 
-            #result = my_pool.apply_async(pipeline, arguments)
-            #results.append(result)
+            result = my_pool.apply_async(pipeline, arguments)
+            results.append(result)
 
-        debug()
-        #my_pool.close()
-        #my_pool.join()
+        #debug()
+        my_pool.close()
+        my_pool.join()
 
          #Get the paths from the final output
         outp = [result.get() for result in results]
