@@ -209,15 +209,15 @@ class Only(object):
     def __init__(self, input_line):
 
         (chrm, beg, end, utr_ID, strand, polyA_coordinate,
-         annotated_polyA_distance, nearby_PAS, PAS_distance,
-         number_supporting_reads, nr_unique_supporting_reads,
+         polyA_coordinate_strand, annotated_polyA_distance, nearby_PAS,
+         PAS_distance, number_supporting_reads, nr_unique_supporting_reads,
          unique_reads_spread) = input_line.split('\t')
 
         self.chrm = chrm
         self.beg = str_to_intfloat(beg)
         self.end = str_to_intfloat(end)
         self.ID = utr_ID
-        self.strand = strand
+        self.strand = polyA_coordinate_strand
 
         self.polyA_coordinate = str_to_intfloat(polyA_coordinate)
         self.annotated_polyA_distance = annotated_polyA_distance
@@ -1915,8 +1915,6 @@ def super_falselength(settings, speedrun, svm):
     """ Return the super clusters with information only from the poly(A) files
     without using length (coverage) information.
 
-    Note that while the other investigations are whole-UTR orientied, this
-    investigation considers only 1-exons by themselves.
     """
 
     dsets = AutoVivification()
@@ -2107,7 +2105,10 @@ def get_super_3utr(dsets, super_cluster, dset_2super):
                 for cl in utr.clusters:
 
                     # superkey for dset_2super
-                    superkey = cell_line+' '+comp + utr.chrm + utr.strand +\
+                    # hey: it's no longer the utr.strand -- it's the cluster
+                    # strand. you still want clusters of different strands to be
+                    # associated to the same utr as in the output file.
+                    superkey = cell_line+' '+comp + utr.chrm + cl.strand +\
                             str(cl.polyA_coordinate)
 
                     supr_covr = AutoVivification()
@@ -4042,6 +4043,8 @@ def itatr(tup):
 def merge_clusters(dsets):
     """
     Merge all clusters from all datasets into one huge cluster.
+
+    NEW: take into account the strand of the cluster
     """
 
     all_clusters = {} # keys = cluster_centers
@@ -4568,7 +4571,7 @@ def get_region_sizes():
 
     return sizes
 
-def polyA_summary(dsets, super_3utr, polyAstats, settings):
+def polyA_summary(dsets, super_3utr, polyAstats, settings, side):
     """ Show that the polyA minus are fishy
 
     1) Number of total polyA sites
@@ -4584,13 +4587,15 @@ def polyA_summary(dsets, super_3utr, polyAstats, settings):
 
     ii) a comparason between the strands for each compartment, cl, etc
 
+    NEW: you now have sites on both strand of the annotated one. I think you
+    should give a report for both.
+
     """
 
     # Get the sizes of the different genomic regions
     region_sizes = get_region_sizes()
     tot_size = sum(region_sizes.values())
 
-    minus = AutoVivification()
 
     # make a [region][cl][compartment][polyA+/-][replica] structure; each region
     # will have its own plots. cl will be K562 only. Then compare compartments
@@ -4600,9 +4605,12 @@ def polyA_summary(dsets, super_3utr, polyAstats, settings):
 
     for region, reg_dict in dsets.items():
 
-        print('-'*60+'\n\nResults for region: {0}\n\n'.format(region)+'-'*60+'\n')
+        print('-'*60+'\n\nResults for region: {0} {1}\n\n'.format(region, side)\
+              +'-'*60+'\n')
 
         for cl, cl_dict in reg_dict.items():
+
+            minus = AutoVivification()
 
             for comp, comp_dict in cl_dict.items():
 
@@ -4612,11 +4620,20 @@ def polyA_summary(dsets, super_3utr, polyAstats, settings):
                 for utr_id, utr in comp_dict.iteritems():
                     if utr.clusters != []:
                         for cls in utr.clusters:
+                            # skip according to which side you want to asess
+                            if side == 'annotated' and cls.strand != utr.strand:
+                                continue
+
+                            if side == 'opposite' and cls.strand == utr.strand:
+                                continue
+
                             minus[comp]['Cls nr'] += 1
                             minus[comp]['read_nr'] += cls.nr_support_reads
 
                             # if more than 1 read supporting
-                            if cls.nr_support_reads > 1 or cls.annotated_polyA_distance != 'NA':
+                            if cls.nr_support_reads > 1 or\
+                               cls.annotated_polyA_distance != 'NA':
+
                                 minus[comp]['Cls min2'] += 1
 
                             if cls.annotated_polyA_distance != 'NA':
@@ -4629,83 +4646,87 @@ def polyA_summary(dsets, super_3utr, polyAstats, settings):
                                and (cls.nearby_PAS != ['NA']):
                                 minus[comp]['both_an_and_PAS'] += 1
 
-        for (comp, count_dict) in minus.items():
-            total = count_dict['Cls nr']
-            total2 = count_dict['Cls min2']
+            for (comp, count_dict) in minus.items():
+                total = count_dict['Cls nr']
+                total2 = count_dict['Cls min2']
 
-            annot = count_dict['Annot pA']
-            annot_frac = format(annot/total, '.2f')
+                total2_frac = format(total2/total, '.2f')
 
-            pas = count_dict['PAS pA']
-            pas_frac = format(pas/total, '.2f')
+                annot = count_dict['Annot pA']
+                annot_frac = format(annot/total, '.2f')
 
-            read_nr = count_dict['read_nr']
-            read_per_site = format(read_nr/total, '.2f')
+                pas = count_dict['PAS pA']
+                pas_frac = format(pas/total, '.2f')
 
-            anYpas = count_dict['both_an_and_PAS']
+                read_nr = count_dict['read_nr']
+                read_per_site = format(read_nr/total, '.2f')
 
-            if annot == 0:
-                anYpas_rate = 'NA'
-            else:
-                anYpas_rate = format(anYpas/annot, '.2f')
+                anYpas = count_dict['both_an_and_PAS']
 
-            # PLOT THIS STATISTIC WHEN RUNNING ONLY FOR ANNOTATED 3UTR REGIONS
-            # YOU KNOW 3UTRs!
-            oppos_readnr = polyAstats[region][cl][comp]['Other_strand_count']
-            this_readnr = polyAstats[region][cl][comp]['This_strand_count']
-            both_readnr = polyAstats[region][cl][comp]['Both_strands_count']
+                if annot == 0:
+                    anYpas_rate = 'NA'
+                else:
+                    anYpas_rate = format(anYpas/annot, '.2f')
 
-            print cl
-            print comp
-            print("Total poly(A) sites: {0}".format(total))
-            print("Total poly(A) sites with 2+ reads or annotated: {0}".format(total2))
-            print("Total poly(A) reads (per site): {0} ({1})".format(read_nr,
-                                                                      read_per_site))
-            print("Annotated poly(A) sites: {0} ({1})".format(annot, annot_frac))
-            print("poly(A) sites with PAS: {0} ({1})".format(pas, pas_frac))
-            print("Annotated poly(A) sites with PAS: {0} ({1})".format(anYpas,
-                                                                        anYpas_rate))
-            print("")
+                # PLOT THIS STATISTIC WHEN RUNNING ONLY FOR ANNOTATED 3UTR REGIONS
+                # YOU KNOW 3UTRs!
+                oppos_readnr = polyAstats[region][cl][comp]['Other strand count']
+                this_readnr = polyAstats[region][cl][comp]['Annotated strand count']
+                both_readnr = polyAstats[region][cl][comp]['Both strands count']
 
-            # get poly(A) + or - and get if it is a replicate or not it's in
-            # comp
-            realcomp = comp # successively remove 'replicate' or 'minus'
+                print cl
+                print comp
+                print("Total poly(A) sites: {0}".format(total))
+                print("Total poly(A) sites with 2+ reads or annotated: {0} ({1})"\
+                      .format(total2, total2_frac))
+                print("Total poly(A) reads (per site): {0} ({1})"\
+                      .format(read_nr, read_per_site))
+                print("Annotated poly(A) sites: {0} ({1})"\
+                      .format(annot, annot_frac))
+                print("poly(A) sites with PAS: {0} ({1})".format(pas, pas_frac))
+                print("Annotated poly(A) sites with PAS: {0} ({1})"\
+                      .format(anYpas, anYpas_rate))
+                print("")
 
-            if 'Replicate' in comp:
-                replicate = 'replicate'
-                realcomp = comp.partition('Replicate')[0]
-            else:
-                replicate = 'not_replicate'
+                # get poly(A) + or - and get if it is a replicate or not it's in
+                # comp
+                realcomp = comp # successively remove 'replicate' or 'minus'
 
-            if 'Minus' in comp:
-                polyMinus = 'PolyA-'
-                realcomp = realcomp.partition('Minus')[0]
-            else:
-                polyMinus = 'PolyA+'
+                if 'Replicate' in comp:
+                    replicate = 'replicate'
+                    realcomp = comp.partition('Replicate')[0]
+                else:
+                    replicate = 'not_replicate'
 
-            mdict = {}
+                if 'Minus' in comp:
+                    polyMinus = 'PolyA-'
+                    realcomp = realcomp.partition('Minus')[0]
+                else:
+                    polyMinus = 'PolyA+'
 
-            mdict['total_sites'] = total
-            mdict['total_sites2'] = total2 # sits with 2+ reads or annotated
-            mdict['total_reads'] = read_nr
+                mdict = {}
 
-            # ad hoc solution: when you run 3UTR only (from the careful stuff)
-            # How many reads normalized by region size?
-            if region == '3UTR':
-                mdict['total_reads_region_normalized'] =\
-                read_nr*(1-(region_sizes['3UTR-exonic']/tot_size))
-                mdict['total_sites_normalized'] =\
-                total*(1-(region_sizes['3UTR-exonic']/tot_size))
-                mdict['sites_with_pas_fraction'] = pas_frac
-            else:
-                mdict['total_reads_region_normalized'] =\
-                read_nr*(1-(region_sizes[region]/tot_size))
-                mdict['total_sites_normalized'] =\
-                total*(1-(region_sizes[region]/tot_size))
-                mdict['sites_with_pas_fraction'] = pas_frac
+                mdict['total_sites'] = total
+                mdict['total_sites2'] = total2 # sits with 2+ reads or annotated
+                mdict['total_reads'] = read_nr
 
-            # finally, add all to this:
-            everything[region][cl][realcomp][replicate][polyMinus] = mdict
+                # ad hoc solution: when you run 3UTR only (from the careful stuff)
+                # How many reads normalized by region size?
+                if region == '3UTR':
+                    mdict['total_reads_region_normalized'] =\
+                    read_nr*(1-(region_sizes['3UTR-exonic']/tot_size))
+                    mdict['total_sites_normalized'] =\
+                    total*(1-(region_sizes['3UTR-exonic']/tot_size))
+                    mdict['sites_with_pas_fraction'] = pas_frac
+                else:
+                    mdict['total_reads_region_normalized'] =\
+                    read_nr*(1-(region_sizes[region]/tot_size))
+                    mdict['total_sites_normalized'] =\
+                    total*(1-(region_sizes[region]/tot_size))
+                    mdict['sites_with_pas_fraction'] = pas_frac
+
+                # finally, add all to this:
+                everything[region][cl][realcomp][replicate][polyMinus] = mdict
 
         total_unique = 0
         for utr_id, utr in super_3utr[region].iteritems():
@@ -4722,6 +4743,7 @@ def polyA_summary(dsets, super_3utr, polyAstats, settings):
         print("Total unique poly(A) sites for {1}: {0}".format(total_unique,
                                                                region))
 
+    return
     p = Plotter()
     #For each region, for each cell type, compute the read counts etc as in
     #'everything' for poly(A) minus and for replicates. Make one multi-plot per
@@ -4799,8 +4821,8 @@ def main():
     # Optionally get SVM information as well
     # so that you will have the same 1000 3UTRs!
 
-    # For the old output files
-    #dsets, super_3utr = get_utrs(settings, speedrun=False, svm=False)
+    # For the 'old' output files use 'get_utrs'
+    # dsets, super_3utr = get_utrs(settings, speedrun=False, svm=False)
 
     # for the onlypolyA files
     # you now have an additional level: the "region" (often the 3UTR)
@@ -4821,7 +4843,8 @@ def main():
     # XXX There is something fishy about the 3UTR exon datasets. there are
     # poly(A) reads on both strands in equal amounts. aaaaah... this is because
     # it's just + :) nothing fishy at all!
-    polyA_summary(dsets, super_3utr, polyAstats, settings)
+    for side in ['annotated', 'opposite']:
+        polyA_summary(dsets, super_3utr, polyAstats, settings, side)
 
     #### Nucleosomes (and sequences) ####
     # TODO continue with this: you're abount to make nucleotide coverage arrays!
