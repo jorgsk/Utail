@@ -47,10 +47,8 @@ class Settings(object):
                  regions_provided, read_limit, max_cores, chr1, hgfasta_path,
                  polyA, min_utrlen, extendby, cumul_tuning, bigwig,
                  bigwig_datasets, bigwig_savedir, bigwig_url, gem_index,
-                 length, pairend, strand):
+                 length):
 
-        self.strand = strand # for non-annotation .bed files
-        self.pairend = pairend # are the reads pair-ended?
         self.get_length = length
         self.datasets = datasets
         self.annotation_path = annotation_path
@@ -93,7 +91,7 @@ class Settings(object):
         self.chr1 = True
         #self.chr1 = False
         #self.read_limit = False
-        self.read_limit = 10000000
+        self.read_limit = 5000000
         self.max_cores = 5
         self.get_length = False
         #self.get_length = True
@@ -962,12 +960,13 @@ def zcat_wrapper(dset_id, bed_reads, read_limit, out_path, polyA, polyA_path,
 
     # Keep track on the number of reads you get for the sake of RPKM
     total_reads = 0
+    total_mapped_reads = 0
     acount = 0
     tcount = 0
 
     # if get_length is false AND! polyA is given, return nothing
     if not get_length and polyA != True:
-        return total_reads, acount, tcount
+        return total_mapped_reads, total_reads, acount, tcount
 
     # File objects for writing to
     out_file = open(out_path, 'wb')
@@ -991,15 +990,14 @@ def zcat_wrapper(dset_id, bed_reads, read_limit, out_path, polyA, polyA_path,
     f = Popen(cmd, stdout=PIPE)
 
     # for speedruns
-    readcount = 0
 
     for map_line in f.stdout:
         (ID, seq, quality, mapinfo, position) = map_line.split('\t')
 
-        readcount +=1
+        total_reads +=1
 
         # If short, only get up to 'limit' of reads
-        if read_limit and readcount > read_limit:
+        if read_limit and total_reads > read_limit:
             break
 
         # Acceptable and poly(A) reads are mutually exclusive.
@@ -1042,11 +1040,11 @@ def zcat_wrapper(dset_id, bed_reads, read_limit, out_path, polyA, polyA_path,
     out_file.close()
     polyA_file.close()
 
-    print('\n{0}: Nr. of total reads: {1}'.format(dset_id, readcount))
+    print('\n{0}: Nr. of total reads: {1}'.format(dset_id, total_reads))
     print('{0}: Nr. of readsReads with poly(A)-tail: {1}'.format(dset_id, acount))
     print('{0}: Nr. of readsReads with poly(T)-tail: {1}\n'.format(dset_id, tcount))
 
-    return (total_reads, acount, tcount)
+    return (total_mapped_reads, total_reads, acount, tcount)
 
 def strip_tailA(seq, trail_A, non_A):
     """
@@ -1421,17 +1419,11 @@ def read_settings(settings_file):
     # length yes or no
     length = conf.getboolean('GET_LENGTH', 'length')
 
-    # datasets
-    pairend = conf.getboolean('DATASETS', 'pairend')
-
     datasets = dict((dset, files.split(':')) for dset,
                     files in conf.items('DATASETS'))
-    # pop the 'pairend' part ...
-    datasets.pop('pairend')
-
 
     # Go through all the items in 'datsets'. Pop the directories from the list.
-    # They are likely to be shortcuts. Also remove the boolean pairend
+    # They are likely to be shortcuts.
     for (dset, dpaths) in datasets.items():
         for pa in dpaths:
             if os.path.isdir(pa):
@@ -1469,7 +1461,6 @@ def read_settings(settings_file):
         utr_bedfile_paths = conf.get('SUPPLIED_3UTR_BEDFILE',
                                     'utr_bed_path').split(':')
         [verify_access(path) for path in utr_bedfile_paths] # Check if is a file
-    strand = conf.getboolean('SUPPLIED_3UTR_BEDFILE', 'strand')
 
     # If both 'annotation' and '3utr_bedfile' are false, your program isn't
     # going to go too far
@@ -1528,21 +1519,16 @@ def read_settings(settings_file):
     # if both an annotation and bedfiles are supplied, give the user warning
     # about this
     if annotation_path and utr_bedfile_paths:
-        print('\nYou have supplied a path to an annotation as well as a '\
+        print('*'*80+'\nYou have supplied a path to an annotation as well as a '\
               'bedfile (or more) with genomic regions as input. The default '\
              'setting is to ignore the annotation in this case. If you want to '\
               'use the annotation and not the supplied bedfiles, set:\n\n'\
-             '"utr_bed_path = false"\n\nin the settings file.')
-
-        leave = raw_input('\nPress A to abort or ENTER to continue: ')
-        if leave == 'A':
-            print('Aborting ...')
-            sys.exit()
+             '"utr_bed_path = false"\n\nin the settings file.\n'+'*'*80+'\n')
 
     return(datasets, annotation_path, annotation_format, utr_bedfile_paths,
            read_limit, max_cores, chr1, hg_fasta, polyA, min_utrlen, extendby,
            cuml_tuning, bigwig, bigwig_datasets, bigwig_savedir, bigwig_url,
-           gem_index, length, pairend, strand)
+           gem_index, length)
 
 def get_a_polyA_sites_path(settings, beddir):
     """
@@ -1706,8 +1692,9 @@ def shape_provided_bed(utr_bed_path, settings, region_file):
                 continue
 
         # Skip short utrs
-        if end - beg < settings.min_utrlen:
-            continue
+        # XXX not doing this. the person who provides should do it.
+        #if end - beg < settings.min_utrlen:
+            #continue
 
         outfile.write('\t'.join([chrm, str(beg), str(end), name, val,
                                  strand])+'\n')
@@ -1906,7 +1893,8 @@ def get_bed_reads(dset_reads, dset_id, read_limit, tempdir, polyA, get_length,
         # Get only the uniquely mapped reads (up to 2 mismatches)
         bundle = zcat_wrapper(dset_id, dset_reads, read_limit, out_path, polyA,
                                    polyA_path, get_length)
-        (total_reads, acount, tcount) = bundle
+
+        (total_mapped_reads, total_reads, acount, tcount) = bundle
 
     # If in bed-format, also run zcat -f on all the files to make one big
     # bedfile. How to restrict reads in this case? No restriction?
@@ -1920,7 +1908,7 @@ def get_bed_reads(dset_reads, dset_id, read_limit, tempdir, polyA, get_length,
               .gem.map, .gem.map.gz, .bed.gz, and .bed'.format(suffix))
         sys.exit()
 
-    return (out_path, polyA_path, total_reads, acount, tcount)
+    return (out_path, polyA_path, total_reads, total_mapped_reads, acount, tcount)
 
 def concat_bedfiles(dset_reads, out_path, polyA, polyA_path):
     """
@@ -2169,7 +2157,7 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs, settings,
                                          '_processed_mapped.bed')
 
         # If the file exists, make this the poly(A) path
-        # TODO: I think there is a bug if the file exists but it is empty: it
+        # XXX: I think there is a bug if the file exists but it is empty: it
         # holds no reads.
         if os.path.isfile(polyA_cached_path):
             polyA = polyA_cached_path
@@ -2184,16 +2172,18 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs, settings,
 
     # Extract from all_reads. polyA might have been modified from True to
     # 'some_path' if cached polyA reads have been found
-    (bed_reads, p_polyA_bed, total_nr_reads, acount, tcount) = all_reads
+    (bed_reads, p_polyA_bed, total_reads, total_mapped_reads, acount, tcount) =\
+            all_reads
 
     # update acount and tcount from saved file if polyAcache is on
     if polyA_cache:
         at_count_path = os.path.join(cache_dir,polydone_path+'_atcount')
 
         if os.path.isfile(at_count_path):
-            (acount, tcount) = open(at_count_path, 'rb').readline().split()
+            (total_reads, acount, tcount) = open(at_count_path,'rb').readline()\
+                    .split()
 
-    # If polyA is a string, it is a path of a bedfile with to polyA sequences
+    # If polyA is a string, it is a path of a bedfile with the polyA sequences
     if type(polyA) == str:
         polyA_bed_path = polyA
         # Get a dictionary for each utr_id with its overlapping polyA reads
@@ -2220,7 +2210,7 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs, settings,
             at_count_path = os.path.join(cache_dir,polydone_path+'_atcount')
 
             outhandle = open(at_count_path, 'wb')
-            outhandle.write('{0}\t{1}'.format(acount, tcount))
+            outhandle.write('{0}\t{1}\t{2}'.format(total_reads, acount, tcount))
             outhandle.close()
 
         # Get a dictionary for each utr_id with its overlapping polyA reads
@@ -2229,22 +2219,19 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs, settings,
     # Cluster the poly(A) reads for each utr_id. If polyA is false or no polyA
     # reads were found, return a placeholder, since this variable is assumed to
     # exist in downstream code.
-    # If reads are not paired ended, poly(A) reads from both strands will be
-    # merged to one strand. Only with paried ended reads can we know the
-    # strandedness of the transcript.
     polyA_reads = cluster_polyAs(settings, utr_polyAs, utr_exons, polyA)
 
     if polyA:
         output_path = os.path.join(output_dir, dset_id+'_polyA_statistics')
         write_polyA_stats(polyA_reads, acount, tcount, at_numbers,
-                          utr_exons, output_path, settings)
+                          total_reads, utr_exons, output_path, settings)
 
     if get_length:
         # Get RPKM and coverage, and write to file
 
         # Get the RPKM, if you get lengths
         print('Obtaining RPKM for {0} ...\n'.format(dset_id))
-        rpkm = get_rpkm(bed_reads, utrfile_path, total_nr_reads, utr_exons,
+        rpkm = get_rpkm(bed_reads, utrfile_path, total_mapped_reads, utr_exons,
                         extendby, dset_id)
 
         # Cover the 3UTRs with the reads, if you get lengths
@@ -2256,7 +2243,7 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs, settings,
         print('Writing output files... {0} ...\n'.format(dset_id))
         output_files = output_writer(dset_id, coverage_path, annotation,
                                      utr_seqs, rpkm, polyA_reads, settings,
-                                     total_nr_reads, output_dir, polyA)
+                                     total_mapped_reads, output_dir, polyA)
 
         # Get the paths to the two output files explicitly
         (polyA_output, length_output) = output_files
@@ -2267,15 +2254,15 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs, settings,
     else:
         # Just get the poly(A) output
         only_pA = only_polyA_writer(dset_id, annotation, utr_seqs, polyA_reads,
-                                    settings, total_nr_reads, output_dir)
+                                    settings, output_dir)
 
         return {dset_id: {'only_polyA': only_pA}}
 
     print('Total time for {0}: {1}\n'.format(dset_id, time.time() - t0))
 
 
-def write_polyA_stats(polyA_reads, acount, tcount, at_numbers, utr_exons,
-                      output_path, settings):
+def write_polyA_stats(polyA_reads, acount, tcount, at_numbers, total_nr_reads,
+                      utr_exons, output_path, settings):
     """
     File for outputting basic polyA statistics. These statistics make most sense
     in 3UTR regions, because we know the orientation of the transcripts. In
@@ -2316,12 +2303,12 @@ def write_polyA_stats(polyA_reads, acount, tcount, at_numbers, utr_exons,
         handle.close()
         return
 
-
     this_strand_count = 0
     other_strand_count = 0
     both_strand_count = 0
-
     both_by_chance = 0
+
+    clusters = 0
 
     # Lists of unique vs. total reads for each utr for each strand
     distributions = {'this_strand': {'unique_reads': [], 'total_reads': [],
@@ -2333,6 +2320,9 @@ def write_polyA_stats(polyA_reads, acount, tcount, at_numbers, utr_exons,
         # Skip those without poly(A) reads
         if strand_stats == {'plus_strand': [[], []], 'minus_strand': [[], []]}:
             continue
+
+        clusters += len(strand_stats['minus_strand'][0])
+        clusters += len(strand_stats['plus_strand'][0])
 
         if utr_exons[utr][3] == '+':
             this_strand_reads = sum(strand_stats['plus_strand'][1], [])
@@ -2380,6 +2370,9 @@ def write_polyA_stats(polyA_reads, acount, tcount, at_numbers, utr_exons,
 
     (amapped, tmapped, amapped_tofeature, tmapped_tofeature) = at_numbers
 
+    # total nr of reads mapped
+    handle.write('Total number of reads\t{0}\n'.format(total_nr_reads))
+
     #-1) A/T reads statistics
     handle.write('Nr of trailing A reads total\t{0}\n'.format(acount))
     handle.write('Nr of leading T reads total\t{0}\n'.format(tcount))
@@ -2390,14 +2383,17 @@ def write_polyA_stats(polyA_reads, acount, tcount, at_numbers, utr_exons,
     handle.write('Nr of leading T reads mapped to annotated object\t{0}\n'\
                  .format(tmapped_tofeature))
 
-    #0) The numbers themselves
+    # Write the total number of clusters
+    handle.write('Nr of clusters\t{0}\n'.format(clusters))
+
+    #0) The strand statistics (assuming the strand in the bedfile makes sense)
     handle.write('Annotated strand count\t{0}\n'.format(this_strand_count))
     handle.write('Other strand count\t{0}\n'.format(other_strand_count))
     handle.write('Both strands count\t{0}\n'.format(both_strand_count))
     handle.write('Both strands by chance\t{0}\n'.format(both_by_chance))
 
     #1) Estimated false-positive rate (this_strand/other_strand)
-    if other_strand_count > 0:
+    if this_strand_count > 0:
         fals_pos = other_strand_count/this_strand_count
     else:
         fals_pos = 'NA'
@@ -2407,12 +2403,15 @@ def write_polyA_stats(polyA_reads, acount, tcount, at_numbers, utr_exons,
     handle.write('"False positive"-rate\t{0}\n'.format(fals_pos, '.4f'))
 
     #2) Estimated false-negative rate (common to both strands)
-    if other_strand_count > 0:
-        fals_neg = both_strand_count/other_strand_count
+    if this_strand_count > 0:
+        fals_neg = both_strand_count/this_strand_count
     else:
         fals_neg = 'NA'
 
     handle.write('"False negative"-rate\t{0}\n'.format(fals_neg, '.4f'))
+
+    # count the number of clusters
+    clusters = 0
 
     # Get distributions of the poly(A) reads you actually use
     for utr, strand_stats in polyA_reads.items():
@@ -2438,6 +2437,8 @@ def write_polyA_stats(polyA_reads, acount, tcount, at_numbers, utr_exons,
                 std = math.sqrt(sum([(cls_center-cls_pos)**2 for cls_pos in
                            cls_reads])/len(cls_reads))
                 distributions[keyw]['spread'].append(std)
+
+    # Write the total number of clusters
 
     # Calculate key statistics from the this_strand and other_strand variables
     for strand_way, dist in distributions.items():
@@ -2468,16 +2469,16 @@ def write_polyA_stats(polyA_reads, acount, tcount, at_numbers, utr_exons,
             unique_mean = 0
             unique_std = 0
 
-        handle.write('{0} Sum unique reads\t{1}\n'.format(strand_way,
-                                                             unique_sum))
-        handle.write('{0} Average unique reads in clusters\t{1}\n'.format(strand_way,
-                                                             unique_mean))
-        handle.write('{0} Std uniuqe reads in clusters\t{1}\n'.format(strand_way,
-                                                                  unique_std))
+        handle.write('{0} Sum unique reads\t{1}\n'\
+                     .format(strand_way, unique_sum))
+        handle.write('{0} Average unique reads in clusters\t{1}\n'\
+                     .format(strand_way, unique_mean))
+        handle.write('{0} Std uniuqe reads in clusters\t{1}\n'\
+                     .format(strand_way, unique_std))
     handle.close()
 
 def only_polyA_writer(dset_id, annotation, utr_seqs, polyA_reads, settings,
-                      total_nr_reads, output_dir):
+                      output_dir):
     """ If only poly(A) is asked for, skip the footprint-heavy "output_writer"
     and use this special method for just writing poly(A) output.
 
@@ -3041,13 +3042,6 @@ def main():
     This method is called if script is run as __main__.
     """
 
-    # TODO compare K562 with HUVEC or H1. HUVEC and H1 are not a cancer cell
-    # line. Does K562 have shorter 3UTRs compared to HUVEC? Can we see this, if
-    # not in length, then in poly(A) reads relative usage? IDEA: if you don't
-    # find any differences, this is also a result! Because so many people have
-    # published differences, it seems like they're a dime a dozen, while in fact
-    # they're not that many.
-
     # IDEA: are some poly(A) cluster's enormous count the result of PCR
     # amplification gone awry? Compare the biological replicates!
 
@@ -3072,11 +3066,6 @@ def main():
 
     # Location of settings file
     settings_file = os.path.join(here, 'UTR_SETTINGS')
-
-    #######################################################
-    ###### TESTING Pedro's old annotation settings
-    #settings_file = os.path.join(here, 'OLD_ENCODE_SETTINGS')
-    #######################################################
 
     # Create the settings object from the settings file
     settings = Settings(*read_settings(settings_file))
