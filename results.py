@@ -1734,7 +1734,7 @@ class Plotter(object):
 
         return (fig, axes)
 
-    def cluster_ladder(self, dsetclusters, dsetreads, fig, ax, col, title, region):
+    def cluster_ladder(self, dsetclusters, dsetreads, fig, ax, col, lstyle):
         """ The more million reads, the more poly(A) clusters!
         """
 
@@ -1754,12 +1754,10 @@ class Plotter(object):
             all_cls.append(numbers['all clusters'])
             good_cls.append(numbers['good clusters'])
 
-        # plot all and unique clusters
-        linestyle = {'3UTR-exonic': '--', 'anti-3UTR-exonic': '-.',
-                     ' ': '-'}
+        pl = ax.plot(mill_reads, good_cls, ls=lstyle, color=col, linewidth=2)[0]
 
-        ax.plot(mill_reads, good_cls, ls=linestyle[region],
-                label=' '.join([title, region]), color=col, linewidth=2)
+        # return the plot handle for later
+        return pl
 
 def pairwise_intersect(in_terms_of, dset_dict, cutoff):
     """
@@ -4888,8 +4886,6 @@ def clusterladder(settings, speedrun):
     dsetreads = get_dsetreads(settings)
 
     #2) Make super-clusters for your datasets of choice
-    # TODO the order should be in such a way that you have the smallest sums
-    # first. you want the smallest increase possible. minsum1 minsum2 etc
 
     k562minus = ['K562_CytoplasmMinus', 'K562_CytoplasmMinusReplicate',
                   'K562_Whole_CellMinus', 'K562_Whole_CellMinusReplicate']
@@ -4925,43 +4921,42 @@ def clusterladder(settings, speedrun):
     all_minus = sum([k562minus, gm12878minus, helaS3minus], [])
     all_minusCy = sum([k562minusCy, gm12878minusCy, helaS3minusCy], [])
 
-    # RESULT: the WholeCell libraries act weird for poly(A) minus. The cytocolic
-    # fraction makes sense. See latest figure. Next, the Venn diagrams?
-    # Actually: try to make the plot prettier. The colors are a bit wank.
-
     regions = ['3UTR-exonic', 'anti-3UTR-exonic']
 
-    #cell_lines = {'K562': k562,
-                  #'HeLa': helaS3}
+    data_grouping = {'Poly(A) plus': all_clCy,
+                  'Poly(A) minus': all_minusCy}
 
-    cell_lines = {'K562/GM12878/HeLa': all_clCy,
-                  'polyA minus': all_minusCy}
+    #data_grouping = {'': all_cl}
 
-    #cell_lines = {'k562 minus': k562minus,
-                 #'gm12878 minus': gm12878minus,
-                 #'hela minus': helaS3minus}
 
-    #cell_lines = {'k562 minus': k562minusCy,
-                 #'gm12878 minus': gm12878minusCy,
-                 #'all minus': all_minusCy,
-                 #'hela minus': helaS3minusCy}
+    # For the plot
+    reg2nicereg = {'3UTR-exonic': 'Annotated 3UTR regions',
+                 'anti-3UTR-exonic': 'in rest of genome',
+                   'Whole genome': 'Whole genome'}
 
-    # Maybe you should use all for all? 
+    linestyle = {'3UTR-exonic': '--',
+                 'anti-3UTR-exonic': ':',
+                   'Whole genome': '-'}
 
     (fig, ax) = plt.subplots(1)
     colors = ['m', 'r', 'b', 'g', 'k']
 
+    # keep a dictionary with reference to all the plots
+    plotdict = {}
+
     # store values for summing in the end
     clusterstorage = []
 
-    #speedrun = True
-    speedrun = False
+    speedrun = True
+    #speedrun = False
+
+    # IDEA: just plot 3UTR and sum. the not-3utr can be imagined.
 
     for indx1, region in enumerate(regions):
 
         region_storage = []
 
-        for indx2, (title, cln) in enumerate(cell_lines.items()):
+        for indx2, (title, cln) in enumerate(data_grouping.items()):
 
             # sort the dsets in cell_lines by # of reads
             def mysorter(dset):
@@ -4982,31 +4977,51 @@ def clusterladder(settings, speedrun):
                 dsetclusters[key] = get_dsetclusters(subset, region, settings,
                                                      speedrun)
             col = colors[indx2]
-            # Make the ladder plot for these cln
-            p.cluster_ladder(dsetclusters, dsetreads, fig, ax, col, title, region)
+
+            label = ' '.join([title, reg2nicereg[region]])
+            lstyle = linestyle[region]
 
             region_storage.append(dsetclusters)
+
+            # Don't actually plot the anti-3UTR region
+            if 'anti' in region:
+                continue
+
+            plotdict[label] = p.cluster_ladder(dsetclusters, dsetreads, fig, ax,
+                                               col, lstyle)
 
         clusterstorage.append(region_storage)
 
     # merge clusterstorage and plot again
     merged_clusters = merge_regions(clusterstorage)
-    region = ' '
-    title = 'sum'
 
+    region = 'Whole genome'
+    titls = data_grouping.keys()
     colorsSum = ['m', 'r', 'b']
-    for indx, merged_clusters in enumerate(merged_clusters):
-        co = colorsSum[indx]
 
-        p.cluster_ladder(merged_clusters, dsetreads, fig, ax, co, title, region)
+    for indx, merged_cls in enumerate(merged_clusters):
+        co = colorsSum[indx]
+        title = titls[indx]
+
+        label = ' '.join([title, reg2nicereg[region]])
+        lstyle = linestyle[region]
+
+        plotdict[label] = p.cluster_ladder(merged_cls, dsetreads, fig, ax, co, lstyle)
 
     ax.set_xlabel('Billons of reads', size=18)
     ax.set_ylabel('Polyadenylation sites', size=18)
     ax.set_title('Polyadenylation site discovery saturates fast', size=20)
 
+    # Sort the legends to your preference
+    sorted_titles = sorted(plotdict.keys(), reverse=True)
+    line_objs = [plotdict[title] for title in sorted_titles]
+    ax.legend(line_objs, sorted_titles, loc=0)
     #bob.legend(loc='upper right', bbox_to_anchor=(0.97,0.9))
 
-    ax.legend(loc=0) # set the legends from the titles you've sent in
+    # Set a grid on the y-axis
+    ax.yaxis.grid(True)
+    ax.xaxis.grid(True)
+
 
 def merge_regions(clusterstorage):
     """ You get in all the individual clusterstorage things for each region.
@@ -5039,6 +5054,9 @@ def merge_regions(clusterstorage):
 def venn_polysites(settings, speedrun):
     """ Output all clustered poly(A) sites for 3UTR exons and for the rest of
     the genome.
+
+    Can you somehow restrict poly(A)DB and GENCODEv7 sites to those 3UTRs that
+    are actually expressed in your datasets? That would simplify matters.
     """
 
     k562 = ['K562_Cytoplasm', 'K562_CytoplasmReplicate',
@@ -5053,18 +5071,18 @@ def venn_polysites(settings, speedrun):
               'HeLa-S3_Whole_Cell', 'HeLa-S3_Whole_CellReplicate']
               #'HeLa-S3_Nucleus', 'HeLa-S3_NucleusReplicate']
 
-    all_cl = sum([k562, gm12878, helaS3], [])
+    all_ds = sum([k562, gm12878, helaS3], [])
 
     regions = ['3UTR-exonic', 'anti-3UTR-exonic']
 
     speedrun = True
-    speedrun = False
+    #speedrun = False
 
     reg_stats = {}
 
     for indx, region in enumerate(regions):
 
-        subset = all_cl
+        subset = all_ds
         #subset = k562
         dsets, super_3utr = super_falselength(settings, region, subset,
                                               speedrun, svm=False)
@@ -5114,22 +5132,22 @@ def gencode_report(settings, speedrun, svm):
 
     speedrun = True
     # 1) nr of polyA sites obtained with increasing readnr
-    clusterladder(settings, speedrun)
-
-    # Sort the other way around: largest first! Or make an average.
-    # XXX YOURE WAITING FOR THE MINUS RUNS TO FINISH FIRST EXONS THEN ALL ELSE
-
-    #And maybe you should include the
-    # poly(A) minus as control?
+    #clusterladder(settings, speedrun)
+    # RESULT: make two plots: one from each of the 'data_groupign' below. One
+    # shows best how discovery tapers out, the other shows that poly(A) minus
+    # controls have few poly(A) reads. Also list how many of those poly(A) minus
+    # are annotated ones. Use the remainder as a false positive.
+    # maybe the gencode people are mostly interested in a kind of validation of
+    # their poly(A) minus datasets: I can show that there are very few poly(A)
+    # sites in poly(A)+ compared to poly(A)-, and further, that those that are
+    # there are mostly noise from the poly(A)- dataset. It is a way a measure of
+    # the robustness of the poly(A)- dataset.
 
     # 2) output all the poly(A) sites from the whole genome for both regions.
     # merge the two regions. make a script that merges these three files with
     # the gencode poly(A) and the poly(A) DB (and also merge the poly(A)DB with
     # gencode, and output all the numbers.
-    #venn_polysites(settings, speedrun)
-
-    # as a final thing, first restrict all files by genes that are actually
-    # expressed.
+    venn_polysites(settings, speedrun)
 
     #5UTR exons:              8.18e+06 (0.003)
     #3UTR introns:            1.19e+07 (0.004)
