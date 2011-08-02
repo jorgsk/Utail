@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt
 from matplotlib import lines
 
 plt.ion() # turn on the interactive mode so you can play with plots
-#plt.ioff() # turn on the interactive mode so you can play with plots
+#plt.ioff() # turn off interactive mode for working undisturbed
 
 from operator import attrgetter
 from operator import itemgetter
@@ -1734,6 +1734,32 @@ class Plotter(object):
 
         return (fig, axes)
 
+    def cluster_ladder(self, dsetclusters, dsetreads, fig, ax, col, title, region):
+        """ The more million reads, the more poly(A) clusters!
+        """
+
+        mill_reads = []
+        all_cls = []
+        good_cls = []
+
+        def something(tup):
+            return len(tup[0])
+
+        # Go through the output in order of number of datasets included
+        for names, numbers in sorted(dsetclusters.items(), key=something):
+            nr_reads = sum([dsetreads[dset] for dset in names.split(':')])
+
+            # add number of reads and numbers of clusters
+            mill_reads.append(nr_reads)
+            all_cls.append(numbers['all clusters'])
+            good_cls.append(numbers['good clusters'])
+
+        # plot all and unique clusters
+        linestyle = {'3UTR-exonic': '--', 'anti-3UTR-exonic': '-.',
+                     ' ': '-'}
+
+        ax.plot(mill_reads, good_cls, ls=linestyle[region],
+                label=' '.join([title, region]), color=col, linewidth=2)
 
 def pairwise_intersect(in_terms_of, dset_dict, cutoff):
     """
@@ -1911,16 +1937,18 @@ def get_clusters(settings):
 
     return clusters
 
-def super_falselength(settings, speedrun, svm):
+def super_falselength(settings, region, subset=[], speedrun=False, svm=False):
     """ Return the super clusters with information only from the poly(A) files
     without using length (coverage) information.
 
     """
 
     dsets = AutoVivification()
-    regions = settings.regions
-
     super_3utr = AutoVivification()
+
+    # if sending in just one region, make it into a string
+    if type(region) == str:
+        regions = [region]
 
     for region in regions:
 
@@ -1934,6 +1962,11 @@ def super_falselength(settings, speedrun, svm):
 
         linenr = 0
         for dset_name in settings.datasets:
+
+            # If you have specified a subset of the datasets, skip those that
+            # are in that subset
+            if subset != [] and dset_name not in subset:
+                continue
 
             onlyfile = open(regionfiles[dset_name], 'rb')
 
@@ -4799,6 +4832,325 @@ def get_polyA_stats(settings):
 
     return polyA_stats
 
+def get_dsetreads(settings):
+    """ For each dataset, get the number of total reads
+    """
+
+    dsetreads = {}
+    polyA_files = settings.polyAstats_files('3UTR-exonic')
+    for dset, dsetpath in polyA_files.items():
+
+        filedict = dict((line.split('\t')[0], line.split('\t')[1])
+                        for line in open(dsetpath, 'rb'))
+
+        dsetreads[dset] = int(filedict['Total number of reads'].rstrip())
+
+    return dsetreads
+
+def get_dsetclusters(subset, region, settings, speedrun):
+    """ Get counts for all clusters and 'good' clusters (2 or more reads or
+    annotated).
+    """
+
+    dsetclusters = {}
+
+    all_clusters = 0
+    good_clusters = 0
+
+    dsets, super_3utr = super_falselength(settings, region, subset,
+                                          speedrun, svm=False)
+
+    for utr_name, utr in super_3utr[region].iteritems():
+
+        for cls in utr.clusters:
+
+            # Count all clusters
+            all_clusters += 1
+
+            # Count clusters with 2 or more reads or annotated
+            if cls.nr_support_reads > 2 or\
+               cls.annotated_polyA_distance != 'NA':
+
+                good_clusters += 1
+
+    dsetclusters['all clusters'] = all_clusters
+    dsetclusters['good clusters'] = good_clusters
+
+    return dsetclusters
+
+def clusterladder(settings, speedrun):
+    """
+    The more reads, the more polyAs, up to a point.
+    """
+    p = Plotter()
+
+    #1) Make a dictionary: dataset: nr of total reads
+    dsetreads = get_dsetreads(settings)
+
+    #2) Make super-clusters for your datasets of choice
+    # TODO the order should be in such a way that you have the smallest sums
+    # first. you want the smallest increase possible. minsum1 minsum2 etc
+
+    k562minus = ['K562_CytoplasmMinus', 'K562_CytoplasmMinusReplicate',
+                  'K562_Whole_CellMinus', 'K562_Whole_CellMinusReplicate']
+    k562minusCy = [ds for ds in k562minus if 'Cytoplasm' in ds]
+
+
+    gm12878minus = ['GM12878_CytoplasmMinus', 'GM12878_CytoplasmMinusReplicate',
+                  'GM12878_Whole_CellMinus', 'GM12878_Whole_CellMinusReplicate']
+    gm12878minusCy = [ds for ds in gm12878minus if 'Cytoplasm' in ds]
+
+    helaS3minus = ['HeLa-S3_CytoplasmMinus', 'HeLa-S3_CytoplasmMinusReplicate',
+                  'HeLa-S3_Whole_CellMinus', 'HeLa-S3_Whole_CellMinusReplicate']
+    helaS3minusCy = [ds for ds in helaS3minus if 'Cytoplasm' in ds]
+
+    k562 = ['K562_Cytoplasm', 'K562_CytoplasmReplicate',
+            'K562_Whole_Cell', 'K562_Whole_CellReplicate']
+    k562Cy = [ds for ds in k562 if 'Cytoplasm' in ds]
+            #'K562_Nucleus', 'K562_NucleusReplicate']
+
+    gm12878 = ['GM12878_Cytoplasm', 'GM12878_CytoplasmReplicate',
+               'GM12878_Whole_Cell', 'GM12878_Whole_CellReplicate']
+    gm12878Cy = [ds for ds in gm12878 if 'Cytoplasm' in ds]
+               #'GM12878_Nucleus', 'GM12878_NucleusReplicate']
+
+    helaS3 = ['HeLa-S3_Cytoplasm', 'HeLa-S3_CytoplasmReplicate',
+              'HeLa-S3_Whole_Cell', 'HeLa-S3_Whole_CellReplicate']
+    helaS3Cy = [ds for ds in helaS3 if 'Cytoplasm' in ds]
+              #'HeLa-S3_Nucleus', 'HeLa-S3_NucleusReplicate']
+
+    all_cl = sum([k562, gm12878, helaS3], [])
+    all_clCy = sum([k562Cy, gm12878Cy, helaS3Cy], [])
+
+    all_minus = sum([k562minus, gm12878minus, helaS3minus], [])
+    all_minusCy = sum([k562minusCy, gm12878minusCy, helaS3minusCy], [])
+
+    # RESULT: the WholeCell libraries act weird for poly(A) minus. The cytocolic
+    # fraction makes sense. See latest figure. Next, the Venn diagrams?
+    # Actually: try to make the plot prettier. The colors are a bit wank.
+
+    regions = ['3UTR-exonic', 'anti-3UTR-exonic']
+
+    #cell_lines = {'K562': k562,
+                  #'HeLa': helaS3}
+
+    cell_lines = {'K562/GM12878/HeLa': all_clCy,
+                  'polyA minus': all_minusCy}
+
+    #cell_lines = {'k562 minus': k562minus,
+                 #'gm12878 minus': gm12878minus,
+                 #'hela minus': helaS3minus}
+
+    #cell_lines = {'k562 minus': k562minusCy,
+                 #'gm12878 minus': gm12878minusCy,
+                 #'all minus': all_minusCy,
+                 #'hela minus': helaS3minusCy}
+
+    # Maybe you should use all for all? 
+
+    (fig, ax) = plt.subplots(1)
+    colors = ['m', 'r', 'b', 'g', 'k']
+
+    # store values for summing in the end
+    clusterstorage = []
+
+    #speedrun = True
+    speedrun = False
+
+    for indx1, region in enumerate(regions):
+
+        region_storage = []
+
+        for indx2, (title, cln) in enumerate(cell_lines.items()):
+
+            # sort the dsets in cell_lines by # of reads
+            def mysorter(dset):
+                return get_dsetreads(settings)[dset]
+
+            #all_dsets = sorted(cln, key=mysorter, reverse=True)
+            all_dsets = sorted(cln, key=mysorter)
+
+            subsets = [all_dsets[:end] for end in range(1, len(all_dsets)+1)]
+
+            # A dictionary with all clusters and +2 or annot clusters
+            dsetclusters = {}
+
+            for subset in subsets:
+
+                # Get the number of 'good' and 'all' clusters
+                key = ':'.join(subset)
+                dsetclusters[key] = get_dsetclusters(subset, region, settings,
+                                                     speedrun)
+            col = colors[indx2]
+            # Make the ladder plot for these cln
+            p.cluster_ladder(dsetclusters, dsetreads, fig, ax, col, title, region)
+
+            region_storage.append(dsetclusters)
+
+        clusterstorage.append(region_storage)
+
+    # merge clusterstorage and plot again
+    merged_clusters = merge_regions(clusterstorage)
+    region = ' '
+    title = 'sum'
+
+    colorsSum = ['m', 'r', 'b']
+    for indx, merged_clusters in enumerate(merged_clusters):
+        co = colorsSum[indx]
+
+        p.cluster_ladder(merged_clusters, dsetreads, fig, ax, co, title, region)
+
+    ax.set_xlabel('Billons of reads', size=18)
+    ax.set_ylabel('Polyadenylation sites', size=18)
+    ax.set_title('Polyadenylation site discovery saturates fast', size=20)
+
+    #bob.legend(loc='upper right', bbox_to_anchor=(0.97,0.9))
+
+    ax.legend(loc=0) # set the legends from the titles you've sent in
+
+def merge_regions(clusterstorage):
+    """ You get in all the individual clusterstorage things for each region.
+    [[1,2,3], [1,2,3]] the 1,2,3 are compatible, so merge them with each other.
+    they should have the same keys, so you need to make a new external one, and
+    iterate over the keys for each one and simply add the internal keys.
+
+    you should output the a dict that can be read in this form. actually the
+    form of those individual 1 2 and 3.
+
+        for names, numbers in sorted(dsetclusters.items(), key=something):
+
+    """
+    outlist = []
+
+    for dset_indx, dsetcluster in enumerate(clusterstorage[0]):
+
+        output = dict((key, val) for key, val in dsetcluster.items())
+
+        # go over the other region(s)
+        for nam, num in clusterstorage[1][dset_indx].items():
+
+            for k in output[nam].keys():
+                output[nam][k] += num[k]
+
+        outlist.append(output)
+
+    return outlist
+
+def venn_polysites(settings, speedrun):
+    """ Output all clustered poly(A) sites for 3UTR exons and for the rest of
+    the genome.
+    """
+
+    k562 = ['K562_Cytoplasm', 'K562_CytoplasmReplicate',
+            'K562_Whole_Cell', 'K562_Whole_CellReplicate']
+            #'K562_Nucleus', 'K562_NucleusReplicate']
+
+    gm12878 = ['GM12878_Cytoplasm', 'GM12878_CytoplasmReplicate',
+               'GM12878_Whole_Cell', 'GM12878_Whole_CellReplicate']
+               #'GM12878_Nucleus', 'GM12878_NucleusReplicate']
+
+    helaS3 = ['HeLa-S3_Cytoplasm', 'HeLa-S3_CytoplasmReplicate',
+              'HeLa-S3_Whole_Cell', 'HeLa-S3_Whole_CellReplicate']
+              #'HeLa-S3_Nucleus', 'HeLa-S3_NucleusReplicate']
+
+    all_cl = sum([k562, gm12878, helaS3], [])
+
+    regions = ['3UTR-exonic', 'anti-3UTR-exonic']
+
+    speedrun = True
+    speedrun = False
+
+    reg_stats = {}
+
+    for indx, region in enumerate(regions):
+
+        subset = all_cl
+        #subset = k562
+        dsets, super_3utr = super_falselength(settings, region, subset,
+                                              speedrun, svm=False)
+
+        # write all poly(A) sites to file
+        # (also write some statistics: how many with annotation, how many with
+        # PAS (AATAA or ATTAAA), and do this for the 1 and the 2+)
+
+        one_with_PAS = 0
+        one_with_good_PAS = 0
+        one_with_annot = 0
+
+        two_with_PAS = 0
+        two_with_good_PAS = 0
+        two_with_annot = 0
+
+        total = 0
+
+        for utr_name, utr in super_3utr[region].iteritems():
+
+            for cls in utr.clusters:
+                total +=1
+
+                # Count clusters with 2 or more reads or annotated
+                #if cls.nr_support_reads >1 or cls.annotated_polyA_distance!='NA':
+                    #two_with_PAS += 1
+
+                if cls.nr_support_reads==1 and cls.annotated_polyA_distance!='NA':
+                    one_with_annot += 1
+                    # XXX quite a lot have just 1 read and is in an annotated
+                    # site.
+        debug()
+
+
+def gencode_report(settings, speedrun, svm):
+    """ Make figures for the GENCODE report. The report is an overview of
+    evidence for polyadenylation from the Gingeras RNA-seq experiments.
+
+    NOTE: you should estimate a some kind of maximum value. get the total number
+    of expressed genes and use the average number of poly(A) sites per gene.
+
+    Two main figures:
+        1) Total number of new poly(A) sites in 3UTRs and outside (+2 reads or
+        annotated) both with and without normalization to region size
+        2) # of new poly(A) sites obtained with increasing number of reads
+    """
+
+    speedrun = True
+    # 1) nr of polyA sites obtained with increasing readnr
+    clusterladder(settings, speedrun)
+
+    # Sort the other way around: largest first! Or make an average.
+    # XXX YOURE WAITING FOR THE MINUS RUNS TO FINISH FIRST EXONS THEN ALL ELSE
+
+    #And maybe you should include the
+    # poly(A) minus as control?
+
+    # 2) output all the poly(A) sites from the whole genome for both regions.
+    # merge the two regions. make a script that merges these three files with
+    # the gencode poly(A) and the poly(A) DB (and also merge the poly(A)DB with
+    # gencode, and output all the numbers.
+    #venn_polysites(settings, speedrun)
+
+    # as a final thing, first restrict all files by genes that are actually
+    # expressed.
+
+    #5UTR exons:              8.18e+06 (0.003)
+    #3UTR introns:            1.19e+07 (0.004)
+    #3UTR exons:              2.99e+07 (0.010)
+    #Nocoding exons:          3.27e+07 (0.011)
+    #CDS exons:               3.54e+07 (0.011)
+    #5UTR introns:            1.46e+08 (0.047)
+    #Noncoding introns:       2.48e+08 (0.080)
+    #CDS introns:             9.76e+08 (0.315)
+    #Intergenic:              1.61e+09 (0.519)
+
+    #Total:                   3.10e+09
+
+    # 16000  in 3UTr and 13000 outside.
+    # the 3UTR regions is 30 million basepairs, vs 3.1 billion for the whole genome.
+    # this leaves. 3UTR is 1 percent of the genome
+
+    # 16/0.01 = 1600. 13/0.99 = 13.13. 1600/13.13 = 121 fold enrichment of
+    # poly(A) sites in annotated 3UTRs.
+
+
 def main():
     # The path to the directory the script is located in
     here = os.path.dirname(os.path.realpath(__file__))
@@ -4814,8 +5166,7 @@ def main():
     settings = Settings(os.path.join(here, 'UTR_SETTINGS'), savedir, outputdir,
                         here, chr1)
 
-    #settings = Settings(os.path.join(here, 'OLD_ENCODE_SETTINGS'),
-                        #savedir, outputdir, here, chr1)
+    gencode_report(settings, speedrun=False, svm=False)
 
     # Get the dsetswith utrs and their clusters from the length and polyA files
     # Optionally get SVM information as well
@@ -4832,24 +5183,23 @@ def main():
         #pickle.dump((dsets, super_3utr), open(pickfile, 'wb'), protocol=2)
     #else:
         #(dsets, super_3utr) = pickle.load(open(pickfile))
-    dsets, super_3utr = super_falselength(settings, speedrun=False, svm=False)
+    #dsets, super_3utr = super_falselength(settings, speedrun=False, svm=False)
     #dsets, super_3utr = super_falselength(settings, speedrun=True, svm=False)
+
+    # TODO to make this faster and consume less memory, don't save whole
+    # clusters. save only the information you need. add as necessary. when
+    # you'll have more of these it will be too much.
 
     # Get the basic poly(A) stat file that is output with each run. It gives
     # statistics on the number of reads that fall in which strand and so forth.
-    polyAstats = get_polyA_stats(settings)
+    #polyAstats = get_polyA_stats(settings)
 
     # Basic poly(A) read statistics for the datasetes
     # XXX There is something fishy about the 3UTR exon datasets. there are
     # poly(A) reads on both strands in equal amounts. aaaaah... this is because
     # it's just + :) nothing fishy at all!
-    for side in ['annotated', 'opposite']:
-        polyA_summary(dsets, super_3utr, polyAstats, settings, side)
-
-    #### Nucleosomes (and sequences) ####
-    # TODO continue with this: you're abount to make nucleotide coverage arrays!
-    # XXX seems you're using too much ram smartypants ...
-    #nucsec(dsets, super_3utr, settings, here)
+    #for side in ['annotated', 'opposite']:
+        #polyA_summary(dsets, super_3utr, polyAstats, settings, side)
 
     #### RPKM distribution
     #### What is the distribution of 3UTR RPKMS? run this function and find out!
@@ -4863,7 +5213,6 @@ def main():
     #### How many 3UTRs extend significantly? beyond the aTTS
     #### NOTE that, with current code, they must be checked by hand, as the
     #### extended area can overlap a genomic feature
-    # Give feedback to Simone, then start documenting.
     #beyond_aTTS(dsets)
 
     ##### Write a bedfile with all the polyA sites confirmed by both annotation and
