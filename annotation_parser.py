@@ -593,6 +593,13 @@ def write_beds(transcripts, bed_dir, chr_sizes, *opts):
     skipsize_filter(paths, skipsize, stranded, chr1, printdict)
     print('finished skipping small sizes')
 
+    # NOTE: introducing the anti-3UTR region now
+    printdict['anti_three_utr_exonic'] = 'anti-3UTR-exonic'
+
+    print('making anti-3UTR file ...')
+    # Super-finally make an anti-three_utr thing
+    paths = make_anti_3utr(bed_dir, paths, chr_sizes, chr1, stranded)
+
     if stranded:
         strnd = 'stranded'
     else:
@@ -637,6 +644,34 @@ def write_beds(transcripts, bed_dir, chr_sizes, *opts):
     for name, filepath in paths.items():
         out_path = os.path.join(savedir, printdict[name]+'_'+strnd+chrm+'.bed')
         shutil.copyfile(filepath, out_path)
+
+    # clean up
+    cmd = 'rm -f {0}/*.bed'.format(bed_dir)
+    call(cmd, shell=True)
+
+    return paths
+
+def make_anti_3utr(bed_dir, paths, chr_sizes, chr1, stranded):
+    """ Return all genomic regions except the 3utr exonic ones
+    """
+    anti_path = os.path.join(bed_dir, 'anti-3UTR-exonic.bed')
+
+    cmd = 'complementBed -i {0} -g {1}'.format(paths['three_utr_exonic'],
+                                               chr_sizes)
+    cmd = cmd.split(' ')
+
+    out_handle = open(anti_path, 'wb')
+
+    p = Popen(cmd, stdout=PIPE)
+
+    for indx, line in enumerate(p.stdout):
+        name = 'anti-3utr_{0}'.format(indx)
+        val = '0'
+        out_handle.write('\t'.join(line.split()+[name, val,'+'])+'\n')
+
+    out_handle.close()
+
+    paths['anti_three_utr_exonic'] = anti_path
 
     return paths
 
