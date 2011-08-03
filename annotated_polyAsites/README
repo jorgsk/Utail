@@ -1,0 +1,28 @@
+I'm merging the annotated poly(A) sites of polyADB with the annotated sites of
+GENCODE
+
+# get the annotated polyA sites from the gencode annotation
+awk '{if ($3=="polyA_site") print $1"\t"$4"\t"$5"\t"$3"\t"$6"\t"$7'} gencode.v7.polyAs.gtf > gencode_polyA.bed 
+
+# extend the polyAdb regions
+slopBed -s -i polyA_db -g ../ext_files/hg19 -l 20 -r 20 > exended_polyAdb
+
+wc -l exended_polyAdb.bed 
+43186
+
+wc -l gencode_polyA.bed 
+35791
+
+#intersect with GENCODE annotation just to see how many overlap
+intersectBed -s -a exended_polyAdb.bed -b gencode_polyA.bed | wc -l
+26372
+
+# so 75% of GENCODE poly(A) can be found in the polyA db.
+
+# take the union of both non-extended poly(A) annotations and merge them
+# this results in the file that is finally used
+
+cat polyA_db.bed gencode_polyA.bed | slopBed -s -i stdin -g ../ext_files/hg19 -l 20 -r 20 | mergeBed -s -i stdin > polyAdb_gencode_merged.bed
+
+wc -l polyAdb_gencode_merged.bed
+50696
