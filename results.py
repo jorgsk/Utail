@@ -5051,6 +5051,90 @@ def merge_regions(clusterstorage):
 
     return outlist
 
+def super_bed(one_stats, two_stats, handle, super_3utr, region):
+    """ Go through the super beds and save them to a bedfile if >1 or annotated,
+    and create summary statistics
+    """
+
+    goodpas = set(['ATTAAA', 'AATAAA'])
+
+    total = 0
+
+    for utr_name, utr in super_3utr[region].iteritems():
+
+        for cls in utr.clusters:
+            total +=1
+
+            # Write to file
+            if cls.nr_support_reads>1 or cls.annotated_polyA_distance!='NA':
+
+                beg = cls.polyA_coordinate
+
+                entry = '\t'.join([cls.chrm, str(beg), str(beg+1), cls.ID,
+                                   str(cls.nr_support_reads), cls.strand])
+
+                handle.write(entry + '\n')
+
+            # Make statistics
+
+            # for PAS with 1 read
+            if cls.nr_support_reads==1:
+                one_stats['total'] += 1
+
+                # with annot
+                if cls.annotated_polyA_distance != 'NA':
+                    one_stats['one_with_annot'] += 1
+
+                    if cls.nearby_PAS[0] != 'NA':
+                        one_stats['one_with_annot_and_PAS'] +=1
+
+                # without annot
+                else:
+                    if cls.nearby_PAS[0] != 'NA':
+                        one_stats['one_with_PAS_sans_annot'] += 1
+
+                        if set.intersection(set(cls.nearby_PAS),goodpas)!=set([]):
+                            one_stats['one_with_good_PAS_sans_annot'] += 1
+
+                if cls.nearby_PAS[0] != 'NA':
+                    one_stats['one_with_PAS'] += 1
+
+                    if set.intersection(set(cls.nearby_PAS), goodpas) != set([]):
+                        one_stats['one_with_good_PAS'] += 1
+
+                        if cls.annotated_polyA_distance != 'NA':
+                            one_stats['one_with_annot_and_good_PAS'] +=1
+
+            # for PAS with 2 reads or more
+            if cls.nr_support_reads > 1:
+                two_stats['total'] += 1
+
+                # with annot
+                if cls.annotated_polyA_distance != 'NA':
+                    two_stats['two_with_annot'] += 1
+
+                    if cls.nearby_PAS[0] != 'NA':
+                        two_stats['two_with_annot_and_PAS'] +=1
+
+                # without annot
+                else:
+                    if cls.nearby_PAS[0] != 'NA':
+                        two_stats['two_with_PAS_sans_annot'] += 1
+
+                        if set.intersection(set(cls.nearby_PAS),goodpas)!=set([]):
+                            two_stats['two_with_good_PAS_sans_annot'] += 1
+
+                if  cls.nearby_PAS[0] != 'NA':
+                    two_stats['two_with_PAS'] += 1
+
+                    if set.intersection(set(cls.nearby_PAS), goodpas) != set([]):
+                        two_stats['two_with_good_PAS'] += 1
+
+                        if cls.annotated_polyA_distance != 'NA':
+                            two_stats['two_with_annot_and_good_PAS'] +=1
+
+    return one_stats, two_stats, total
+
 def venn_polysites(settings, speedrun):
     """ Output all clustered poly(A) sites for 3UTR exons and for the rest of
     the genome.
@@ -5078,44 +5162,139 @@ def venn_polysites(settings, speedrun):
     speedrun = True
     #speedrun = False
 
-    reg_stats = {}
+    outdir = '/home/jorgsk/work/3UTR/Results_and_figures/GENCODE_report/venn_diagram'
+
+    # 1) output all the poly(A) sites from the whole genome for both regions.
+    # 2) merge the two regions.
+    # 3) merge each of these three files with the gencode poly(A) andthe
+    # poly(A) DB. Also merge each of these 3 with the merger of the
+    # poly(A)DB/GENCODE.
+    # 4) Output all the numbers of intersection.
+    # 5) Make it easy to change which sites you choose to include.
+    # 6) Make a table with the one/two_stats dicts? Can be supplementary
+    # information.
+
+    # will hold statistics about 1-read and 2-read polyA sites and the path to
+    # the bedfile with the super poly(A) sites
+    reg_data = {}
+
+    # will hold the paths of all the files that result from merging sites with
+    # one another
+    paths = {}
 
     for indx, region in enumerate(regions):
 
-        subset = all_ds
-        #subset = k562
+        #subset = all_ds
+        subset = k562 # while debugging
+
         dsets, super_3utr = super_falselength(settings, region, subset,
                                               speedrun, svm=False)
 
-        # write all poly(A) sites to file
-        # (also write some statistics: how many with annotation, how many with
-        # PAS (AATAA or ATTAAA), and do this for the 1 and the 2+)
+        one_stats = {'one_with_PAS': 0, 'one_with_good_PAS': 0,
+                     'one_with_annot': 0, 'one_with_annot_and_PAS': 0,
+                     'one_with_annot_and_good_PAS': 0, 'total': 0,
+                     'one_with_PAS_sans_annot': 0,
+                     'one_with_good_PAS_sans_annot': 0}
 
-        one_with_PAS = 0
-        one_with_good_PAS = 0
-        one_with_annot = 0
+        two_stats = {'two_with_PAS': 0, 'two_with_good_PAS': 0,
+                     'two_with_annot': 0, 'two_with_annot_and_PAS': 0,
+                     'two_with_annot_and_good_PAS': 0, 'total': 0,
+                     'two_with_PAS_sans_annot': 0,
+                     'two_with_good_PAS_sans_annot': 0}
 
-        two_with_PAS = 0
-        two_with_good_PAS = 0
-        two_with_annot = 0
+        superbed_path = os.path.join(outdir, region+'.bed')
+        handle = open(superbed_path, 'wb')
 
-        total = 0
+        # create 'outfile' and fill up the stats dicts
+        (one_stats, two_stats, total) = super_bed(one_stats, two_stats, handle,
+                                           super_3utr, region)
 
-        for utr_name, utr in super_3utr[region].iteritems():
+        handle.close() # close the file you wrote to
 
-            for cls in utr.clusters:
-                total +=1
+        reg_data[region] = {'total': total,
+                           'one_stats': one_stats,
+                           'two_stats': two_stats,
+                           'superbed_path': superbed_path}
 
-                # Count clusters with 2 or more reads or annotated
-                #if cls.nr_support_reads >1 or cls.annotated_polyA_distance!='NA':
-                    #two_with_PAS += 1
+        paths[region] = superbed_path
 
-                if cls.nr_support_reads==1 and cls.annotated_polyA_distance!='NA':
-                    one_with_annot += 1
-                    # XXX quite a lot have just 1 read and is in an annotated
-                    # site.
-        debug()
+    # get all paths to merged polyA files and their linenumbers
+    (paths, merged_stats) = bedmerge_polyAs(paths, outdir)
 
+def bedmerge_polyAs(paths, outdir):
+    """ Merge all combinations of poly(A) bedfiles
+    1) Join 3UTR and anti-3UTR -> A, B, C files
+    2) Intersect polyAdb (X) with each of A, B, C
+    3) Intersect GENCODE (Y) with each of A, B, C
+    4) Intersect X with Y -> Z
+    5) Intersect Z with each of A, B, C
+
+    Make a name-combinations for all of your intersections. Store the number of
+    lines in the resulting merge in a dict with that name.
+    """
+
+    # paths to polyAdb and gencode polyAs
+
+    # 1) Join the poly(A) sites from the two regions
+    regions = paths.keys() # the regions are the only two in paths for now
+    paths = join_polyAs(paths, regions, outdir)
+
+    debug()
+
+    # 2) Intersect
+
+def join_polyAs(paths, only_these, outdir, stranded=False, extendby=False):
+    """ Run mergeBed on the paths priovided in output that correspond to titles
+    in 'only_these'. Return 'paths' with the path to the merged version.
+    """
+
+    joined_name = '+'.join(only_these)
+    joined_path = os.path.join(outdir, joined_name+'.bed')
+
+    joined_handle = open(joined_path, 'wb')
+
+    # pass through each file, writing each line to the new one
+    for path in paths.values():
+        for line in open(path, 'rb'):
+            joined_handle.write(line)
+    joined_handle.close()
+
+    # as an experiment, check how many poly(A) sites overlap between the two.
+    # first extend each entry by 20 nt and then merge. compare the line count
+    # before and after
+
+    hg19 = '/home/jorgsk/work/3UTR/ext_files/hg19'
+
+    ## lines in jouned_path
+    wc_1 = sum((1 for line in open(joined_path, 'rb')))
+
+    cmd1 = ['slopBed', '-b', '10', '-i', joined_path, '-g', hg19]
+
+    cmd2 = ['mergeBed', '-s', '-i', 'stdin']
+
+    p1 = Popen(cmd1, stdout=PIPE)
+
+    p2 = Popen(cmd2, stdin=p1.stdout, stdout=PIPE)
+
+    joined_merged_name = joined_name+'+merged'
+    joined_merged_path = os.path.join(outdir, joined_merged_name+'.bed')
+    jm_handle = open(joined_merged_path, 'wb')
+
+    wc_2 = 0
+    for line in p2.stdout:
+        wc_2 += 1
+        (chrm, beg, end, strnd) = line.split()
+        center = math.ceil((int(end)-int(beg))/2)
+        # write the center of the new mergers
+        jm_handle.write('\t'.join([chrm, str(center), str(center+1), '0',
+                                   '0',strnd]) + '\n')
+
+    print wc_1, 'before merge of regions'
+    print wc_2, 'after merge of regions'
+
+    paths[joined_name] = joined_merged_path
+
+    return paths
 
 def gencode_report(settings, speedrun, svm):
     """ Make figures for the GENCODE report. The report is an overview of
@@ -5143,6 +5322,9 @@ def gencode_report(settings, speedrun, svm):
     # there are mostly noise from the poly(A)- dataset. It is a way a measure of
     # the robustness of the poly(A)- dataset.
 
+    #XXX you have 4k sites with 1 read AND close to annotated site ... would boost your
+    #numbers. consider including them.
+
     # 2) output all the poly(A) sites from the whole genome for both regions.
     # merge the two regions. make a script that merges these three files with
     # the gencode poly(A) and the poly(A) DB (and also merge the poly(A)DB with
@@ -5165,9 +5347,14 @@ def gencode_report(settings, speedrun, svm):
     # the 3UTR regions is 30 million basepairs, vs 3.1 billion for the whole genome.
     # this leaves. 3UTR is 1 percent of the genome
 
-    # 16/0.01 = 1600. 13/0.99 = 13.13. 1600/13.13 = 121 fold enrichment of
+    # XXX 16/0.01 = 1600. 13/0.99 = 13.13. 1600/13.13 = 121 fold enrichment of
     # poly(A) sites in annotated 3UTRs.
 
+    # XXX Overlap between the regions? you merged the polyA sites for the 3 celllines
+    # for both regions (3UTR and anti-3UTR). you extended by 10nt and merged the
+    # sites. you obtain 30192 before merge and 27799 after merge.
+    # What you should have probably done is to have 3UTR-exons as a slightly
+    # extended region.
 
 def main():
     # The path to the directory the script is located in
