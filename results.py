@@ -1882,23 +1882,23 @@ def get_intersection_matrix(pair_names, unions_names, cutoff, dset_dict):
 
     # Get number of intersections 
     # (using main_cls from the previous for-loop -- dirty :S)
-    all_isect_nrs = [len(set.intersection(set(main_cls[count]),
+    all_I_nrs = [len(set.intersection(set(main_cls[count]),
                                           set(all_cls[count]))) for count in
                      range(0, cutoff)]
 
     # Get percent of intersection relative to 'main' dataset (will be all or annot)
-    all_isect_pcnt = []
+    all_I_pcnt = []
     for (indx, isect_nr) in enumerate(isect_nrs):
 
         # Only calculate percentage if more than 1 cluster with this read count
         if main_cls[indx] != 0:
-            all_isect_pcnt.append(all_isect_nrs[indx]/len(main_cls[indx]))
+            all_I_pcnt.append(all_I_nrs[indx]/len(main_cls[indx]))
         else:
-            all_isect_pcnt.append(0)
+            all_I_pcnt.append(0)
 
     # Add the number and intersection to the array
-    counter[-1,:,0] = all_isect_nrs
-    counter[-1,:,1] = all_isect_pcnt
+    counter[-1,:,0] = all_I_nrs
+    counter[-1,:,1] = all_I_pcnt
 
     ### flip things around; put union row first. This is for better compliance
     # with downstream code
@@ -5051,10 +5051,22 @@ def merge_regions(clusterstorage):
 
     return outlist
 
-def super_bed(one_stats, two_stats, handle, super_3utr, region):
+def super_bed(handle, super_3utr, region):
     """ Go through the super beds and save them to a bedfile if >1 or annotated,
     and create summary statistics
     """
+
+    one_stats = {'one_with_PAS': 0, 'one_with_good_PAS': 0,
+                 'one_with_annot': 0, 'one_with_annot_and_PAS': 0,
+                 'one_with_annot_and_good_PAS': 0, 'total': 0,
+                 'one_with_PAS_sans_annot': 0,
+                 'one_with_good_PAS_sans_annot': 0}
+
+    two_stats = {'two_with_PAS': 0, 'two_with_good_PAS': 0,
+                 'two_with_annot': 0, 'two_with_annot_and_PAS': 0,
+                 'two_with_annot_and_good_PAS': 0, 'total': 0,
+                 'two_with_PAS_sans_annot': 0,
+                 'two_with_good_PAS_sans_annot': 0}
 
     goodpas = set(['ATTAAA', 'AATAAA'])
 
@@ -5135,6 +5147,13 @@ def super_bed(one_stats, two_stats, handle, super_3utr, region):
 
     return one_stats, two_stats, total
 
+
+def annotation_merger(paths, annotations):
+    """ Merge the poly(A) sites in the two anntations
+    # Do this by first extending each site, then merging the two files, then
+    # outputing the centered merged version.
+    """
+
 def venn_polysites(settings, speedrun):
     """ Output all clustered poly(A) sites for 3UTR exons and for the rest of
     the genome.
@@ -5157,59 +5176,39 @@ def venn_polysites(settings, speedrun):
 
     all_ds = sum([k562, gm12878, helaS3], [])
 
-    regions = ['3UTR-exonic', 'anti-3UTR-exonic']
-
-    speedrun = True
-    #speedrun = False
+    #speedrun = True
+    speedrun = False
 
     outdir = '/home/jorgsk/work/3UTR/Results_and_figures/GENCODE_report/venn_diagram'
 
-    # 1) output all the poly(A) sites from the whole genome for both regions.
-    # 2) merge the two regions.
-    # 3) merge each of these three files with the gencode poly(A) andthe
-    # poly(A) DB. Also merge each of these 3 with the merger of the
-    # poly(A)DB/GENCODE.
-    # 4) Output all the numbers of intersection.
-    # 5) Make it easy to change which sites you choose to include.
-    # 6) Make a table with the one/two_stats dicts? Can be supplementary
-    # information.
-
-    # will hold statistics about 1-read and 2-read polyA sites and the path to
-    # the bedfile with the super poly(A) sites
-    reg_data = {}
-
     # will hold the paths of all the files that result from merging sites with
-    # one another
-    paths = {}
+    # one another. begin by adding the two sources of poly(A) sites
+    paths = {'gencode':\
+             '/home/jorgsk/work/3UTR/annotated_polyAsites/gencode_polyA.bed',
+             'polyAdb':\
+             '/home/jorgsk/work/3UTR/annotated_polyAsites/polyA_db.bed'}
 
+    reg_data = {}
+    regions = ['3UTR-exonic', 'anti-3UTR-exonic']
     for indx, region in enumerate(regions):
 
-        #subset = all_ds
-        subset = k562 # while debugging
+        subset = all_ds
+        #subset = k562 # while debugging
 
         dsets, super_3utr = super_falselength(settings, region, subset,
                                               speedrun, svm=False)
-
-        one_stats = {'one_with_PAS': 0, 'one_with_good_PAS': 0,
-                     'one_with_annot': 0, 'one_with_annot_and_PAS': 0,
-                     'one_with_annot_and_good_PAS': 0, 'total': 0,
-                     'one_with_PAS_sans_annot': 0,
-                     'one_with_good_PAS_sans_annot': 0}
-
-        two_stats = {'two_with_PAS': 0, 'two_with_good_PAS': 0,
-                     'two_with_annot': 0, 'two_with_annot_and_PAS': 0,
-                     'two_with_annot_and_good_PAS': 0, 'total': 0,
-                     'two_with_PAS_sans_annot': 0,
-                     'two_with_good_PAS_sans_annot': 0}
 
         superbed_path = os.path.join(outdir, region+'.bed')
         handle = open(superbed_path, 'wb')
 
         # create 'outfile' and fill up the stats dicts
-        (one_stats, two_stats, total) = super_bed(one_stats, two_stats, handle,
-                                           super_3utr, region)
+        (one_stats, two_stats, total) = super_bed(handle, super_3utr, region)
 
-        handle.close() # close the file you wrote to
+        handle.close() # close the file you wrote to inside super_bed
+
+        # TODO
+        # Write one_stats and two_stats to a file so you can go back to the
+        # summary statistics when you need them again
 
         reg_data[region] = {'total': total,
                            'one_stats': one_stats,
@@ -5218,34 +5217,248 @@ def venn_polysites(settings, speedrun):
 
         paths[region] = superbed_path
 
-    # get all paths to merged polyA files and their linenumbers
-    (paths, merged_stats) = bedmerge_polyAs(paths, outdir)
+    # join the polyA sites in the two regions
+    paths['genome'] = join_regions(paths, regions, outdir, extendby=5)
+    regions = regions + ['genome']
 
-def bedmerge_polyAs(paths, outdir):
-    """ Merge all combinations of poly(A) bedfiles
-    1) Join 3UTR and anti-3UTR -> A, B, C files
-    2) Intersect polyAdb (X) with each of A, B, C
-    3) Intersect GENCODE (Y) with each of A, B, C
-    4) Intersect X with Y -> Z
-    5) Intersect Z with each of A, B, C
+    # Make venn-diagrams for each region
+    for region in regions:
 
-    Make a name-combinations for all of your intersections. Store the number of
-    lines in the resulting merge in a dict with that name.
+        # get all paths to merged polyA files and their linenumbers
+        (paths, merged_stats) = intersect_polyAs(paths, outdir, region)
+
+        # make a venn-diagram of the intersection of poly(A) sites between each of
+        # the below regions and the polyAdb and the GENCODE poly(A) annotation.
+
+        make_venn(paths, merged_stats, outdir, region)
+
+        # RESULT: the diagrams look good numerically. their design not so. Is
+        # this error a result of going through rpy?  Try the real numbers in R.
+        # Maybe the manual has something to offer.
+
+
+def make_venn(paths, wcdict, outdir, region):
+    """ Call upon R to summon forth the elusive Venn diagrams
     """
 
-    # paths to polyAdb and gencode polyAs
+    import rpy2.robjects as robjects
+    from rpy2.robjects.packages import importr
 
-    # 1) Join the poly(A) sites from the two regions
-    regions = paths.keys() # the regions are the only two in paths for now
-    paths = join_polyAs(paths, regions, outdir)
 
-    debug()
+    importr("Vennerable") # import the Vennerable package
 
-    # 2) Intersect
+    # call in a loop if you want the regions separate.
 
-def join_polyAs(paths, only_these, outdir, stranded=False, extendby=False):
-    """ Run mergeBed on the paths priovided in output that correspond to titles
-    in 'only_these'. Return 'paths' with the path to the merged version.
+    reg2title = {'genome': 'whole genome',
+                 'anti-3UTR-exonic': 'complement of annotated 3UTRs',
+                 '3UTR-exonic': 'annotated 3UTRs'}
+
+    order = [reg2title[region], 'GENCODE', 'polyAdb']
+    # 000 100 010 110 001 101 011 111
+    # You must keep order, whilst obeying your archaic system.
+
+    # shortcuts
+    A = 'gencode'
+    B = 'polyAdb'
+
+    vend = {'000': 0,
+            '001': wcdict['polyAdb'], #onlt polyAdb
+            '010': wcdict['gencode'], # only GENC
+            '100': wcdict[region], # only in region
+            '011': wcdict['_I_'.join(sorted(['gencode','polyAdb']))], # pAdb + GENC
+            '101': wcdict['_I_'.join(sorted([region,'polyAdb']))],
+            '110': wcdict['_I_'.join(sorted([region,'gencode']))],
+            '111': wcdict['_I_'.join(sorted(['gencode','polyAdb', region]))]}
+
+    names = robjects.StrVector(order)
+
+    weights = robjects.IntVector(vend.values())
+    weights.names = vend.keys()
+
+    x = robjects.r('Venn')(SetNames=names, Weight=weights)
+
+    # save plots both with and without weights
+    for doweights in [True, False]:
+
+        if doweights:
+            output_filename = os.path.join(outdir, region+'_venn_diagram_weighted.pdf')
+        else:
+            output_filename = os.path.join(outdir, region+'_venn_diagram.pdf')
+
+        #robjects.r('pdf')(output_filename, width=width, height=height)
+        robjects.r('pdf')(output_filename) # output plot to pdf
+
+        robjects.r('plot')(x, **{'doWeights': doweights})
+        robjects.r('dev.off()')  # close the plot to access the file
+
+
+def intersect_polyAs(paths, outdir, region):
+    """ You have regions 3UTR, a-3UTR, genome (A1, A2, A3) where polyA reads
+    land and PAdb (B) and GENCODE (C)
+
+    For each of these 3 regions, compute all intersections with B and C:
+     U = union
+     I = intersection
+     \ = complement
+
+     Compute with bedTools:
+     AIBIC
+     AIB
+     BIC
+     AIC
+     From these 4 intersections you can compute all the numbers you need:
+
+     A\(BUC) = A - AIB - AIC - AIBIC (Just A)
+     B\(AUC) = B - BIC - BIA - AIBIC (Just B)
+     C\(BUC) = C - CIB - CIA - AIBIC (Just C)
+
+     (AIB)\C = AIB - AIBIC (Just A and B)
+     (AIC)\B = AIC - AIBIC (Just A and C)
+     (CIB)\A = CIB - AIBIC (Just C and B)
+
+     AIBIC (A, B and C) """
+
+    # Compute with bedTools:
+    # AIBIC
+    # AIB
+    # BIC
+    # From these 3 intersections you can compute all the numbers you need
+
+    # 4) intersect the two annotations
+    intersecters = [region] + ['gencode', 'polyAdb']
+    # Send in A and [B,C]
+    paths = intersect_wrap(paths, intersecters, outdir, extendby=10)
+
+    # Do a wc of all the paths in paths
+    wc = {}
+    for pathname, path in paths.items():
+        wc[pathname] = sum((1 for line in open(path, 'rb')))
+
+    # make a printout of wc for comparing with the final plots
+    for name, count in wc.items():
+        print name + ':\t' + str(count)
+    print('\n')
+
+    A = region
+    B = 'gencode'
+    C = 'polyAdb'
+
+    AIBIC = '_I_'.join(sorted([A,B,C]))
+
+    venncount = {}
+    venncount[AIBIC] = wc[AIBIC] # we don't need to compute this one
+
+    # A\(BUC) = A - AIB - AIC - AIBIC (Just A)
+    for let in [A, B, C]:
+        compl = [A, B, C]
+        compl.remove(let)
+        compl.sort()
+
+        # initialize with all poly(A) sites
+        venncount[let] = wc[let]
+        # remove the two "BIC" or "AIC" types
+        for k in compl:
+            venncount[let] -= wc['_I_'.join(sorted([let, k]))]
+        # add the union of the three types, since it was subtracted twice
+        venncount[let] += wc[AIBIC]
+
+    # (AUB)\C = AIB - AIBIC (Just A and B)
+    for let in [A, B, C]:
+        compl = [A, B, C]
+        compl.remove(let)
+        (c1, c2) = sorted(compl)
+
+        key = '{0}_I_{1}'.format(c1, c2) # one of (BUC)\A
+        venncount[key] = wc['_I_'.join(sorted([c1, c2]))] - wc[AIBIC]
+
+
+    return paths, venncount
+
+
+def intersect_wrap(paths, intersecters, outdir, extendby=20):
+    """
+    1) extend each of the joiner files with some value
+    2) intersect them
+    3) return paths dict with link to the intersected path
+    """
+    hg19 = '/home/jorgsk/work/3UTR/ext_files/hg19'
+
+    # function used only here
+    def extender(extendby, path, hg19, ext_path):
+        cmd1 = ['slopBed', '-b', str(extendby), '-i', path, '-g', hg19]
+        p1 = Popen(cmd1, stdout = open(ext_path, 'wb'))
+        p1.wait()
+
+    # 1) extend all files
+    for pathname, path in paths.items():
+        # skip those you don't want
+        if pathname not in intersecters:
+            continue
+
+        ext_name = pathname+'_extended_{0}'.format(extendby)
+        ext_path = os.path.join(outdir, ext_name)
+
+        # if you have extended already, don't do it again
+        if ext_name in paths:
+            continue
+
+        extender(extendby, path, hg19, ext_path)
+        paths[ext_name] = ext_path
+
+    # there are 4 intersections to be performed:
+        # AIB, AIC, BIC, and AIBIC
+
+    for r in [2, 3]:
+        combinations = list(combins(intersecters, r))
+        for combo in combinations:
+            combo = sorted(combo)
+
+            isect_name = '_I_'.join(combo) # sort to access easier
+            isect_path = os.path.join(outdir, isect_name)
+
+            if len(combo) == 2:
+                # refer to the extended files
+                (filea, fileb) = [paths[combo[0]+'_extended_{0}'.format(extendby)],
+                                  paths[combo[1]+'_extended_{0}'.format(extendby)]]
+
+            if len(combo) == 3:
+                # 1) extend the intersection that exists of the first two
+                orig_name = '_I_'.join(combo[:-1])
+                orig_path = os.path.join(outdir, orig_name)
+                ext_name = '_I_'.join(combo[:-1])+'_extended_{0}'.format(extendby)
+                ext_path = os.path.join(outdir, ext_name)
+                extender(extendby, orig_path, hg19, ext_path)
+                # 2) Use the extended intersection as file a and the normal as b
+                # Why is this one so sensitive to extendby?
+                (filea, fileb) = (ext_path,
+                                  paths[combo[2]+'_extended_{0}'.format(extendby)])
+
+            cmd2 = ['intersectBed', '-wa', '-s', '-a', filea, '-b', fileb]
+            p2 = Popen(cmd2, stdout=PIPE )
+
+            out_handle = open(isect_path, 'wb')
+            for line in p2.stdout:
+                # re-center the intersection
+                if len(line.split()) == 6:
+                    (chrm, beg, end, name, val, strnd) = line.split()
+
+                if len(line.split()) == 4:
+                    (chrm, beg, end, strnd) = line.split()
+
+                center_dist = math.ceil((int(end)-int(beg))/2)
+                center = int(int(end) - center_dist)
+
+                # write the center of the new mergers
+                out_handle.write('\t'.join([chrm, str(center), str(center+1), '0',
+                                           '0', strnd]) + '\n')
+            paths[isect_name] = isect_path
+
+    return paths
+
+def join_regions(paths, only_these, outdir, extendby=False):
+    """ Merge the paths in 'only_these' into one file, and then run mergeBed on
+    them, and finally report the centers of the mergings obtained.  Return
+    'paths' with the path to the merged version.
     """
 
     joined_name = '+'.join(only_these)
@@ -5254,26 +5467,27 @@ def join_polyAs(paths, only_these, outdir, stranded=False, extendby=False):
     joined_handle = open(joined_path, 'wb')
 
     # pass through each file, writing each line to the new one
-    for path in paths.values():
+    for name, path in paths.items():
+
+        # skip those not sent in here
+        if name not in only_these:
+            continue
+
         for line in open(path, 'rb'):
             joined_handle.write(line)
+
     joined_handle.close()
 
-    # as an experiment, check how many poly(A) sites overlap between the two.
-    # first extend each entry by 20 nt and then merge. compare the line count
-    # before and after
-
+    # now that you have joined them, merge them back together
     hg19 = '/home/jorgsk/work/3UTR/ext_files/hg19'
 
     ## lines in jouned_path
     wc_1 = sum((1 for line in open(joined_path, 'rb')))
 
-    cmd1 = ['slopBed', '-b', '10', '-i', joined_path, '-g', hg19]
-
+    cmd1 = ['slopBed', '-b', str(extendby), '-i', joined_path, '-g', hg19]
     cmd2 = ['mergeBed', '-s', '-i', 'stdin']
 
     p1 = Popen(cmd1, stdout=PIPE)
-
     p2 = Popen(cmd2, stdin=p1.stdout, stdout=PIPE)
 
     joined_merged_name = joined_name+'+merged'
@@ -5281,20 +5495,23 @@ def join_polyAs(paths, only_these, outdir, stranded=False, extendby=False):
     jm_handle = open(joined_merged_path, 'wb')
 
     wc_2 = 0
+    # Write the center of the merged poly(A) sites
     for line in p2.stdout:
         wc_2 += 1
         (chrm, beg, end, strnd) = line.split()
-        center = math.ceil((int(end)-int(beg))/2)
+
+        center_dist = math.ceil((int(end)-int(beg))/2)
+        center = int(int(end) - center_dist)
+
         # write the center of the new mergers
         jm_handle.write('\t'.join([chrm, str(center), str(center+1), '0',
                                    '0',strnd]) + '\n')
 
-    print wc_1, 'before merge of regions'
-    print wc_2, 'after merge of regions'
+    print 'extendby: ', extendby
+    print wc_1, 'before merge of {0}'.format(' '.join(only_these))
+    print wc_2, 'after merge of {0}'.format(' '.join(only_these))
 
-    paths[joined_name] = joined_merged_path
-
-    return paths
+    return joined_merged_path
 
 def gencode_report(settings, speedrun, svm):
     """ Make figures for the GENCODE report. The report is an overview of
@@ -5309,7 +5526,6 @@ def gencode_report(settings, speedrun, svm):
         2) # of new poly(A) sites obtained with increasing number of reads
     """
 
-    speedrun = True
     # 1) nr of polyA sites obtained with increasing readnr
     #clusterladder(settings, speedrun)
     # RESULT: make two plots: one from each of the 'data_groupign' below. One
