@@ -5154,6 +5154,28 @@ def annotation_merger(paths, annotations):
     # outputing the centered merged version.
     """
 
+def regdata_writer(reg_data, outdir, subset):
+    """
+    Write data from the two regions
+    """
+    # Subset is the set of sub-datasets the poly(A) sites were derived from
+    for region, reg_dict in reg_data.items():
+        outfile = os.path.join(outdir, region+'.summary')
+        outhandle = open(outfile, 'wb')
+        outhandle.write("""Summary of super-clustering of poly(A) sites for the
+                      following datasets:\n {0}""".format(' '.join(subset))+'\n')
+
+        "Numbers for poly(A) sites with only 1 read:\n"
+        for name, val in reg_dict['one_stats'].items():
+            outhandle.write('\t'.join([name, str(val)]))
+        outhandle.write('\n')
+
+        "Numbers for poly(A) sites with more than 1 reads:\n"
+        for name, val in reg_dict['two_stats'].items():
+            outhandle.write('\t'.join([name, str(val)]))
+
+        outhandle.close()
+
 def venn_polysites(settings, speedrun):
     """ Output all clustered poly(A) sites for 3UTR exons and for the rest of
     the genome.
@@ -5206,10 +5228,6 @@ def venn_polysites(settings, speedrun):
 
         handle.close() # close the file you wrote to inside super_bed
 
-        # TODO
-        # Write one_stats and two_stats to a file so you can go back to the
-        # summary statistics when you need them again
-
         reg_data[region] = {'total': total,
                            'one_stats': one_stats,
                            'two_stats': two_stats,
@@ -5217,7 +5235,10 @@ def venn_polysites(settings, speedrun):
 
         paths[region] = superbed_path
 
-    # join the polyA sites in the two regions
+    # Write one_stats and two_stats to a file for future reference
+    regdata_writer(reg_data, outdir, subset)
+
+    # join the polyA sites in the two regions and give the ensuing filepath to paths
     paths['genome'] = join_regions(paths, regions, outdir, extendby=5)
     regions = regions + ['genome']
 
@@ -5234,7 +5255,15 @@ def venn_polysites(settings, speedrun):
 
         # RESULT: the diagrams look good numerically. their design not so. Is
         # this error a result of going through rpy?  Try the real numbers in R.
-        # Maybe the manual has something to offer.
+        # Maybe the manual has something to offer. Or maybe that's just how it
+        # is.
+
+        # Regardless, you now have the plots you were planning to have. Now you
+        # need to write the text. Pedro suggested not to let it get technical.
+        # What can we offer? How does this poly(A) discovery compare against
+        # others? What is the benefit of GENCODE for poly(A) discovery? It's
+        # good that we can look exactly in the cytosol, where we know long term
+        # mRNA hang out, instead of the noise of the nucleus.
 
 
 def make_venn(paths, wcdict, outdir, region):
@@ -5326,6 +5355,7 @@ def intersect_polyAs(paths, outdir, region):
 
     # 4) intersect the two annotations
     intersecters = [region] + ['gencode', 'polyAdb']
+
     # Send in A and [B,C]
     paths = intersect_wrap(paths, intersecters, outdir, extendby=10)
 
