@@ -1,0 +1,136 @@
+Focus points of the report:
+
+0) Motivation for studying 3UTRs in general
+i) Involved in regulation of transcript localization and degradation, among
+other thorugh snRNA binding sites.
+
+The 3' untranslated region (3UTR) of mRNAs is generally involved in the
+regulation of mRNA transport and degradation. A gene can produce transcripts
+with multiple 3UTR isoforms, chiefly through the usage of different
+polyadenylation sites. By varying the nucleotide composition of a 3UTR through
+alternative polyadenylation, cis-regulatory elements can be retained or
+discarded. For example, snRNAs frequently bind 3UTRs, acting as repressors of
+translation, which is the implied reason why proliferating and cancer cell
+lines exhibit shortened 3UTR tails (cite people). Also, binding sites in the
+3UTR are partially responsible for the degradation of mis-translated mRNAs
+(lykke dansk).
+
+1) Motivation for studying polyadenylation
+ii) The tell-tale sign of the end of an mRNA's 3UTR, and a signal for ending
+transcription
+
+Evidence from ESTs and cDNA shows that At least half of human genes contain two
+or more polyadenylation sites in their 3UTRs (tiaaan), indicating that
+regulation of 3UTR length may be common in the cell. Around 70% of
+polyadenylation sites are contain a cis-hexamer around 20 nt downstram, called
+the polyadenylation signal (PAS). Other cis-regulator regions have been
+implied, but to a lesser extent (CITE). Polyadenylation happes by a two step
+process, where the nascent transcript is first cleaved at the polyadenylation
+site and subsequently polyadenylated by poly(A) polymerase. In humans, the
+length of the poly(A) tail normally reaches around 250 nucleotides.  However,
+there are also non-canonical polyadenylation mechanisms (cite noncanonical 3'
+end processing Spector). Regardless of mechanism or PAS site existence, the
+tell-tale sign of the polyA site is the poly(A) tail, which consist almost
+exclusively of adenosie nucleotides.
+
+iii) The map of polyadenylation sites in a 3UTR gives a map over possible 3UTR
+isoforms.
+
+An important reason to annotate polyadenylation sites is that they give
+information about the possible 3UTR isoforms that can be transcribed from a
+gene. As more is being learned about snRNA regulation in the 3UTRs, the
+precise knowledge of the polyadenylation patterns for a given transcript will
+become more valuable.
+
+2) Motivation for stydying polyadenylation in RNA-seq
+i)RNA-seq aims to quantify the transcriptome and identify novel transcripts
+
+RNA-seq aims to quantify the transcriptome and identify novel transcripts and
+transcript isoforms (CITE review).
+
+ii) isoform detection is difficult, but poly(A) sites are the hallmark of the
+end of an isoform, and aid in gene identification.
+
+Quantification of different isoforms is difficult because the reads of
+different mRNA isoforms will map to the same genomic region where the isoforms
+overlap in sequence. While different 3UTR isoforms indeed overlap each other,
+they leave a hallmark behind: the poly(A) tail. Since the poly(A) tail is part
+of the transcriptome, it is possible to identify reads that cover the
+poladenylation site by trimming poly(A) tails of unmapped reads and remapping
+them to the genome. If a read remaps after the poly(A)-trimming, there is a
+good chance that this read originated from a piece of the original transcript
+that covered the polyadenylation site, in which case we will refer to it as a
+poly(A) read.
+
+By doing this to all the unmapped read of an RNA-seq experiment, one can hope
+to obtain a map of all the polyadenylation events in the transcriptome under
+investigation. Further, by counting the number of poly(A) reads that cluster
+around each poly(A) site, one obtains a measure of the relative usage of each
+3UTR isomer that ended at that poly(A) site. Then, by comparing the
+polyadenylation maps between experiments, one can infer the relative usage of
+different 3UTR isomers between the different experiments.
+
+In reality, common RNA-seq protocols are negatively biased toward the 5' and 3'
+ends, meaning that read coverage decreases toward the 5' and 3' ends. Thus, for
+lowly expressed transcripts or 3UTR isoforms, it is possible that no poly(A)
+reads are obtained. Special RNA-seq protocols have been developed to circumvent
+this problem (CITE HERE AND THERE). While these experiments will capture many
+more polyadenylation events than experiments that use standard protocols, there
+is also a loss of information. Here we show that even with a 3UTR-non-specific
+rna-seq protocol we manage to capture a large amount of the polyadenylation
+activity in transcriptomes, sufficient for making meaningful comparison between
+the polyadenlyation patterns of different 3UTRs
+
+1) Capacity to discover poly(A) sites with current standard RNA-seq techniques
+FIGURE
+
+The capacity of current all-round RNA-seq protocol for discovering
+polyadenylation sites can be seen in Figure 1. As can be seen, the total number
+of polyadenylation sites level off at 2X thousand sites. A polyadenylation site
+is counted if it has 2 or more supporting poly(A) reads or if it is landing at
+an annotated polyadenylation site. Increasing the number of reads do not add
+more polyadenylation sites. With an estimated XXX actively transcribed mRNA
+transcript, one expects at least XXXX polyadenlyation sites that could
+potentialyl be discovred. Because the rate of discovery is XX% for high RPKM
+transcripts and only $$% for low RPKM transcripts, it is coverage that sents
+the limit for polyadenylation discovery. But only up to a certain point; after
+this point adding more read, and thereby more coverage, does not add to the
+number of polyadenylation clusters identified. T
+
+More importantly: the number of annotated 3UTRs: how many unique genes are
+covered by those regions? how many transripts? this would truly give us a good
+number to work from.
+NOTE: write as much as you like: then synthesize it down to a paragraph or two.
+
+2) Two annotation sources: poly(A)DB and GENCODE.
+FIGURE
+
+In Figure 2 is desplayed the intersection between the polyaddnylation sites for
+the GENCODE datasets with two sources of annotated polyadenylation sites for
+human. As can be seen, ... 
+
+3) Briefly about the method
+i) NR of sites found with >1 site, % of which are annotated, % of which have
+PAS, good PAS etc. Make this into a table and put at the end. The high
+percentage of 1-cover sites that are annotated point to that the limitation
+lies in the coverage and read length. As these things improve, we will we might
+reach the total number of 3UTRs covered.
+
+APPENDIX: tables for 3UTR, anti-3UTR, and SUM. Brief explanation of the
+pipeline.
+
+
+5) Coverage might not be enough, since some 3UTRs express themselves
+independently of the host mRNA. Thus the best information that can be had about
+the relative usage of 3UTR isoforms comes from the poly(A) pattern.
+
+#NOTE: you have a clear lack in your method. It's not only 3UTRs that are
+polyadenylated. Also long noncoding RNAs are.
+
+# You need this number: for each 3UTR and each gene, how many polyadenylation
+# events do you find? This number can challenge Tian's number. And it shows
+# that 3UTR isoform regulation is abundant.
+
+# NOTE!!!!!!!!!!! NOW THAT YOU KNOW THAT POLY(A) SITE IS ENTIRELY STRAND
+# SPECIFIC, YOU HADN'T NEEDED TO EXCLUDE OVERLAPPING 3UTRs FOR POLYA STUDY. YOU
+# STILL NEED TO EXCLUDE THEM FOR A 3UTR lenght STUDY.

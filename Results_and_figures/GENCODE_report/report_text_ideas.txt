@@ -1,0 +1,42 @@
+Focus points of the report:
+
+1) Capacity to discover poly(A) sites with current standard RNA-seq techniques
+FIGURE
+
+*) Why are poly(A) sites important? 
+1) For a given transcript, it gives information about usage of alternative 3UTR
+isoforms, or even protein coding isoforms, if the poly(A) site is before the
+3UTR. This it can work as an exon exclusion mechanism as well. (not really,
+splicing is actually the core mechnism for this regulation -- but the poly(A)
+reads let us spie this!)
+2) This in turn gives information about 3UTR regulation, important for many
+things. Short 3UTR more highly expressed, at least partially due to reduced
+capacity of snRNAs to repress expression through 3UTR binding.
+3) Coverage might not be enough, since some 3UTRs express themselves
+independently of the host mRNA. Thus the best information that can be had about
+the relative usage of 3UTR isoforms comes from the poly(A) pattern.
+4) argument against specialist RNA-seq protocols: you want all in one package,
+no?
+
+NOTE: write as much as you like: then synthesize it down to a paragraph or two.
+
+2) Overlap with annotated poly(A) sites
+3) Two annotation sources: poly(A)DB and GENCODE.
+FIGURE
+
+3) Briefly about the method
+i) NR of sites found with >1 site, % of which are annotated, % of which have
+PAS, good PAS etc. Make this into a table and put at the end. The high
+percentage of 1-cover sites that are annotated point to that the limitation
+lies in the coverage and read length. As these things improve, we will we might
+reach the total number of 3UTRs covered.
+
+#NOTE: you have a clear lack in your method. It's not only 3UTRs that are
+polyadenylated. Also long noncoding RNAs are.
+
+# You need this number: for each 3UTR, how many polyadenylation events do you
+# find?
+
+# NOTE!!!!!!!!!!! NOW THAT YOU KNOW THAT POLY(A) SITE IS ENTIRELY STRAND
+# SPECIFIC, YOU HADN'T NEEDED TO EXCLUDE OVERLAPPING 3UTRs FOR POLYA STUDY. YOU
+# STILL NEED TO EXCLUDE THEM FOR A 3UTR lenght STUDY.
