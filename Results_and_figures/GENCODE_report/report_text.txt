@@ -131,6 +131,14 @@ polyadenylated. Also long noncoding RNAs are.
 # events do you find? This number can challenge Tian's number. And it shows
 # that 3UTR isoform regulation is abundant.
 
+# NOTE: you find a comparable number of new poly(A) sites in the 3UTR, 15000.
+# The rest is novel stuff for them! They've lots in intergenic regions. HEY!
+# you don't know: maybe the TIANDB and USCS numbers are 3UTR ones. Probably
+# yes. Opps.
+
+# NOTE why don't you make a simple plot like they did? It's short, and it
+# captures the relevnant information.
+
 # NOTE!!!!!!!!!!! NOW THAT YOU KNOW THAT POLY(A) SITE IS ENTIRELY STRAND
 # SPECIFIC, YOU HADN'T NEEDED TO EXCLUDE OVERLAPPING 3UTRs FOR POLYA STUDY. YOU
 # STILL NEED TO EXCLUDE THEM FOR A 3UTR lenght STUDY.
