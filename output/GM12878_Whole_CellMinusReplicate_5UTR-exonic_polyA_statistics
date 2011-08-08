@@ -1,0 +1,24 @@
+Total number of reads	207493750
+Nr of trailing A reads total	611178
+Nr of leading T reads total	173258
+Nr of trailing A reads mapped	134
+Nr of leading T reads mapped	73
+Nr of trailing A reads mapped to annotated object	67
+Nr of leading T reads mapped to annotated object	46
+Nr of clusters	149
+Annotated strand count	113
+Other strand count	94
+Both strands count	1
+Both strands by chance	0.112359550562
+"False positive"-rate	0.83185840708
+"False negative"-rate	0.00884955752212
+other_strand Average total reads in clusters	1.27027027027
+other_strand Std total reads in clusters	1.13062165748
+other_strand Sum unique reads	75
+other_strand Average unique reads in clusters	1.01351351351
+other_strand Std uniuqe reads in clusters	0.115459510072
+this_strand Average total reads in clusters	1.50666666667
+this_strand Std total reads in clusters	1.42710273709
+this_strand Sum unique reads	78
+this_strand Average unique reads in clusters	1.04
+this_strand Std uniuqe reads in clusters	0.195959179423

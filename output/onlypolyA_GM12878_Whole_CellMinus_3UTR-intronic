@@ -1,0 +1,97 @@
+chrm	beg	end	utr_ID	strand	polyA_coordinate	polyA_coordinate_strand	annotated_polyA_distance	nearby_PAS	PAS_distance	number_supporting_reads	number_unique_supporting_reads	unique_reads_spread
+chr9	37881628	37884219	three_utr_intronic_4769	+	37881891	-	NA	AATAAA	18	1	1	0.0
+chr9	37867663	37878105	three_utr_intronic_4766	+	37874023	-	NA	NA	NA	1	1	0.0
+chr7	43666385	43670750	three_utr_intronic_3927	+	43668194	-	NA	NA	NA	1	1	0.0
+chr6	26124978	26138280	three_utr_intronic_3722	+	26132800	-	NA	NA	NA	1	1	0.0
+chr1	90312217	90395366	three_utr_intronic_196	+	90324865	+	NA	NA	NA	1	1	0.0
+chr1	90312217	90395366	three_utr_intronic_196	+	90326988	-	NA	AAGAAA AATGAA	30 11	1	1	0.0
+chr6	27106461	27107075	three_utr_intronic_3731	+	27107075	+	NA	AAGAAA	1	1	1	0.0
+chr6	27108418	27114186	three_utr_intronic_3732	+	27114186	+	NA	NA	NA	1	1	0.0
+chr6	27108418	27114186	three_utr_intronic_3732	+	27110068	-	NA	NA	NA	1	1	0.0
+chr6	13288645	13295027	three_utr_intronic_3708	+	13290691	+	NA	TTTAAA	22	1	1	0.0
+chr6	13288645	13295027	three_utr_intronic_3708	+	13290004	-	NA	NA	NA	1	1	0.0
+chr1	151025804	151026705	three_utr_intronic_400	+	151026317	-	NA	NA	NA	1	1	0.0
+chr5	159492518	159493553	three_utr_intronic_3639	+	159492550	+	24	AATAAA	11	4	1	0.0
+chr19	35820997	35822921	three_utr_intronic_2093	+	35822753	+	NA	NA	NA	1	1	0.0
+chr2	152333863	152336610	three_utr_intronic_2479	+	152335766	+	NA	NA	NA	1	1	0.0
+chr2	99814089	99823095	three_utr_intronic_2385	+	99815407	-	NA	NA	NA	1	1	0.0
+chr8	102190616	102209279	three_utr_intronic_4601	+	102195824	+	NA	NA	NA	1	1	0.0
+chr16	11027861	11035424	three_utr_intronic_1498	+	11028746	+	NA	NA	NA	1	1	0.0
+chr16	11027861	11035424	three_utr_intronic_1498	+	11029860	-	NA	NA	NA	1	1	0.0
+chr17	4175812	4185067	three_utr_intronic_1814	+	4180635	-	NA	ACTAAA	22	1	1	0.0
+chr20	51873111	52014198	three_utr_intronic_2662	+	51908747	+	NA	NA	NA	1	1	0.0
+chr3	290280	324371	three_utr_intronic_2912	+	311726	+	NA	NA	NA	1	1	0.0
+chr17	55754421	55756908	three_utr_intronic_1930	+	55756498	-	NA	NA	NA	1	1	0.0
+chr11	838835	839655	three_utr_intronic_720	+	839651	-	NA	NA	NA	1	1	0.0
+chr1	173855774	173865796	three_utr_intronic_439	+	173862059	-	NA	NA	NA	1	1	0.0
+chr1	118503049	118506420	three_utr_intronic_234	+	118506420	+	NA	NA	NA	1	1	0.0
+chr19	16742536	16747549	three_utr_intronic_2053	+	16743367	-	NA	NA	NA	1	1	0.0
+chrX	122737782	122744048	three_utr_intronic_4990	+	122741952	-	NA	TTTAAA	33	1	1	0.0
+chr16	29437240	29437968	three_utr_intronic_1653	+	29437509	+	NA	AATAAA AATACA	24 16	1	1	0.0
+chr16	29418348	29437120	three_utr_intronic_1652	+	29418348	-	NA	NA	NA	1	1	0.0
+chr16	29418348	29437120	three_utr_intronic_1652	+	29429286	-	NA	ACTAAA	17	1	1	0.0
+chr7	141450261	141463896	three_utr_intronic_4425	+	141451854	-	NA	NA	NA	1	1	0.0
+chr17	45534160	45560356	three_utr_intronic_1906	+	45551652	+	NA	AATACA	34	2	1	0.0
+chr3	119244597	119246310	three_utr_intronic_3084	+	119246308	-	NA	NA	NA	3	1	0.0
+chr4	22351177	22389006	three_utr_intronic_3262	+	22356200	+	NA	NA	NA	1	1	0.0
+chr2	75884986	75889831	three_utr_intronic_2335	+	75886069	-	NA	NA	NA	1	1	0.0
+chr16	58192258	58197956	three_utr_intronic_1739	+	58197158	+	NA	NA	NA	2	1	0.0
+chr15	25227215	25230246	three_utr_intronic_1354	+	25228551	+	NA	NA	NA	1	1	0.0
+chr15	25232142	25244115	three_utr_intronic_1356	+	25239743	-	NA	TATAAA AATATA	33 10	1	1	0.0
+chr15	25213976	25218865	three_utr_intronic_1352	+	25215121	+	NA	NA	NA	2	1	0.0
+chr8	17144120	17152494	three_utr_intronic_4469	+	17148957	-	NA	NA	NA	1	1	0.0
+chr6	86304505	86318052	three_utr_intronic_3852	+	86318048	-	27	NA	NA	2	1	0.0
+chr4	421671	429557	three_utr_intronic_3215	+	429094	-	NA	NA	NA	1	1	0.0
+chr1	112251887	112255051	three_utr_intronic_215	+	112254681	+	NA	NA	NA	1	1	0.0
+chr8	28910787	28916369	three_utr_intronic_4508	+	28912860	-	NA	NA	NA	1	1	0.0
+chr20	8865547	8910541	three_utr_intronic_2621	+	8865850	+	NA	NA	NA	1	1	0.0
+chr1	43133568	43140958	three_utr_intronic_134	+	43133874	+	NA	NA	NA	1	1	0.0
+chr1	43140998	43142253	three_utr_intronic_135	+	43142139	+	NA	NA	NA	1	1	0.0
+chr3	193409922	193412393	three_utr_intronic_3194	+	193412391	-	NA	NA	NA	1	1	0.0
+chr19	42989376	43011457	three_utr_intronic_2130	+	42998293	-	NA	ATTAAA	33	1	1	0.0
+chrX	46434859	46457193	three_utr_intronic_4897	+	46435506	+	NA	NA	NA	1	1	0.0
+chrX	46434859	46457193	three_utr_intronic_4897	+	46455102	+	NA	NA	NA	1	1	0.0
+chrX	46434859	46457193	three_utr_intronic_4897	+	46437729	-	NA	NA	NA	1	1	0.0
+chr12	56146665	56151077	three_utr_intronic_1114	+	56149167	+	NA	NA	NA	1	1	0.0
+chr12	56146665	56151077	three_utr_intronic_1114	+	56151070	-	37	NA	NA	4	2	8.23103881658
+chr3	105290809	105293319	three_utr_intronic_3059	+	105291104	+	NA	NA	NA	1	1	0.0
+chr3	98244178	98250742	three_utr_intronic_3055	+	98245154	-	NA	NA	NA	1	1	0.0
+chr3	98241910	98243904	three_utr_intronic_3054	+	98242984	-	NA	NA	NA	2	1	0.0
+chr3	98251960	98281166	three_utr_intronic_3056	+	98252563	+	NA	NA	NA	1	1	0.0
+chr3	98251960	98281166	three_utr_intronic_3056	+	98253524	+	NA	AATAAA ATTAAA AATATA	15 11 21	1	1	0.0
+chr3	98251960	98281166	three_utr_intronic_3056	+	98276786	+	NA	NA	NA	2	1	0.0
+chr6	57472442	57498965	three_utr_intronic_3838	+	57495717	+	NA	NA	NA	1	1	0.0
+chr6	57472442	57498965	three_utr_intronic_3838	+	57495589	-	NA	NA	NA	4	1	0.0
+chr6	57467207	57472357	three_utr_intronic_3837	+	57468820	-	NA	NA	NA	1	1	0.0
+chr4	5819982	5822490	three_utr_intronic_3238	+	5820016	+	21	ATTAAA TATAAA	7 25	1	1	0.0
+chr7	76180839	76239302	three_utr_intronic_4235	+	76200184	+	NA	ATTAAA	3	2	1	0.0
+chr7	76180839	76239302	three_utr_intronic_4235	+	76190042	-	NA	NA	NA	1	1	0.0
+chr1	204527858	204531540	three_utr_intronic_481	+	204530348	+	NA	TTTAAA TTTAAA	3 18	1	1	0.0
+chr14	69160300	69196523	three_utr_intronic_1311	+	69194712	+	NA	NA	NA	1	1	0.0
+chr7	141479235	141487521	three_utr_intronic_4427	+	141484045	+	NA	NA	NA	1	1	0.0
+chr22	31893334	31904239	three_utr_intronic_2783	+	31896804	-	NA	NA	NA	4	1	0.0
+chr3	10322902	10326102	three_utr_intronic_2967	+	10323815	-	NA	NA	NA	1	1	0.0
+chr3	10143614	10144586	three_utr_intronic_2964	+	10143619	+	6	NA	NA	4	2	2.0
+chr3	16347594	16357351	three_utr_intronic_2969	+	16348063	-	NA	NA	NA	1	1	0.0
+chrX	65817936	65819314	three_utr_intronic_4931	+	65819294	-	NA	NA	NA	1	1	0.0
+chr9	5881676	5890149	three_utr_intronic_4688	+	5888842	+	NA	NA	NA	1	1	0.0
+chr9	5776557	5784570	three_utr_intronic_4687	+	5779063	+	NA	NA	NA	1	1	0.0
+chr19	58992591	58995115	three_utr_intronic_2216	+	58994564	+	NA	NA	NA	1	1	0.0
+chr2	8823137	8823813	three_utr_intronic_2218	+	8823713	-	NA	NA	NA	1	1	0.0
+chr12	27183206	27183665	three_utr_intronic_1097	+	27183251	-	NA	NA	NA	1	1	0.0
+chr12	69656343	69663290	three_utr_intronic_1144	+	69659825	+	NA	NA	NA	2	1	0.0
+chr3	169804890	169813008	three_utr_intronic_3159	+	169810998	-	NA	NA	NA	1	1	0.0
+chr6	41012076	41020002	three_utr_intronic_3799	+	41019960	-	NA	AGTAAA AATACA	0 5	1	1	0.0
+chr5	43180053	43191853	three_utr_intronic_3480	+	43184428	+	NA	NA	NA	1	1	0.0
+chr19	50431503	50431973	three_utr_intronic_2175	+	50431778	+	NA	NA	NA	1	1	0.0
+chr19	50432796	50433988	three_utr_intronic_2177	+	50432922	-	NA	NA	NA	2	1	0.0
+chr2	173463862	173486150	three_utr_intronic_2515	+	173472293	-	NA	NA	NA	1	1	0.0
+chr2	173461193	173462340	three_utr_intronic_2514	+	173461852	-	NA	NA	NA	3	1	0.0
+chr19	53059589	53066569	three_utr_intronic_2192	+	53060540	-	NA	NA	NA	1	1	0.0
+chr19	53059589	53066569	three_utr_intronic_2192	+	53064776	-	NA	NA	NA	1	1	0.0
+chr7	127011869	127013394	three_utr_intronic_4358	+	127013358	-	NA	NA	NA	2	1	0.0
+chrX	47905703	47915698	three_utr_intronic_4912	+	47915063	+	NA	AATACA ACTAAA	34 28	1	1	0.0
+chr9	37904350	37919130	three_utr_intronic_4775	+	37917035	+	NA	NA	NA	1	1	0.0
+chr7	74580984	74582341	three_utr_intronic_4160	+	74582339	-	NA	NA	NA	1	1	0.0
+chr2	191054724	191064422	three_utr_intronic_2537	+	191062911	-	NA	NA	NA	2	1	0.0
+chr10	11639717	11653440	three_utr_intronic_601	+	11642414	-	NA	NA	NA	1	1	0.0
