@@ -6,14 +6,16 @@ from __future__ import division
 
 def run_from_ipython():
     try:
-        __IPYTHON__
+        #__IPYTHON__ in pre 0.11 ...
+        __IPYTHON__active
         return True
     except NameError:
         return False
 
 # only get the debug functio prop
 if run_from_ipython():
-    from IPython.Debugger import Tracer
+    #from IPython.Debugger import Tracer
+    from IPython.core.debugger import Tracer
     debug = Tracer()
 else:
     def debug(): pass
@@ -1582,6 +1584,66 @@ def split_annotation(transcripts, chr1):
 
         write_beds(transcripts, bed_dir, chr_s, *opts)
 
+def only_introns_exons(transcripts, genes, chr1, gene_limit):
+    output_dir = '/home/jorgsk/work/pipeline_files/genomic_regions'
+
+    if chr1:
+        chr1 = '_chr1'
+    else:
+        chr1 = ''
+
+    out_introns = 'introns_ordered'+chr1+'.bed'
+    out_exons = 'exons_ordered'+chr1+'.bed'
+
+    int_handle = open(os.path.join(output_dir, out_introns), 'wb')
+    ex_handle = open(os.path.join(output_dir, out_exons), 'wb')
+
+    # go through each transcritp. note rtanscript type and name. write each exon
+    # and intron to separate files in the order 5' 1, ..., N 3'
+
+    gene_count = {}
+
+    for ts_id, ts in transcripts.iteritems():
+
+        if ts.gene_id in gene_count:
+            gene_count[ts.gene_id] += 1
+        else:
+            gene_count[ts.gene_id] = 0
+
+        # skip after a certain number of transcripts have been taken from each
+        # gene
+        if gene_count[ts.gene_id] > gene_limit:
+            continue
+
+        t_type = ts.t_type
+        strand = ts.strand
+
+        if strand == '+':
+            exon_order = ts.exons
+            intron_order = ts.get_exon_introns()
+
+        # change the order for negative strand! (default: 3->5 ordering)
+        if strand == '-':
+            exon_order = ts.exons[::-1]
+            intron_order = ts.get_exon_introns()[::-1]
+
+        # loop through the exons and introns with their respective handles
+        exinthandles = [(exon_order, ex_handle), (intron_order, int_handle)]
+
+        for (ex_or_int, handle) in exinthandles:
+
+            for nr, entry in enumerate(ex_or_int):
+                nr = nr+1 # 1-centered numbering ;)
+                chrm, beg, end, strand = entry
+                bedformat = '\t'.join([chrm, str(beg), str(end), str(nr), t_type,
+                                  strand])
+
+                handle.write(bedformat + '\n')
+
+    # close the file handles
+    int_handle.close()
+    ex_handle.close()
+
 def main():
 
     for chr1 in [True, False]:
@@ -1589,12 +1651,17 @@ def main():
 
         t1 = time.time()
 
-        annotation = '/users/rg/jskancke/phdproject/3UTR/'\
-                'gencode7/gencode7_annotation.gtf'
+        #annotation = '/users/rg/jskancke/phdproject/3UTR/'\
+                #'gencode7/gencode7_annotation.gtf'
+        annotation = '/home/jorgsk/work/pipeline_files/gencode7/'\
+                'gencode.v7.annotation.gtf'
 
+        #if chr1:
+            #annotation = '/users/rg/jskancke/phdproject/3UTR/'\
+                    #'gencode7/gencode7_annotation_chr1.gtf'
         if chr1:
-            annotation = '/users/rg/jskancke/phdproject/3UTR/'\
-                    'gencode7/gencode7_annotation_chr1.gtf'
+            annotation = '/home/jorgsk/work/pipeline_files/gencode7/'\
+                    'gencode.v7.annotation_chr1.gtf'
 
         an_frmt = 'GENCODE'
         #an_frmt = 'ENSEMBL'
@@ -1602,7 +1669,24 @@ def main():
         (transcripts, genes) = make_transcripts(annotation, an_frmt)
         print('finished getting transcripts')
 
-        split_annotation(transcripts, chr1)
+        # normal annoatation splitting
+        #split_annotation(transcripts, chr1)
+
+        # special annotation splitting. Split one into introns and one into
+        # exons. Name the exons/introns according to their transcript_ID +
+        # exon/intron number as determined in the 5' to 3' order. 1 in 5' end
+        # and so on. Do the same for 5' and 3', although here there will be
+        # fewer cases.
+        # This order is essential. How to deal with cases with overlap?
+        # Initially, don't deal with overlap. Simply create a sample.
+
+        # problem: the files are too big. 50 mbytes regions? omgmfg.
+        # solution: only get ... 1 transcript per gene? you might be unlucky and
+        # chose lots of bad transcripts. let's hope for the best
+        gene_limit = 1
+
+        only_introns_exons(transcripts, genes, chr1, gene_limit)
+
 
         print time.time() - t1
 

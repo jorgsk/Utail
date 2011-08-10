@@ -5602,6 +5602,9 @@ def gencode_report(settings, speedrun, svm):
     # What you should have probably done is to have 3UTR-exons as a slightly
     # extended region.
 
+    # XXX forget it all and focus on the TRAMP-like polyadenylation in the
+    # nucleus :)
+
 def main():
     # The path to the directory the script is located in
     here = os.path.dirname(os.path.realpath(__file__))
