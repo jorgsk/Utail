@@ -19,13 +19,14 @@ import re
 # only get the debug function if run from Ipython
 def run_from_ipython():
     try:
-        __IPYTHON__
+        __IPYTHON__active
         return True
     except NameError:
         return False
 
 if run_from_ipython():
     from IPython.Debugger import Tracer
+    #from IPython.core.debugger import Tracer
     debug = Tracer()
 else:
     def debug(): pass
@@ -47,12 +48,13 @@ class Settings(object):
                  regions_provided, read_limit, max_cores, chr1, hgfasta_path,
                  polyA, min_utrlen, extendby, cumul_tuning, bigwig,
                  bigwig_datasets, bigwig_savedir, bigwig_url, gem_index,
-                 length):
+                 length, annotated_polyA_sites):
 
         self.get_length = length
         self.datasets = datasets
         self.annotation_path = annotation_path
         self.annotation_format = annotation_format
+        self.annotated_polyA_sites = annotated_polyA_sites
 
         # if annotation is not used, make a list of the region files provided
         if regions_provided:
@@ -120,12 +122,12 @@ class Annotation(object):
     annotation.
     """
 
-    def __init__(self, annotation_path, annotation_format):
+    def __init__(self, annotation_path, annotation_format, a_polyA_sites_path):
         self.path = annotation_path
         self.ant_format = annotation_format
         self.utrfile_path = ''
-        self.utr_exons = ''
-        self.a_polyA_sites_path = ''
+        self.region_coords = ''
+        self.a_polyA_sites_path = a_polyA_sites_path
         self.a_polyA_sites_dict = ''
 
     def get_utrdict(self):
@@ -144,7 +146,7 @@ class Annotation(object):
 
         return utr_dict
 
-    def get_polyA_dict(self):
+    def get_polyA_dict(self, chr1):
         """
         Intersect the annotated poly(A) sites with the 3UTR files obtained from
         the annotation. Return a dictionarty of the poly(A) sites that
@@ -156,9 +158,12 @@ class Annotation(object):
         polyA_dict = {}
 
         polyA_path = self.a_polyA_sites_path
+        if chr1:
+            core, suffix = os.path.splitext(polyA_path)
+            polyA_path = os.path.join(core+'_chr1'+ suffix)
+
         utr_path = self.utrfile_path
 
-        # run -s or not? no! You don't know the strand of the polyAs :S
         cmd = ['intersectBed', '-wb', '-a', polyA_path, '-b', utr_path]
 
         # Run the above command -- outside the shell -- and loop through output
@@ -174,7 +179,7 @@ class Annotation(object):
 
         # For the multi-exon utrs, add [] (they will probably not intersect with
         # annotated polyA sites.
-        for utr_id in self.utr_exons.iterkeys():
+        for utr_id in self.region_coords.iterkeys():
             if utr_id not in polyA_dict:
                 polyA_dict[utr_id] = []
 
@@ -195,7 +200,7 @@ class UTR(object):
     """
 
     def __init__(self, chrm, beg, end, strand, val, utr_ID, rpkm, first_covr,
-                 sequence, polyA_reads, a_polyA_sites):
+                 polyA_reads, a_polyA_sites):
 
         # variables you have to initialize
         self.chrm = chrm
@@ -212,7 +217,6 @@ class UTR(object):
         self.utr_ID = utr_ID
         self.strand = strand
         self.rpkm = rpkm
-        self.sequence = sequence
         self.polyA_reads = polyA_reads
         self.a_polyA_sites = [int(site[1]) for site in a_polyA_sites] # annotated
         self.rel_pos = 'NA' # it might not be updated
@@ -354,17 +358,10 @@ class UTR(object):
         # This works, because the utrs have been sorted by chrm_beg. The next
         # exon always has HIGHER utr_beg coordinate. You don't need to
         # special-case for each strand for 'covr_vector', since this array is
-        # strand-inspecific. The 'sequence' array, however, is always in the
-        # 3->5 direction, so you must special-case it.
+        # strand-inspecific.
 
         # No covr_vector is strand-insensitive
         self.covr_vector = self.covr_vector + new_exon.covr_vector
-
-        # sequence is strand-sensitive
-        if self.strand == '+':
-            self.sequence = self.sequence + new_exon.sequence
-        elif self.strand == '-':
-            self.sequence = new_exon.sequence + self.sequence
 
         # If last exon, recalculate the cumulative coverage
         if new_exon.this_exnr == self.tot_exnr:
@@ -597,7 +594,8 @@ class FullLength(object):
         #"""
         #Return all close-by PAS and their distances.
         #"""
-        # TODO update something
+
+        # TODO XXX call to genome.get_seqs here, or re-invent the wheel
 
         if this_utr.strand == '+':
             rel_pos = this_utr.rel_pos
@@ -805,6 +803,8 @@ class PolyAReads(object):
         as you find them. if side is negative, get the reverse complement
         """
 
+        # TODO XXX call to genome.get_seqs here, or re-invent the wheel
+
         all_pas = {}
         for rpoint in self.rel_polyRead_sites:
             if side == 'plus_strand':
@@ -975,12 +975,8 @@ def zcat_wrapper(dset_id, bed_reads, read_limit, out_path, polyA, polyA_path,
     # Accept up to two mismatches. Make as set for speedup.
     acceptable = set(('1:0:0', '0:1:0', '0:0:1'))
 
-    # Make regular expression for getting read-start
-    start_re = re.compile('[0-9]*')
-    trail_A = re.compile('A{5,}') # must be used on reversed string
-    lead_T = re.compile('T{5,}')
-    non_A = re.compile('[^A]')
-    non_T = re.compile('[^T]')
+    # nucleotides
+    nucleotides = set(['G', 'A', 'T', 'C'])
 
     # A dictionary of strands
     getstrand = {'R':'-', 'F':'+'}
@@ -989,7 +985,28 @@ def zcat_wrapper(dset_id, bed_reads, read_limit, out_path, polyA, polyA_path,
     cmd = ['zcat', '-f'] + bed_reads
     f = Popen(cmd, stdout=PIPE)
 
-    # for speedruns
+    # You need an overall method for determining tails.
+    # Two pieces of information
+    # 1) minimum length of tail
+    # 2) nr of non-A/T nucleotides ratio 1:3, 1:4, 1:5?
+    # 4) Commence with a minimum UTR length of 4 and 1:5 ratio
+    # 5) let these be optional in the final version of Utail
+    # 7) ratio denominator must b
+    # 8) TODO if 1/5, also accept and iteratively trim 2/10!
+
+    min_length = 4
+    ratio_denominator = 5
+    rd = ratio_denominator
+
+    min_A = 'A'*min_length
+    min_T = 'T'*min_length
+
+    # Make regular expression for getting read-start
+    start_re = re.compile('[0-9]*')
+    trail_A = re.compile('A{{{0},}}'.format(min_length))
+    lead_T = re.compile('T{{{0},}}'.format(min_length))
+    non_A = re.compile('[^A]')
+    non_T = re.compile('[^T]')
 
     for map_line in f.stdout:
         (ID, seq, quality, mapinfo, position) = map_line.split('\t')
@@ -1024,18 +1041,36 @@ def zcat_wrapper(dset_id, bed_reads, read_limit, out_path, polyA, polyA_path,
                 if seq.count('N') > 2:
                     continue
 
+                # Check for putative poly(T)-head. Remove tail and write to file.
+                if (seq[:min_length] == min_T) or (seq[:rd].count('T') >=rd-1)\
+                   or (seq[:2*rd].count('T') >=2*rd-2):
+
+                    t_strip = strip_tailT(seq, lead_T, non_T, min_length, rd,
+                                          min_T)
+                    striplen = len(t_strip)
+                    if striplen > 25:
+                        seqlen = len(seq)
+                        tail = seq[:seqlen-striplen]
+                        tail_rep = ':'.join([l+'='+str(tail.count(l)) for
+                                             l in nucleotides])
+                        polyA_file.write(t_strip + ' T '+tail_rep+'\n')
+                        tcount +=1
+
                 # Check for putative poly(A)-tail. Remove tail and write to file.
-                if (seq[-5:] == 'AAAAA') or (seq[-7:].count('A') >=6):
-                    a_strip = strip_tailA(seq, trail_A, non_A)
-                    if len(a_strip) > 25:
-                        polyA_file.write(a_strip + ' A\n')
+                if (seq[-min_length:] == min_A) or (seq[-rd:].count('A') >=rd-1)\
+                   or (seq[-2*rd:].count('A') >=2*rd-2):
+
+                    a_strip = strip_tailA(seq, trail_A, non_A, min_length, rd,
+                                          min_A)
+                    striplen = len(a_strip)
+                    if striplen > 25:
+                        seqlen = len(seq)
+                        tail = seq[-(seqlen-striplen):]
+                        tail_rep = ':'.join([l+'='+str(tail.count(l)) for
+                                             l in nucleotides])
+                        polyA_file.write(a_strip + ' A '+tail_rep+'\n')
                         acount += 1
 
-                if (seq[:5] == 'TTTTT') or (seq[:7].count('T') >=6):
-                    t_strip = strip_tailT(seq, lead_T, non_T)
-                    if len(t_strip) > 25:
-                        polyA_file.write(t_strip + ' T\n')
-                        tcount +=1
 
     out_file.close()
     polyA_file.close()
@@ -1046,40 +1081,55 @@ def zcat_wrapper(dset_id, bed_reads, read_limit, out_path, polyA, polyA_path,
 
     return (total_mapped_reads, total_reads, acount, tcount)
 
-def strip_tailA(seq, trail_A, non_A):
+def strip_tailA(seq, trail_A, non_A, min_length, rd, min_A):
     """
-    Strip the polyA tail of a read iteratively.
+    Strip the polyA tail of a read iteratively. Strip things ending in a stretch
+    of As and stript 1/min_length and 2/min_length*2
     """
 
-    if seq[-5:] == 'AAAAA':
+    if seq[-min_length:] == min_A:
         # Remove all trailing As on reverse sequence; then reverse
         # again. rexexp only works from the beginning
         seq = strip_tailA(trail_A.sub('', seq[::-1], count=1)[::-1], trail_A,
-                           non_A)
+                           non_A, min_length, rd, min_A)
 
-    if seq[-7:].count('A') >=6:
+    if seq[-rd:].count('A') >=rd-1:
         # First remove the non-A character
         # Then remove all trailing As
         seq = strip_tailA(trail_A.sub('', non_A.sub('', seq[::-1], count=1),
-                           count=1)[::-1], trail_A, non_A)
+                           count=1)[::-1], trail_A, non_A, min_length, rd, min_A)
+
+    if seq[-2*rd:].count('A') >=2*rd-2:
+        # First remove the non-A characters
+        # Then remove all trailing As
+        debug()
+        seq = strip_tailA(trail_A.sub('', non_A.sub('', seq[::-1], count=2),
+                           count=1)[::-1], trail_A, non_A, min_length, rd, min_A)
+        debug()
 
     return seq
 
-def strip_tailT(seq, lead_T, non_T):
+def strip_tailT(seq, lead_T, non_T, min_length, rd, min_T):
     """
     Strip the polyT tail of a read iteratively.
     """
 
-    if seq[:5] == 'TTTTT':
+    if seq[:min_length] == min_T:
         # Remove all leading Ts
-        seq = strip_tailT(lead_T.sub('', seq, count=1), lead_T, non_T)
+        seq = strip_tailT(lead_T.sub('', seq, count=1), lead_T, non_T,
+                          min_length, rd, min_T)
 
-    if seq[:7].count('T') >=6:
+    if seq[:rd].count('T') >=rd-1:
         # First remove the non-T character
         # Then remove all leading Ts
         seq = strip_tailT(lead_T.sub('', non_T.sub('', seq, count=1), count=1),
-                           lead_T, non_T)
+                           lead_T, non_T, min_length, rd, min_T)
 
+    if seq[:2*rd].count('T') >=2*rd-2:
+        # First remove the non-T characters
+        seq = strip_tailT(lead_T.sub('', non_T.sub('', seq, count=2), count=1),
+                           lead_T, non_T, min_length, rd, min_T)
+        # Then remove all leading Ts
     return seq
 
 def coverage_wrapper(dset_id, filtered_reads, utrfile_path):
@@ -1119,8 +1169,8 @@ def join_multiexon_utr(multi_exon_utr, total_nr_reads):
 
     return main_utr
 
-def output_writer(dset_id, coverage, annotation, utr_seqs, rpkm, polyA_reads,
-                  settings, total_nr_reads, output_dir, polyA):
+def output_writer(dset_id, coverage, annotation, rpkm, polyA_reads, settings,
+                  total_nr_reads, output_dir, polyA):
     """
     Putting together all the info on the 3UTRs and writing to files. Write
     one file mainly about the length of the 3UTR, and write another file about
@@ -1128,7 +1178,7 @@ def output_writer(dset_id, coverage, annotation, utr_seqs, rpkm, polyA_reads,
     """
 
     a_polyA_sites_dict = annotation.a_polyA_sites_dict
-    utr_exons = annotation.utr_exons
+    region_coords = annotation.region_coords
 
     (dirpath, basename) = os.path.split(coverage)
 
@@ -1164,8 +1214,7 @@ def output_writer(dset_id, coverage, annotation, utr_seqs, rpkm, polyA_reads,
 
     # Create a UTR-instance
     this_utr = UTR(chrm, beg, end, strand, val, utr_ID, rpkm[utr_ID], covr,
-                   utr_seqs[utr_ID], polyA_reads[utr_ID],
-                   a_polyA_sites_dict[utr_ID])
+                   polyA_reads[utr_ID], a_polyA_sites_dict[utr_ID])
 
     # Create instances for writing to two output files
     length_output = FullLength(utr_ID)
@@ -1186,7 +1235,7 @@ def output_writer(dset_id, coverage, annotation, utr_seqs, rpkm, polyA_reads,
                                        'utr-length', 'strand']) + '\n')
 
     # Assert that the file information is the same as you started with
-    assert utr_exons[utr_ID] == (chrm, int(beg), int(end), strand), 'Mismatch'
+    assert region_coords[utr_ID] == (chrm, int(beg), int(end), strand), 'Mismatch'
 
     # staring reading from line nr 2
     for line in read_from:
@@ -1206,7 +1255,6 @@ def output_writer(dset_id, coverage, annotation, utr_seqs, rpkm, polyA_reads,
             if this_utr.tot_exnr > 1:
                 # If so, add to multi_exon archive
                 utr_name = this_utr.utr_ID[:-2]
-
 
                 if utr_name in multi_exons:
                     multi_exons[utr_name].append(this_utr)
@@ -1233,14 +1281,9 @@ def output_writer(dset_id, coverage, annotation, utr_seqs, rpkm, polyA_reads,
                 length_output.calculate_output(pas_patterns, this_utr)
                 length_output.write_output(length_outfile, this_utr)
 
-                # Calculate poly(A) output for pas-clusters on both strands
-
                 # If the utr is empty, skip the poly(A) writing
                 if this_utr.is_empty():
                     pass
-
-                #if (this_utr.polyA_reads['plus_strand'][0] != []) and \
-                   #(this_utr.polyA_reads['minus_strand'][0] != []):
 
                 for side in ['plus_strand', 'minus_strand']:
                     # skip if empty
@@ -1259,8 +1302,7 @@ def output_writer(dset_id, coverage, annotation, utr_seqs, rpkm, polyA_reads,
 
             # Update to the new utr and start the loop from scratch
             this_utr = UTR(chrm, beg, end, strand, val, utr_ID, rpkm[utr_ID],
-                           covr, utr_seqs[utr_ID], polyA_reads[utr_ID],
-                           a_polyA_sites_dict[utr_ID])
+                           covr, polyA_reads[utr_ID], a_polyA_sites_dict[utr_ID])
 
             # If not a multi exon, make output instances for writing to file
             if not this_utr.multi_exon:
@@ -1268,7 +1310,7 @@ def output_writer(dset_id, coverage, annotation, utr_seqs, rpkm, polyA_reads,
                 pAread_output = PolyAReads(utr_ID)
 
             # Assert that the next utr has correct info
-            assert utr_exons[utr_ID] == (chrm, int(beg), int(end),
+            assert region_coords[utr_ID] == (chrm, int(beg), int(end),
                                          strand), 'Mismatch'
 
     # Close opened files
@@ -1415,6 +1457,12 @@ def read_settings(settings_file):
         verify_access(annotation_path)
         annotation_format = conf.get('ANNOTATION', 'annotation_format')
 
+    # annotated polyA sites
+    try:
+        annotated_polyA_sites = conf.get('ANNOTATION', 'annotated_polyA_files')
+    except ValueError:
+        annotated_polyA_sites = False
+        verify_access(annotated_polyA_sites)
 
     # length yes or no
     length = conf.getboolean('GET_LENGTH', 'length')
@@ -1528,7 +1576,7 @@ def read_settings(settings_file):
     return(datasets, annotation_path, annotation_format, utr_bedfile_paths,
            read_limit, max_cores, chr1, hg_fasta, polyA, min_utrlen, extendby,
            cuml_tuning, bigwig, bigwig_datasets, bigwig_savedir, bigwig_url,
-           gem_index, length)
+           gem_index, length, annotated_polyA_sites)
 
 def get_a_polyA_sites_path(settings, beddir):
     """
@@ -1782,7 +1830,7 @@ def process_reads(pA_reads_path):
 
     for line in open(pA_reads_path, 'rb'):
         # add lines until there are 2 entries in linepair
-        (seq, at) = line.split()
+        (seq, at, tail_info) = line.split()
         seqlen = len(seq)
         if seqlen > 25:
             As = seq.count('A')
@@ -1792,7 +1840,7 @@ def process_reads(pA_reads_path):
                 length_sum += seqlen
                 tot_reads += 1
                 # trim the title
-                outfile.write('>{0}\n'.format(at)+seq+'\n')
+                outfile.write('>{0}\t{1}\n'.format(at, tail_info)+seq+'\n')
 
     if tot_reads > 0:
         avrg_len = length_sum/float(tot_reads)
@@ -1846,7 +1894,7 @@ def map_reads(processed_reads, avrg_read_len, settings):
     reads_file = open(polybed_path, 'wb')
 
     for line in open(mapped_reads + '.0.map', 'rb'):
-        (at, seq, mapinfo, position) = line.split('\t')
+        (at, tail_info, seq, mapinfo, position) = line.split('\t')
 
         # Acceptable reads and poly(A) reads are mutually exclusive.
         if mapinfo in acceptable:
@@ -1856,7 +1904,8 @@ def map_reads(processed_reads, avrg_read_len, settings):
             beg = start_re.match(rest[1:]).group()
 
             # Write to file in .bed format
-            reads_file.write('\t'.join([chrom, beg, str(int(beg)+len(seq)), at,
+            name = ' '.join([at, tail_info])
+            reads_file.write('\t'.join([chrom, beg, str(int(beg)+len(seq)), name,
                                       '0', strand]) + '\n')
 
     return polybed_path
@@ -1937,7 +1986,7 @@ def concat_bedfiles(dset_reads, out_path, polyA, polyA_path):
         sys.exit()
 
     # If polyA is a path to a bedfile (or bedfiles) concatenate these too
-    if type(polyA) == str:
+    if type(polyA) == str or type(polyA) == unicode:
         cmd = ['zcat', '-f'] + polyA
         f = Popen(cmd, stdout=polyA_file)
         f.wait()
@@ -1977,13 +2026,13 @@ def get_polyA_utr(polyAbed, utrfile_path):
     amapped_tofeature = 0
     tmapped_tofeature = 0
 
-    # Don't run with -s because we don't know the polyA strand
+    # Hey, we do know the strand ... but maybe we're not interested: no -s
     cmd = ['intersectBed', '-wb', '-a', polyAbed, '-b', utrfile_path]
 
     # Run the above command -- outside the shell -- and loop through output
     f = Popen(cmd, stdout=PIPE)
     for line in f.stdout:
-        (polyA, utr) = (line.split()[:6], line.split()[6:])
+        (polyA, utr) = (line.split()[:7], line.split()[7:])
         utr_id = utr[3]
         if not utr_id in utr_polyAs:
             utr_polyAs[utr_id] = [tuple(polyA)]
@@ -2014,17 +2063,27 @@ def cluster_loop(ends):
     site is the average of the two sites. If the next site were not withing 20
     nt, then this previous site is kept as a cluster, and the new site is the
     new cluster; and so on.
+
+    Keep the tail information. Average the nucleotide counts with the number of
+    reads in the cluster. (and sub-clustering? and subsub-clustering? Just keep
+    averaging I suppose ... ... codemonkey :)
+
+    Damn: a proof against this could have been that reads landing at the same
+    site have different tails. This would show a random process (or sequencing
+    error), instead of spliced reads. Another argument against split reads would
+    be the average length of the tails. If that length is short, it implies not
+    split reads but something else.
     """
 
     # If you get an empty set in, return emtpy out
     if ends == []:
-        return [[], []]
+        return [[], [], []]
 
     clustsum = 0
     clustcount = 0
     this_cluster = []
     clusters = []
-    for indx, val in enumerate(ends):
+    for indx, (val, info) in enumerate(ends):
         ival = int(val)
 
         clustsum = clustsum + ival
@@ -2033,31 +2092,54 @@ def cluster_loop(ends):
 
         # If dist between new entry and cluster mean is < 20, keep in cluster
         if abs(ival - mean) < 20:
-            this_cluster.append(ival)
+            this_cluster.append((ival, info))
 
         else: # If not, start a new cluster, and save the old one
             clusters.append(this_cluster)
             clustsum = ival
             clustcount = 1
-            this_cluster = [ival]
+            this_cluster = [(ival, info)]
 
     # Append the last cluster
     clusters.append(this_cluster)
 
-    ## Get only the clusters with length more than one
-    #res_clus = [clus for clus in clusters if len(clus) > 1]
-
     # Get the mean of the clusters
-    averages_cluster = []
+    cluster_avrg = []
+    # Store the average tail info from the clusters
+    nucsums = []
 
     for clus in clusters:
         # skip empty clusters
         if clus == []:
             continue
-        averages_cluster.append(int(math.floor(sum(clus)/len(clus))))
+
+        # The averaged location of the clusters
+        clu_sum = sum([k[0] for k in clus])
+        cluster_avrg.append(int(math.floor(clu_sum/len(clus))))
+
+        nucsum = {'G':0, 'A':0, 'T':0, 'C':0}
+        # Add all nucleotides to the sum
+        nuc_dicts = [dict([b.split('=') for b in k[1].split(':')]) for k in clus]
+        for ndict in nuc_dicts:
+            for nucl, nr in ndict.items():
+                nucsum[nucl] += int(nr)
+
+        # Average the nucsum (first name int -> str)
+        tmp = []
+        for nuc, nr in nucsum.items():
+            tmp.append('='.join([nuc, str(nr/len(clus))]))
+        nucsum_avrg = ':'.join(tmp)
+
+        nucsums.append(nucsum_avrg)
+
+    # Strip the tail info from the clusters
+    new_clusters = []
+    for subcl in clusters:
+        new_subcl = [c[0] for c in subcl]
+        new_clusters.append(new_subcl)
 
     # Return the clusters and their average
-    return (averages_cluster, clusters)
+    return (cluster_avrg, new_clusters, nucsums)
 
 def cluster_polyAs(settings, utr_polyAs, utrs, polyA):
     """
@@ -2066,13 +2148,20 @@ def cluster_polyAs(settings, utr_polyAs, utrs, polyA):
     opposite side of the strand it came from. You count the number of reads
     landing in different strands and use the ratio as a false-positive rate. You
     also count the number of identical reads in both strands as a measure of how
-    many on the self-strand are genuine!
+    many on the self-strand are genuine (if you know the orientation of the
+    original genomic feature, that is)!
+
+    Since in recent updates you output the nucleotide composition of the trimmed
+    tails, you need to save these somehow. Update the algorithm by sorting
+    tuples. The second piece of information in the tuple is the tail-info. This
+    information must be stacked. Should you keep all the information or just the
+    average number of nucleotides in the tails? Maybe average is enough.
     """
 
     # If there are no polyA reads or polyA is false: return empty lists 
     if utr_polyAs == {} or polyA == False:
-        polyA_reads = dict((utr_id, {'plus_strand':[[],[]],
-                                     'minus_strand':[[], []]})
+        polyA_reads = dict((utr_id, {'plus_strand':[[],[], []],
+                                     'minus_strand':[[], [], []]})
                            for utr_id in utrs)
 
         return polyA_reads
@@ -2081,26 +2170,27 @@ def cluster_polyAs(settings, utr_polyAs, utrs, polyA):
 
     for utr_id, polyAs in utr_polyAs.iteritems():
 
-        # you know the strand of the poly(A) reads
 
         plus_sites = []
         minus_sites = []
 
+        # you know the strand of the poly(A) reads from the A/T and strand they
+        # map to
         for tup in polyAs:
 
             # it came from the - strand
-            if tup[3] == 'T' and tup[5] == '+':
-                minus_sites.append(tup[1])
+            if tup[3] == 'T' and tup[6] == '+':
+                minus_sites.append((tup[1], tup[4]))
 
-            if tup[3] == 'A' and tup[5] == '-':
-                minus_sites.append(tup[1])
+            if tup[3] == 'A' and tup[6] == '-':
+                minus_sites.append((tup[1], tup[4]))
 
             # it came from the + strand
-            if tup[3] == 'T' and tup[5] == '-':
-                plus_sites.append(tup[2])
+            if tup[3] == 'T' and tup[6] == '-':
+                plus_sites.append((tup[2], tup[4]))
 
-            if tup[3] == 'A' and tup[5] == '+':
-                plus_sites.append(tup[2])
+            if tup[3] == 'A' and tup[6] == '+':
+                plus_sites.append((tup[2], tup[4]))
 
         polyA_reads[utr_id] = {'plus_strand': cluster_loop(sorted(plus_sites)),
                                'minus_strand': cluster_loop(sorted(minus_sites))}
@@ -2108,13 +2198,66 @@ def cluster_polyAs(settings, utr_polyAs, utrs, polyA):
     # For those utr_id that don't have a cluster, give them an empty list; ad hoc
     for utr_id in utrs:
         if utr_id not in polyA_reads:
-            polyA_reads[utr_id] = {'plus_strand': [[],[]], 'minus_strand': [[],[]]}
+            polyA_reads[utr_id] = {'plus_strand': [[],[], []],
+                                   'minus_strand': [[],[], []]}
 
     return polyA_reads
 
+def downstream_sequence(settings, polyA_clusters, region_coords):
+    """
+    For each of the poly(A) clusters, get the nucleotide sequence 40 nt
+    downsteam. Look for PAS, and determine their distance and nature, preferably
+    in sub-functions that can be reused by the 3UTR length output branch.
+    """
+    # each utr or genomic element gets its sequence dictionary. the indexes of
+    # the subdict are the polyA sites themselves
+    # pA_seqs[region_id][plus_strand][pA_coordinate] = 'GATTACA' for example
 
-def pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs, settings,
-             annotation, DEBUGGING, polyA_cache, here):
+    # for getting strand:
+    strandgetter = {'plus_strand': '+',
+                    'minus_strand': '-'}
+
+    #pA_seqs = genome.get_seqs(annotation.region_coords, settings.hgfasta_path)
+    pA_seqs = {}
+    for reg_id, pm_dict in polyA_clusters.iteritems():
+        orient_dict = {}
+
+        for orientation, (centers, clusters, tail_info) in pm_dict.items():
+
+            # skip the ones without sequence
+            if centers == []:
+                continue
+            # we need to send in a dict[pA_coord] = (chrm, beg, beg+1, strnd)
+            # NOTE DICT IS HASHED BY THE BEG COORDINATE, IRRESPECTIVE OF STRAND
+            # UTILIZE THIS IFARMATIONZ l8r
+            orient_dict[orientation] = {}
+            center_dict = {}
+            for center in centers:
+                chrm = region_coords[reg_id][0]
+
+                if strandgetter[orientation] == '+':
+                    beg = center - 40
+                    end = center
+                    strand = '+'
+                else:
+                    beg = center
+                    end = center + 40
+                    strand = '-'
+
+                center_dict[center] = (chrm, beg, end, strand)
+
+            # get the sequences! note: the sequence fetcher automatically
+            # reverse-transribes regions on the - strand. In other words, it
+            # always returns sequences in the 5->3 direction.
+            orient_dict[orientation] = genome.get_seqs(center_dict,
+                                                       settings.hgfasta_path)
+        pA_seqs[reg_id] = orient_dict
+
+    return pA_seqs
+
+
+def pipeline(dset_id, dset_reads, tempdir, output_dir, settings, annotation,
+             DEBUGGING, polyA_cache, here):
     """
     Get reads, get polyA reads, cluster polyA reads, get coverage, combine it in
     a 3UTr object, do calculations on the object attributes, write calculation
@@ -2127,7 +2270,7 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs, settings,
     read_limit = settings.read_limit
     polyA = settings.polyA
     get_length = settings.get_length
-    utr_exons = annotation.utr_exons
+    region_coords = annotation.region_coords
 
     # Define utr_polyAs in case polyA is false
     utr_polyAs = {}
@@ -2184,7 +2327,7 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs, settings,
                     .split()
 
     # If polyA is a string, it is a path of a bedfile with the polyA sequences
-    if type(polyA) == str:
+    if type(polyA) == str or type(polyA) == unicode:
         polyA_bed_path = polyA
         # Get a dictionary for each utr_id with its overlapping polyA reads
         utr_polyAs, at_numbers = get_polyA_utr(polyA_bed_path, utrfile_path)
@@ -2214,24 +2357,41 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs, settings,
             outhandle.close()
 
         # Get a dictionary for each utr_id with its overlapping polyA reads
+        # XXX WARNING FOR TOMORROW: THINK ABOUT WHY THESE THINGS ARE NOT
+        # SPLITMAPPED READS!!!!!!!!!!!!!!!!!!!!!!!!!! Super important.
+        # Solution: subtractBed with splice sites. You'll find these on the
+        # servers I presume?
+        # /users/rg/projects/NGS/Projects/ENCODE/hg19main/GingerasCarrie
+        # /001WC/splitmapping
+        # Look at 1 or 2 cases (cyto and nucleus, chromatin?) to estimate how
+        # many of your reads come from split-mapped reads. Alternatively, get
+        # only the reads that are unmapped AFter the splitmapping. However,
+        # check out that that file really mans what you think it means.
         utr_polyAs, at_numbers = get_polyA_utr(polyA_bed_path, utrfile_path)
 
     # Cluster the poly(A) reads for each utr_id. If polyA is false or no polyA
     # reads were found, return a placeholder, since this variable is assumed to
-    # exist in downstream code.
-    polyA_reads = cluster_polyAs(settings, utr_polyAs, utr_exons, polyA)
+    # exist in downstream code. Further, save the tail information in the
+    # clustering somehow
+    polyA_clusters = cluster_polyAs(settings, utr_polyAs, region_coords, polyA)
+
+    if polyA:
+        tx = time.time()
+        print('Fetching the sequences downstream poly(A) sites ...')
+        pA_seqs = downstream_sequence(settings, polyA_clusters, region_coords)
+        print('\tTime to get sequences: {0}\n'.format(time.time() - tx))
 
     if polyA:
         output_path = os.path.join(output_dir, dset_id+'_polyA_statistics')
-        write_polyA_stats(polyA_reads, acount, tcount, at_numbers,
-                          total_reads, utr_exons, output_path, settings)
+        write_polyA_stats(polyA_clusters, acount, tcount, at_numbers,
+                          total_reads, region_coords, output_path, settings)
 
     if get_length:
         # Get RPKM and coverage, and write to file
 
         # Get the RPKM, if you get lengths
         print('Obtaining RPKM for {0} ...\n'.format(dset_id))
-        rpkm = get_rpkm(bed_reads, utrfile_path, total_mapped_reads, utr_exons,
+        rpkm = get_rpkm(bed_reads, utrfile_path, total_mapped_reads, region_coords,
                         extendby, dset_id)
 
         # Cover the 3UTRs with the reads, if you get lengths
@@ -2240,9 +2400,10 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs, settings,
 
         # Collect read coverage for each 3UTR exon, join the multi-exon 3UTRs,
         # and write to file the parameters you calculate
+        # TODO fetch the utr seqs on demand inside the below function
         print('Writing output files... {0} ...\n'.format(dset_id))
-        output_files = output_writer(dset_id, coverage_path, annotation,
-                                     utr_seqs, rpkm, polyA_reads, settings,
+        output_files = output_writer(dset_id, coverage_path, annotation, rpkm,
+                                     polyA_clusters, settings,
                                      total_mapped_reads, output_dir, polyA)
 
         # Get the paths to the two output files explicitly
@@ -2253,16 +2414,17 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, utr_seqs, settings,
                           'polyA':polyA_output}}
     else:
         # Just get the poly(A) output
-        only_pA = only_polyA_writer(dset_id, annotation, utr_seqs, polyA_reads,
+        only_path = only_polyA_writer(dset_id, annotation, pA_seqs, polyA_clusters,
                                     settings, output_dir)
 
-        return {dset_id: {'only_polyA': only_pA}}
+        debug()
+        return {dset_id: {'only_polyA': only_path}}
 
     print('Total time for {0}: {1}\n'.format(dset_id, time.time() - t0))
 
 
 def write_polyA_stats(polyA_reads, acount, tcount, at_numbers, total_nr_reads,
-                      utr_exons, output_path, settings):
+                      region_coords, output_path, settings):
     """
     File for outputting basic polyA statistics. These statistics make most sense
     in 3UTR regions, because we know the orientation of the transcripts. In
@@ -2324,7 +2486,7 @@ def write_polyA_stats(polyA_reads, acount, tcount, at_numbers, total_nr_reads,
         clusters += len(strand_stats['minus_strand'][0])
         clusters += len(strand_stats['plus_strand'][0])
 
-        if utr_exons[utr][3] == '+':
+        if region_coords[utr][3] == '+':
             this_strand_reads = sum(strand_stats['plus_strand'][1], [])
             other_strand_reads = sum(strand_stats['minus_strand'][1], [])
             other_strand_clstrs = strand_stats['minus_strand'][0]
@@ -2348,10 +2510,8 @@ def write_polyA_stats(polyA_reads, acount, tcount, at_numbers, total_nr_reads,
                         both_strand_count += 1
                         movers += 1
 
-            # Estimating the chance of moving strands by chance
-
             # length of this exon
-            exon_len = utr_exons[utr][2]-utr_exons[utr][1]
+            exon_len = region_coords[utr][2]-region_coords[utr][1]
 
             # Number of clustersClusters in 
             cls_nr = len(other_strand_clstrs)
@@ -2419,17 +2579,17 @@ def write_polyA_stats(polyA_reads, acount, tcount, at_numbers, total_nr_reads,
         for keyw in ['this_strand', 'other_strand']:
 
             # Add total and unique reads for the clusters
-            if utr_exons[utr][3] == '+' and keyw == 'this_strand':
-                (cls_centers, cls_all_reads) = strand_stats['plus_strand']
+            if region_coords[utr][3] == '+' and keyw == 'this_strand':
+                (cls_centers, cls_all_reads, info) = strand_stats['plus_strand']
 
-            if utr_exons[utr][3] == '+' and keyw == 'other_strand':
-                (cls_centers, cls_all_reads) = strand_stats['minus_strand']
+            if region_coords[utr][3] == '+' and keyw == 'other_strand':
+                (cls_centers, cls_all_reads, info) = strand_stats['minus_strand']
 
-            if utr_exons[utr][3] == '-' and keyw == 'this_strand':
-                (cls_centers, cls_all_reads) = strand_stats['minus_strand']
+            if region_coords[utr][3] == '-' and keyw == 'this_strand':
+                (cls_centers, cls_all_reads, info) = strand_stats['minus_strand']
 
-            if utr_exons[utr][3] == '-' and keyw == 'other_strand':
-                (cls_centers, cls_all_reads) = strand_stats['plus_strand']
+            if region_coords[utr][3] == '-' and keyw == 'other_strand':
+                (cls_centers, cls_all_reads, info) = strand_stats['plus_strand']
 
             for cls_center, cls_reads in zip(cls_centers, cls_all_reads):
                 distributions[keyw]['total_reads'].append(len(cls_reads))
@@ -2477,9 +2637,9 @@ def write_polyA_stats(polyA_reads, acount, tcount, at_numbers, total_nr_reads,
                      .format(strand_way, unique_std))
     handle.close()
 
-def only_polyA_writer(dset_id, annotation, utr_seqs, polyA_reads, settings,
+def only_polyA_writer(dset_id, annotation, pA_seqs, polyA_reads, settings,
                       output_dir):
-    """ If only poly(A) is asked for, skip the footprint-heavy "output_writer"
+    """ If only poly(A) is asked for, skip the footprint-heavy "outpt_writer"
     and use this special method for just writing poly(A) output.
 
     Thus you must remove the coverage and RPKM parameters from the
@@ -2502,6 +2662,7 @@ def only_polyA_writer(dset_id, annotation, utr_seqs, polyA_reads, settings,
                     'strand',
                     'polyA_coordinate',
                     'polyA_coordinate_strand',
+                    'polyA_average_composition',
                     'annotated_polyA_distance',
                     'nearby_PAS',
                     'PAS_distance',
@@ -2518,7 +2679,7 @@ def only_polyA_writer(dset_id, annotation, utr_seqs, polyA_reads, settings,
 
     # Get dict with annotated poly(A) sites and dict with utr exons
     a_polyA_sites_dict = annotation.a_polyA_sites_dict
-    utr_exons = annotation.utr_exons
+    region_coords = annotation.region_coords
 
     polyA_outpath = os.path.join(output_dir, 'onlypolyA_'+dset_id)
     polyA_outfile = open(polyA_outpath, 'wb')
@@ -2526,21 +2687,13 @@ def only_polyA_writer(dset_id, annotation, utr_seqs, polyA_reads, settings,
     # Write header to the columns
     polyA_outfile.write('\t'.join(output_order)+'\n')
 
-    # If the region is not with annotated strand: write poly(A) sites from both
-    # strands. Should I do this here or at the end? If I do it here, I will
-    # double-write those that are common (they will be very few, of course).
-    # Keep in mind that this is all for the analysis. Other uses will have other
-    # demands. For the users, you should respect the strands they give you. You
-    # need a flag for this. like settings non_stranded.
-
-    for utr_id, polyA_dict in polyA_reads.iteritems():
+    for feature_id, polyA_dict in polyA_reads.iteritems():
         # Skip those that don't have any reads in them 
         if polyA_dict == {'plus_strand': [[], []], 'minus_strand': [[], []]}:
             continue
 
-        (chrm, beg, end, strand) = utr_exons[utr_id]
-        annotated_pA_sites = a_polyA_sites_dict[utr_id]
-        sequence = utr_seqs[utr_id]
+        (chrm, beg, end, strand) = region_coords[feature_id]
+        annotated_pA_sites = a_polyA_sites_dict[feature_id]
 
         # you need to go through both plus and minus strands and write the
         # clusters for each. this will change a lot of downstream readings.
@@ -2552,8 +2705,7 @@ def only_polyA_writer(dset_id, annotation, utr_seqs, polyA_reads, settings,
             if pm_strand == 'plus_strand':
                 pA_coord_strand = '+'
 
-            for cls_center, cls_reads in zip(*cluster_list):
-                polyA_coordinate = cls_center
+            for cls_center, cls_reads, tail_info in zip(*cluster_list):
                 annotated_polyA_distance = annotation_dist(cls_center,
                                                            annotated_pA_sites,
                                                            strand)
@@ -2562,6 +2714,7 @@ def only_polyA_writer(dset_id, annotation, utr_seqs, polyA_reads, settings,
 
                 # getting PAS. If annotation exists, look at the annotated strand.
                 # If not, look at the "other strand" than the poly(A) read maps to.
+                sequence = pA_seqs[feature_id][pm_strand][cls_center]
                 (nearby_PAS, PAS_distance) = get_pas_and_distance(rpoint,
                                                                   pas_patterns,
                                                                   sequence,
@@ -2578,12 +2731,13 @@ def only_polyA_writer(dset_id, annotation, utr_seqs, polyA_reads, settings,
                                                      cls_reads])/len(cls_reads))
 
                 output_dict = {'chrm':chrm, 'beg': str(beg), 'end': str(end),
-                           'utr_ID': utr_id, 'strand': strand,
-                           'polyA_coordinate': str(polyA_coordinate),
+                           'utr_ID': feature_id, 'strand': strand,
+                           'polyA_coordinate': str(cls_center),
                            'polyA_coordinate_strand': pA_coord_strand,
                            'annotated_polyA_distance':str(annotated_polyA_distance),
                            'nearby_PAS': nearby_PAS,
                            'PAS_distance': PAS_distance,
+                           'polyA_average_composition': tail_info,
                            'number_supporting_reads': str(number_supporting_reads),
                            'number_unique_supporting_reads':\
                            str(number_unique_supporting_reads),
@@ -3070,6 +3224,10 @@ def main():
     # Create the settings object from the settings file
     settings = Settings(*read_settings(settings_file))
 
+    # some debugging settings
+    settings.chr1 = True
+    settings.read_limit = 500000
+
     # You can chose to not simulate. Only purpose is to make bigwigs.
     #simulate = False
     simulate = True
@@ -3082,7 +3240,9 @@ def main():
     # The program reads a lot of information from the annotation. The annotation
     # object will hold this information (file-paths and datastructures).
     print('Reading settings ...\n')
-    annotation = Annotation(settings.annotation_path, settings.annotation_format)
+    annotation = Annotation(settings.annotation_path,
+                            settings.annotation_format,
+                            settings.annotated_polyA_sites)
 
     # DEBUGGING: only the first two regions
     #settings.region_files = settings.region_files[:2]
@@ -3106,24 +3266,12 @@ def piperunner(settings, annotation, simulate, DEBUGGING, beddir, tempdir,
     # NOTE: for the 3'terminal exons, the beg/end is the extended value. For
     # internal exons, the beg/end are not extended.
     print('Making data structures ...\n')
-    annotation.utr_exons = annotation.get_utrdict()
+    annotation.region_coords = annotation.get_utrdict()
 
-    # You extract all annotated polyA sites into a bedfile: a_polyA_sites_path
-
-    # Note: you have a better one now. The merger of the poly(A) DB with the
-    # GENCODE annotatted polyA sites.
-    #annotation.a_polyA_sites_path = get_a_polyA_sites_path(settings, beddir)
-    a_path = os.path.join(beddir, 'annotated_polyAdb_gencode_merged.bed')
-    if settings.chr1 == True:
-        a_path = os.path.join(beddir, 'annotated_polyAdb_gencode_merged_chr1.bed')
-
-    #annotation.a_polyA_sites_path = get_a_polyA_sites_path(settings, beddir)
-    annotation.a_polyA_sites_path = a_path
-
-    # You intersect the annotated polyA files with the 3UTR bedfile you got from
-    # the annotation. Put the intersected annotated polyA sites in a dictionary.
+    # You intersect the annotated polyA files with the region file provided.
+    # Put the intersected annotated polyA sites in a dictionary.
     print('Making data structures for annotated poly(A) sites ...\n')
-    annotation.a_polyA_sites_dict = annotation.get_polyA_dict()
+    annotation.a_polyA_sites_dict = annotation.get_polyA_dict(settings.chr1)
 
     # If this is true, the poly(A) reads will be saved after getting them. That
     # will save all that reading. They will only be saved if you run with no
@@ -3139,13 +3287,6 @@ def piperunner(settings, annotation, simulate, DEBUGGING, beddir, tempdir,
 
     ##################################################################
     if simulate:
-        # For all 3UTR exons, get the genomic sequence. The sequence is needed
-        # to look for PAS sites.
-        tx = time.time() # time the operation
-        print('Fetching the sequences of the supplied genomic regions ...')
-        utr_seqs = genome.get_seqs(annotation.utr_exons, settings.hgfasta_path)
-        print('\tTime to get sequences: {0}\n'.format(time.time() - tx))
-
         # Create a pool of processes; one dataset will take up one process.
         my_pool = Pool(processes = settings.max_cores)
         results = []
@@ -3160,43 +3301,43 @@ def piperunner(settings, annotation, simulate, DEBUGGING, beddir, tempdir,
             dset_id = dset_id + '_' + region
 
             # The arguments needed for the pipeline
-            arguments = (dset_id, dset_reads, tempdir, output_dir, utr_seqs,
-                         settings, annotation, DEBUGGING, polyA_cache, here)
+            arguments = (dset_id, dset_reads, tempdir, output_dir, settings,
+                         annotation, DEBUGGING, polyA_cache, here)
 
             ###### FOR DEBUGGING ######
-            #akk = pipeline(*arguments)
+            akk = pipeline(*arguments)
             ###########################
 
-            result = my_pool.apply_async(pipeline, arguments)
-            results.append(result)
+            #result = my_pool.apply_async(pipeline, arguments)
+            #results.append(result)
 
-        #debug()
-        my_pool.close()
-        my_pool.join()
+        debug()
+        #my_pool.close()
+        #my_pool.join()
 
-         #Get the paths from the final output
-        outp = [result.get() for result in results]
+         ##Get the paths from the final output
+        #outp = [result.get() for result in results]
 
-        # Print the total elapsed time
-        print('Total elapsed time: {0}\n'.format(time.time()-t1))
+        ## Print the total elapsed time
+        #print('Total elapsed time: {0}\n'.format(time.time()-t1))
 
-        # create output dictionaries
-        coverage, final_outp_length, final_outp_polyA = {}, {}, {}
+        ## create output dictionaries
+        #coverage, final_outp_length, final_outp_polyA = {}, {}, {}
 
-        # Now copy over the output that was in temp-files but that you want to
-        # have in output files
-        for line in outp:
-            # If this is a only-polyA-run, don't move stuff
-            if 'only_polyA' in line[line.keys()[0]].keys():
-                break
-            for key, value in line.items():
-                coverage[key] = value['coverage']
-                final_outp_polyA[key] = value['polyA']
-                final_outp_length[key] = value['length']
+        ## Now copy over the output that was in temp-files but that you want to
+        ## have in output files
+        #for line in outp:
+            ## If this is a only-polyA-run, don't move stuff
+            #if 'only_polyA' in line[line.keys()[0]].keys():
+                #break
+            #for key, value in line.items():
+                #coverage[key] = value['coverage']
+                #final_outp_polyA[key] = value['polyA']
+                #final_outp_length[key] = value['length']
 
-        # Copy output from temp-dir do output-dir
-        save_output(final_outp_polyA, output_dir)
-        save_output(final_outp_length, output_dir)
+        ## Copy output from temp-dir do output-dir
+        #save_output(final_outp_polyA, output_dir)
+        #save_output(final_outp_length, output_dir)
 
     ##################################################################
 
