@@ -994,8 +994,8 @@ def zcat_wrapper(dset_id, bed_reads, read_limit, out_path, polyA, polyA_path,
     # 7) ratio denominator must b
     # 8) TODO if 1/5, also accept and iteratively trim 2/10!
 
-    min_length = 4
-    ratio_denominator = 5
+    min_length = 5
+    ratio_denominator = 6
     rd = ratio_denominator
 
     min_A = 'A'*min_length
@@ -1071,7 +1071,6 @@ def zcat_wrapper(dset_id, bed_reads, read_limit, out_path, polyA, polyA_path,
                         polyA_file.write(a_strip + ' A '+tail_rep+'\n')
                         acount += 1
 
-
     out_file.close()
     polyA_file.close()
 
@@ -1102,10 +1101,8 @@ def strip_tailA(seq, trail_A, non_A, min_length, rd, min_A):
     if seq[-2*rd:].count('A') >=2*rd-2:
         # First remove the non-A characters
         # Then remove all trailing As
-        debug()
         seq = strip_tailA(trail_A.sub('', non_A.sub('', seq[::-1], count=2),
                            count=1)[::-1], trail_A, non_A, min_length, rd, min_A)
-        debug()
 
     return seq
 
