@@ -6,7 +6,6 @@ from __future__ import division
 
 def run_from_ipython():
     try:
-        #__IPYTHON__ in pre 0.11 ...
         __IPYTHON__active
         return True
     except NameError:
@@ -14,8 +13,8 @@ def run_from_ipython():
 
 # only get the debug functio prop
 if run_from_ipython():
-    #from IPython.Debugger import Tracer
-    from IPython.core.debugger import Tracer
+    from IPython.Debugger import Tracer
+    #from IPython.core.debugger import Tracer
     debug = Tracer()
 else:
     def debug(): pass
@@ -1546,18 +1545,18 @@ def get_seqs(utr_dict, hgfasta):
     Use the *pyfasta* module to get sequences quickly from an indexed version
     of the human genome fasta file.
 
-    :returns: *utr_dict*, an exon -> sequence dictionary
+    :returns: *utr_dict*, a region -> sequence dictionary
     """
     f = Fasta(hgfasta, record_class=FastaRecord)
     #f = Fasta(hgfasta)
     seq_dict = {}
-    for ts_id, ts_param in utr_dict.iteritems():
-        (chrm, beg, end, strand) = ts_param
+    for reg_id, reg_param in utr_dict.iteritems():
+        (chrm, beg, end, strand) = reg_param
         if strand == '+':
-            seq_dict[ts_id] = f.sequence({'chr':chrm,'start':beg+1, 'stop':end-1,
+            seq_dict[reg_id] = f.sequence({'chr':chrm,'start':beg+1, 'stop':end-1,
                                           'strand':strand}).upper()
         if strand == '-':
-            seq_dict[ts_id] = f.sequence({'chr':chrm,'start':beg+2, 'stop':end,
+            seq_dict[reg_id] = f.sequence({'chr':chrm,'start':beg+2, 'stop':end,
                                           'strand':strand}).upper()
     return seq_dict
 
@@ -1615,7 +1614,6 @@ def only_introns_exons(transcripts, genes, chr1, gene_limit):
         if gene_count[ts.gene_id] > gene_limit:
             continue
 
-        t_type = ts.t_type
         strand = ts.strand
 
         if strand == '+':
@@ -1635,7 +1633,8 @@ def only_introns_exons(transcripts, genes, chr1, gene_limit):
             for nr, entry in enumerate(ex_or_int):
                 nr = nr+1 # 1-centered numbering ;)
                 chrm, beg, end, strand = entry
-                bedformat = '\t'.join([chrm, str(beg), str(end), str(nr), t_type,
+                name = ':'.join([ts.t_type, ts_id, str(nr)])
+                bedformat = '\t'.join([chrm, str(beg), str(end), name, str(nr),
                                   strand])
 
                 handle.write(bedformat + '\n')
