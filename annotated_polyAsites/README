@@ -1,5 +1,5 @@
-I'm merging the annotated poly(A) sites of polyADB with the annotated sites of
-GENCODE
+#I'm merging the annotated poly(A) sites of polyADB with the annotated sites of
+#GENCODE. First you need to gather the annotated polyA sites from GENCODE (ftp.sanger..) and the poly(A)db files (from USCS).
 
 # get the annotated polyA sites from the gencode annotation
 awk '{if ($3=="polyA_site") print $1"\t"$4"\t"$5"\t"$3"\t"$6"\t"$7'} gencode.v7.polyAs.gtf > gencode_polyA.bed 
@@ -19,10 +19,18 @@ intersectBed -s -a exended_polyAdb.bed -b gencode_polyA.bed | wc -l
 
 # so 75% of GENCODE poly(A) can be found in the polyA db.
 
-# take the union of both non-extended poly(A) annotations and merge them
-# this results in the file that is finally used
+# take the union of both non-extended poly(A) annotations and merge them. Finally center the result using awk.
 
-cat polyA_db.bed gencode_polyA.bed | slopBed -s -i stdin -g ../ext_files/hg19 -l 20 -r 20 | mergeBed -s -i stdin > polyAdb_gencode_merged.bed
+cat polyA_db.bed gencode_polyA.bed | slopBed -s -i stdin -g ../ext_files/hg19 -l 20 -r 20 | mergeBed -s -i stdin | awk '{print $1, int(($2+$3)/2), int((($2+$3)/2)+1), $4}' OFS='\t' > polyAdb_gencode_merged.bed
+
 
 wc -l polyAdb_gencode_merged.bed
 50696
+
+# finally, separate out chromosome 1 if you want to.
+grep 'chr1[[:blank:]]' polyAdb_gencode_merged.bed > polyAdb_gencode_merged_chr1.bed 
+
+wc -l polyAdb_gencode_merged_chr1.bed 
+4926 polyAdb_gencode_merged_chr1.bed
+
+

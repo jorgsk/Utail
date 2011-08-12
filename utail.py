@@ -989,8 +989,6 @@ def zcat_wrapper(dset_id, bed_reads, read_limit, out_path, polyA, polyA_path,
     cmd = ['zcat', '-f'] + bed_reads
     f = Popen(cmd, stdout=PIPE)
 
-    # for speedruns
-
     for map_line in f.stdout:
         try:
             (ID, seq, quality, mapinfo, position) = map_line.split('\t')
