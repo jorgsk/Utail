@@ -992,7 +992,11 @@ def zcat_wrapper(dset_id, bed_reads, read_limit, out_path, polyA, polyA_path,
     # for speedruns
 
     for map_line in f.stdout:
-        (ID, seq, quality, mapinfo, position) = map_line.split('\t')
+        try:
+            (ID, seq, quality, mapinfo, position) = map_line.split('\t')
+        except ValueError:
+            print('Error in reading form unmapped reads')
+            continue
 
         total_reads +=1
 
@@ -2104,6 +2108,8 @@ def cluster_polyAs(settings, utr_polyAs, utrs, polyA):
 
         polyA_reads[utr_id] = {'plus_strand': cluster_loop(sorted(plus_sites)),
                                'minus_strand': cluster_loop(sorted(minus_sites))}
+        if utr_id == '100778325':
+            debug()
 
     # For those utr_id that don't have a cluster, give them an empty list; ad hoc
     for utr_id in utrs:
@@ -3113,9 +3119,9 @@ def piperunner(settings, annotation, simulate, DEBUGGING, beddir, tempdir,
     # Note: you have a better one now. The merger of the poly(A) DB with the
     # GENCODE annotatted polyA sites.
     #annotation.a_polyA_sites_path = get_a_polyA_sites_path(settings, beddir)
-    a_path = os.path.join(beddir, 'annotated_polyAdb_gencode_merged.bed')
+    a_path = os.path.join(beddir, 'polyAdb_gencode_merged.bed')
     if settings.chr1 == True:
-        a_path = os.path.join(beddir, 'annotated_polyAdb_gencode_merged_chr1.bed')
+        a_path = os.path.join(beddir, 'polyAdb_gencode_merged_chr1.bed')
 
     #annotation.a_polyA_sites_path = get_a_polyA_sites_path(settings, beddir)
     annotation.a_polyA_sites_path = a_path
@@ -3164,45 +3170,45 @@ def piperunner(settings, annotation, simulate, DEBUGGING, beddir, tempdir,
                          settings, annotation, DEBUGGING, polyA_cache, here)
 
             ###### FOR DEBUGGING ######
-            #akk = pipeline(*arguments)
+            akk = pipeline(*arguments)
             ###########################
 
-            result = my_pool.apply_async(pipeline, arguments)
-            results.append(result)
+            #result = my_pool.apply_async(pipeline, arguments)
+            #results.append(result)
 
         #debug()
-        my_pool.close()
-        my_pool.join()
+        #my_pool.close()
+        #my_pool.join()
 
-         #Get the paths from the final output
-        outp = [result.get() for result in results]
+         ##Get the paths from the final output
+        #outp = [result.get() for result in results]
 
-        # Print the total elapsed time
-        print('Total elapsed time: {0}\n'.format(time.time()-t1))
+        ## Print the total elapsed time
+        #print('Total elapsed time: {0}\n'.format(time.time()-t1))
 
-        # create output dictionaries
-        coverage, final_outp_length, final_outp_polyA = {}, {}, {}
+        ## create output dictionaries
+        #coverage, final_outp_length, final_outp_polyA = {}, {}, {}
 
-        # Now copy over the output that was in temp-files but that you want to
-        # have in output files
-        for line in outp:
-            # If this is a only-polyA-run, don't move stuff
-            if 'only_polyA' in line[line.keys()[0]].keys():
-                break
-            for key, value in line.items():
-                coverage[key] = value['coverage']
-                final_outp_polyA[key] = value['polyA']
-                final_outp_length[key] = value['length']
+        ## Now copy over the output that was in temp-files but that you want to
+        ## have in output files
+        #for line in outp:
+            ## If this is a only-polyA-run, don't move stuff
+            #if 'only_polyA' in line[line.keys()[0]].keys():
+                #break
+            #for key, value in line.items():
+                #coverage[key] = value['coverage']
+                #final_outp_polyA[key] = value['polyA']
+                #final_outp_length[key] = value['length']
 
-        # Copy output from temp-dir do output-dir
-        save_output(final_outp_polyA, output_dir)
-        save_output(final_outp_length, output_dir)
+        ## Copy output from temp-dir do output-dir
+        #save_output(final_outp_polyA, output_dir)
+        #save_output(final_outp_length, output_dir)
 
-    ##################################################################
+    ###################################################################
 
-    # if set, make bigwig files
-    if settings.bigwig:
-        make_bigwigs(settings, annotation, tempdir, output_dir, here)
+    ## if set, make bigwig files
+    #if settings.bigwig:
+        #make_bigwigs(settings, annotation, tempdir, output_dir, here)
 
 if __name__ == '__main__':
     main()

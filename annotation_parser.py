@@ -6,7 +6,6 @@ from __future__ import division
 
 def run_from_ipython():
     try:
-        #__IPYTHON__ in pre 0.11 ...
         __IPYTHON__active
         return True
     except NameError:
@@ -14,8 +13,7 @@ def run_from_ipython():
 
 # only get the debug functio prop
 if run_from_ipython():
-    #from IPython.Debugger import Tracer
-    from IPython.core.debugger import Tracer
+    from IPython.Debugger import Tracer
     debug = Tracer()
 else:
     def debug(): pass
