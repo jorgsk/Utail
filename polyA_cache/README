@@ -1,0 +1,11 @@
+Files in this directory must be named like this
+
+'polyA_reads_' + dset + '.bed'
+
+Example:
+
+polyA_reads_HeLa-S3_Whole_Cell.bed
+
+
+The 'dsets' must be in the UTR_SETTINGS file under 'PLOTTING'. Only then
+will the classic_polyA_stats() in results.py work.
