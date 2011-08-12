@@ -126,7 +126,7 @@ class Annotation(object):
         self.path = annotation_path
         self.ant_format = annotation_format
         self.utrfile_path = ''
-        self.region_coords = ''
+        self.feature_coords = ''
         self.a_polyA_sites_path = a_polyA_sites_path
         self.a_polyA_sites_dict = ''
 
@@ -179,7 +179,7 @@ class Annotation(object):
 
         # For the multi-exon utrs, add [] (they will probably not intersect with
         # annotated polyA sites.
-        for utr_id in self.region_coords.iterkeys():
+        for utr_id in self.feature_coords.iterkeys():
             if utr_id not in polyA_dict:
                 polyA_dict[utr_id] = []
 
@@ -1009,7 +1009,12 @@ def zcat_wrapper(dset_id, bed_reads, read_limit, out_path, polyA, polyA_path,
     non_T = re.compile('[^T]')
 
     for map_line in f.stdout:
-        (ID, seq, quality, mapinfo, position) = map_line.split('\t')
+        #
+        try:
+            (ID, seq, quality, mapinfo, position) = map_line.split('\t')
+        except ValueError:
+            print 'read error from line {0} in {1} '.format(map_line, bed_reads)
+            continue
 
         total_reads +=1
 
@@ -1175,7 +1180,7 @@ def output_writer(dset_id, coverage, annotation, rpkm, polyA_reads, settings,
     """
 
     a_polyA_sites_dict = annotation.a_polyA_sites_dict
-    region_coords = annotation.region_coords
+    feature_coords = annotation.feature_coords
 
     (dirpath, basename) = os.path.split(coverage)
 
@@ -1232,7 +1237,7 @@ def output_writer(dset_id, coverage, annotation, rpkm, polyA_reads, settings,
                                        'utr-length', 'strand']) + '\n')
 
     # Assert that the file information is the same as you started with
-    assert region_coords[utr_ID] == (chrm, int(beg), int(end), strand), 'Mismatch'
+    assert feature_coords[utr_ID] == (chrm, int(beg), int(end), strand), 'Mismatch'
 
     # staring reading from line nr 2
     for line in read_from:
@@ -1307,7 +1312,7 @@ def output_writer(dset_id, coverage, annotation, rpkm, polyA_reads, settings,
                 pAread_output = PolyAReads(utr_ID)
 
             # Assert that the next utr has correct info
-            assert region_coords[utr_ID] == (chrm, int(beg), int(end),
+            assert feature_coords[utr_ID] == (chrm, int(beg), int(end),
                                          strand), 'Mismatch'
 
     # Close opened files
@@ -2200,7 +2205,7 @@ def cluster_polyAs(settings, utr_polyAs, utrs, polyA):
 
     return polyA_reads
 
-def downstream_sequence(settings, polyA_clusters, region_coords):
+def downstream_sequence(settings, polyA_clusters, feature_coords):
     """
     For each of the poly(A) clusters, get the nucleotide sequence 40 nt
     downsteam. Look for PAS, and determine their distance and nature, preferably
@@ -2214,7 +2219,7 @@ def downstream_sequence(settings, polyA_clusters, region_coords):
     strandgetter = {'plus_strand': '+',
                     'minus_strand': '-'}
 
-    #pA_seqs = genome.get_seqs(annotation.region_coords, settings.hgfasta_path)
+    #pA_seqs = genome.get_seqs(annotation.feature_coords, settings.hgfasta_path)
     pA_seqs = {}
     for reg_id, pm_dict in polyA_clusters.iteritems():
         orient_dict = {}
@@ -2230,7 +2235,7 @@ def downstream_sequence(settings, polyA_clusters, region_coords):
             orient_dict[orientation] = {}
             center_dict = {}
             for center in centers:
-                chrm = region_coords[reg_id][0]
+                chrm = feature_coords[reg_id][0]
 
                 if strandgetter[orientation] == '+':
                     beg = center - 40
@@ -2267,7 +2272,7 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, settings, annotation,
     read_limit = settings.read_limit
     polyA = settings.polyA
     get_length = settings.get_length
-    region_coords = annotation.region_coords
+    feature_coords = annotation.feature_coords
 
     # Define utr_polyAs in case polyA is false
     utr_polyAs = {}
@@ -2370,25 +2375,25 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, settings, annotation,
     # reads were found, return a placeholder, since this variable is assumed to
     # exist in downstream code. Further, save the tail information in the
     # clustering somehow
-    polyA_clusters = cluster_polyAs(settings, utr_polyAs, region_coords, polyA)
+    polyA_clusters = cluster_polyAs(settings, utr_polyAs, feature_coords, polyA)
 
     if polyA:
         tx = time.time()
         print('Fetching the sequences downstream poly(A) sites ...')
-        pA_seqs = downstream_sequence(settings, polyA_clusters, region_coords)
+        pA_seqs = downstream_sequence(settings, polyA_clusters, feature_coords)
         print('\tTime to get sequences: {0}\n'.format(time.time() - tx))
 
     if polyA:
         output_path = os.path.join(output_dir, dset_id+'_polyA_statistics')
         write_polyA_stats(polyA_clusters, acount, tcount, at_numbers,
-                          total_reads, region_coords, output_path, settings)
+                          total_reads, feature_coords, output_path, settings)
 
     if get_length:
         # Get RPKM and coverage, and write to file
 
         # Get the RPKM, if you get lengths
         print('Obtaining RPKM for {0} ...\n'.format(dset_id))
-        rpkm = get_rpkm(bed_reads, utrfile_path, total_mapped_reads, region_coords,
+        rpkm = get_rpkm(bed_reads, utrfile_path, total_mapped_reads, feature_coords,
                         extendby, dset_id)
 
         # Cover the 3UTRs with the reads, if you get lengths
@@ -2414,14 +2419,13 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, settings, annotation,
         only_path = only_polyA_writer(dset_id, annotation, pA_seqs, polyA_clusters,
                                     settings, output_dir)
 
-        debug()
         return {dset_id: {'only_polyA': only_path}}
 
     print('Total time for {0}: {1}\n'.format(dset_id, time.time() - t0))
 
 
 def write_polyA_stats(polyA_reads, acount, tcount, at_numbers, total_nr_reads,
-                      region_coords, output_path, settings):
+                      feature_coords, output_path, settings):
     """
     File for outputting basic polyA statistics. These statistics make most sense
     in 3UTR regions, because we know the orientation of the transcripts. In
@@ -2483,7 +2487,7 @@ def write_polyA_stats(polyA_reads, acount, tcount, at_numbers, total_nr_reads,
         clusters += len(strand_stats['minus_strand'][0])
         clusters += len(strand_stats['plus_strand'][0])
 
-        if region_coords[utr][3] == '+':
+        if feature_coords[utr][3] == '+':
             this_strand_reads = sum(strand_stats['plus_strand'][1], [])
             other_strand_reads = sum(strand_stats['minus_strand'][1], [])
             other_strand_clstrs = strand_stats['minus_strand'][0]
@@ -2508,7 +2512,7 @@ def write_polyA_stats(polyA_reads, acount, tcount, at_numbers, total_nr_reads,
                         movers += 1
 
             # length of this exon
-            exon_len = region_coords[utr][2]-region_coords[utr][1]
+            exon_len = feature_coords[utr][2]-feature_coords[utr][1]
 
             # Number of clustersClusters in 
             cls_nr = len(other_strand_clstrs)
@@ -2576,16 +2580,16 @@ def write_polyA_stats(polyA_reads, acount, tcount, at_numbers, total_nr_reads,
         for keyw in ['this_strand', 'other_strand']:
 
             # Add total and unique reads for the clusters
-            if region_coords[utr][3] == '+' and keyw == 'this_strand':
+            if feature_coords[utr][3] == '+' and keyw == 'this_strand':
                 (cls_centers, cls_all_reads, info) = strand_stats['plus_strand']
 
-            if region_coords[utr][3] == '+' and keyw == 'other_strand':
+            if feature_coords[utr][3] == '+' and keyw == 'other_strand':
                 (cls_centers, cls_all_reads, info) = strand_stats['minus_strand']
 
-            if region_coords[utr][3] == '-' and keyw == 'this_strand':
+            if feature_coords[utr][3] == '-' and keyw == 'this_strand':
                 (cls_centers, cls_all_reads, info) = strand_stats['minus_strand']
 
-            if region_coords[utr][3] == '-' and keyw == 'other_strand':
+            if feature_coords[utr][3] == '-' and keyw == 'other_strand':
                 (cls_centers, cls_all_reads, info) = strand_stats['plus_strand']
 
             for cls_center, cls_reads in zip(cls_centers, cls_all_reads):
@@ -2676,7 +2680,7 @@ def only_polyA_writer(dset_id, annotation, pA_seqs, polyA_reads, settings,
 
     # Get dict with annotated poly(A) sites and dict with utr exons
     a_polyA_sites_dict = annotation.a_polyA_sites_dict
-    region_coords = annotation.region_coords
+    feature_coords = annotation.feature_coords
 
     polyA_outpath = os.path.join(output_dir, 'onlypolyA_'+dset_id)
     polyA_outfile = open(polyA_outpath, 'wb')
@@ -2689,7 +2693,7 @@ def only_polyA_writer(dset_id, annotation, pA_seqs, polyA_reads, settings,
         if polyA_dict == {'plus_strand': [[], []], 'minus_strand': [[], []]}:
             continue
 
-        (chrm, beg, end, strand) = region_coords[feature_id]
+        (chrm, beg, end, strand) = feature_coords[feature_id]
         annotated_pA_sites = a_polyA_sites_dict[feature_id]
 
         # you need to go through both plus and minus strands and write the
@@ -3222,8 +3226,8 @@ def main():
     settings = Settings(*read_settings(settings_file))
 
     # some debugging settings
-    settings.chr1 = True
-    settings.read_limit = 500000
+    #settings.chr1 = True
+    #settings.read_limit = 500000
 
     # You can chose to not simulate. Only purpose is to make bigwigs.
     #simulate = False
@@ -3259,11 +3263,11 @@ def piperunner(settings, annotation, simulate, DEBUGGING, beddir, tempdir,
     annotation.utrfile_path = get_utr_path(settings, beddir,
                                            rerun_annotation_parser, region_file)
 
-    # Get dictionary with (chrm, beg, end, strand) values for each 3utr-exon key
-    # NOTE: for the 3'terminal exons, the beg/end is the extended value. For
-    # internal exons, the beg/end are not extended.
+    # Get dictionary with (chrm, beg, end, strand) values for each feature
+    # (feature = 3utr-exonic, intergenic, etc). Note that the values may be
+    # extended if so desired in the program code.
     print('Making data structures ...\n')
-    annotation.region_coords = annotation.get_utrdict()
+    annotation.feature_coords = annotation.get_utrdict()
 
     # You intersect the annotated polyA files with the region file provided.
     # Put the intersected annotated polyA sites in a dictionary.
