@@ -5679,24 +5679,7 @@ def main():
 
     ##### get the before/after coverage ratios for trusted epsilon ends
     #before_after_ratio(dsets)
-
-    # RESULT the before/after ratio is not as informative as we had hoped.
-    # I should print out a good few of them that have ratios in the gray zone
-    # and check them in the browser. However, this could just mean that the
-    # ratio is not important for classifying ends. The cause of this could be
-    # the intrinsic variablity in the read coverage.
-    # TODO check it in the browser to see if our intutition is correct ... !:)
-    # For the non-beyond_aTTS ones.
-
-    # TODO the only way to compare polyA presence between cell compartments
-    # would be to do so for 3UTRs with rpkm > 40 or so. You won't have many
-    # samples, but they should hold true. It would be easy. Do what you did for
-    # novelcount but do it for each sub-compartment. Then query somewhere else
-    # to get the 3UTR RPKM. Compare polyA usage for those with high enough RPKM.
-
-    # When you have done that -- the only thing that remains could be
-    # investigating the 3UTRs that seeem to have longer length than in the
-    # annotation. Would be fun if we found some variation here as well.
+    # RESULT these are not useful values. rna seq is too stochastic
 
     #utr_length_comparison(settings, dsets)
 
@@ -5718,6 +5701,41 @@ if __name__ == '__main__':
     main()
 
 # DISCUSSION #
+# XXX README COMING BACK FROM MALAGA
+
+# The new poly(A) investigation: looking for small poly(A) tail remnants. It has
+# been shown that human rRNA have poly(A) tails in cytoplasm and nucleus. These
+# tails are likely degradation-related, as poly(A) tails assist the exosome in
+# degradation. This degradation happens chiefly in the nucleus at least in
+# yeast. If you find increased poladenylation in the nucleus, perhaps in the
+# poly(A) minus sets (the degradation-coupled poly(A) tails are short), you
+# could have found some evidence for this. The only caveat is that you have to
+# watch out for splice sites. Maybe you can filter with the splice sites found
+# by the gem mapper. Then show that along transcripts, poly(A) sites are
+# distributed differently in the nucleus and cytocolic fractions (and chromatin
+# and nucleoplasm and nuclolus). Also show that the poly(A) reads are of
+# differnt type (length and composition wise).
+
+# The general merit of the method is a WholeCell comparison to mimick Fu et al.
+# 2011. Just merge your sites together and show the increase in poly(A) sites
+# and also show the merger of annotated sites with annotations
+
+# You have shown already that you have a high specificity for annotated poly(A)
+# sites in annotated 3UTRs.
+
+# Next, you must show that your gene-internal reads are not simply split-map
+# reads. Simply use the gem-mapped split-map reads and do a bed-intersect.
+
+# The reason you have more maps in the nucleus to the introns is simply because
+# they don't exist in the cytoplasm! But the question is what is the nature of
+# these poly(A) reads.
+
+# evidence against split-mapped reads: In the cytoplasm you expect to have only
+# split-map poly(A) errors. They will fall in in annotated exon-intron
+# junctions. Simply make a region like this with annotation_parser. By comparing
+# the # of poly(A) sites in the 3UTR to the number across the exon-exon
+# junctions, you should get a reasonably number of the number of split-mapped
+# reads.
 
 # On internal representation:
     # Your main dataset will be the cell compartments; therefore, it makes sense

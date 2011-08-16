@@ -1683,8 +1683,13 @@ def main():
         # chose lots of bad transcripts. let's hope for the best
         gene_limit = 1
 
-        only_introns_exons(transcripts, genes, chr1, gene_limit)
+        # TODO make a new region: exon-exon junctions. Use this to test your methods
+        # aginst split-mapped reads.
+        # Actually, for a proper comparison, make a region of things just around
+        # the annotated poly(A) sites :) These two regions will serve as
+        # relatively comparable.
 
+        only_introns_exons(transcripts, genes, chr1, gene_limit)
 
         print time.time() - t1
 
