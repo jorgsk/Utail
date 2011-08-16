@@ -1,7 +1,0 @@
-chrm	beg	end	utr_ID	strand	polyA_coordinate	polyA_coordinate_strand	annotated_polyA_distance	nearby_PAS	PAS_distance	number_supporting_reads	number_unique_supporting_reads	unique_reads_spread
-chr13	41384997	41385484	three_utr_intronic_1262	+	41385086	+	NA	NA	NA	1	1	0.0
-chrX	135952577	135954425	three_utr_intronic_5008	+	135952944	+	NA	NA	NA	1	1	0.0
-chr8	37997228	38001166	three_utr_intronic_4522	+	37999952	+	NA	ATTAAA	23	1	1	0.0
-chr2	152648600	152655315	three_utr_intronic_2495	+	152654558	-	NA	AATAAA AATAGA	21 30	1	1	0.0
-chr9	100845357	100846636	three_utr_intronic_4819	+	100845358	+	2	NA	NA	1	1	0.0
-chr9	37899948	37903527	three_utr_intronic_4774	+	37901185	-	NA	NA	NA	1	1	0.0
