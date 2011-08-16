@@ -1880,11 +1880,11 @@ def map_reads(processed_reads, avrg_read_len, settings):
 
     ### mapping trimmed reads
     ### DEBUG skipping this step for speedy work :) XXX
-    #command = "gem-mapper -I {0} -i {1} -o {2} -q ignore -m {3}"\
-            #.format(settings.gem_index, processed_reads, mapped_reads, mismatch_nr)
+    command = "gem-mapper -I {0} -i {1} -o {2} -q ignore -m {3}"\
+            .format(settings.gem_index, processed_reads, mapped_reads, mismatch_nr)
 
-    #p = Popen(command.split())
-    #p.wait()
+    p = Popen(command.split())
+    p.wait()
 
     # Accept mismatches according to average read length
     acceptables = {1: set(('1:0', '0:1')), 2: set(('1:0:0', '0:1:0', '0:0:1')),
@@ -2094,8 +2094,8 @@ def bed_field_converter(out_path, field_nr):
 
 def get_polyA_utr(polyAbed, utrfile_path):
     """
-    Call intersectBed on the poly(A) reads and on the 3UTR file. Return
-    the surviving poly(A) reads in a dictionary, where each 3UTR (key) points
+    Call intersectBed on the poly(A) reads and on the genomic region file. Return
+    the surviving poly(A) reads in a dictionary, where each region (key) points
     to all its polyA sites.
     """
     # A dictionary to hold the utr_id -> poly(A)-reads relation
@@ -2431,17 +2431,6 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, settings, annotation,
             outhandle.write('{0}\t{1}\t{2}'.format(total_reads, acount, tcount))
             outhandle.close()
 
-        # Get a dictionary for each utr_id with its overlapping polyA reads
-        # XXX WARNING FOR TOMORROW: THINK ABOUT WHY THESE THINGS ARE NOT
-        # SPLITMAPPED READS!!!!!!!!!!!!!!!!!!!!!!!!!! Super important.
-        # Solution: subtractBed with splice sites. You'll find these on the
-        # servers I presume?
-        # /users/rg/projects/NGS/Projects/ENCODE/hg19main/GingerasCarrie
-        # /001WC/splitmapping
-        # Look at 1 or 2 cases (cyto and nucleus, chromatin?) to estimate how
-        # many of your reads come from split-mapped reads. Alternatively, get
-        # only the reads that are unmapped AFter the splitmapping. However,
-        # check out that that file really mans what you think it means.
         utr_polyAs, at_numbers = get_polyA_utr(polyA_bed_path, utrfile_path)
 
     # Cluster the poly(A) reads for each utr_id. If polyA is false or no polyA
@@ -3300,7 +3289,7 @@ def main():
 
     # some debugging settings
     #settings.chr1 = True
-    settings.read_limit = 5000
+    #settings.read_limit = 5000
 
     # You can chose to not simulate. Only purpose is to make bigwigs.
     #simulate = False
@@ -3350,8 +3339,8 @@ def piperunner(settings, annotation, simulate, DEBUGGING, beddir, tempdir,
     # If this is true, the poly(A) reads will be saved after getting them. That
     # will save all that reading. They will only be saved if you run with no
     # restriction in reads.
-    #polyA_cache = True
-    polyA_cache = False
+    polyA_cache = True
+    #polyA_cache = False
 
     # Extract the name of the bed-region you are checking for poly(A) reads
     # you might have to extract it differently, because 'intergenic' doesn't
@@ -3379,39 +3368,39 @@ def piperunner(settings, annotation, simulate, DEBUGGING, beddir, tempdir,
                          annotation, DEBUGGING, polyA_cache, here)
 
             ###### FOR DEBUGGING ######
-            akk = pipeline(*arguments)
+            #akk = pipeline(*arguments)
             ###########################
 
-            #result = my_pool.apply_async(pipeline, arguments)
-            #results.append(result)
+            result = my_pool.apply_async(pipeline, arguments)
+            results.append(result)
 
-        debug()
-        #my_pool.close()
-        #my_pool.join()
+        #debug()
+        my_pool.close()
+        my_pool.join()
 
-         ##Get the paths from the final output
-        #outp = [result.get() for result in results]
+         #Get the paths from the final output
+        outp = [result.get() for result in results]
 
-        ## Print the total elapsed time
-        #print('Total elapsed time: {0}\n'.format(time.time()-t1))
+        # Print the total elapsed time
+        print('Total elapsed time: {0}\n'.format(time.time()-t1))
 
-        ## create output dictionaries
-        #coverage, final_outp_length, final_outp_polyA = {}, {}, {}
+        # create output dictionaries
+        coverage, final_outp_length, final_outp_polyA = {}, {}, {}
 
-        ## Now copy over the output that was in temp-files but that you want to
-        ## have in output files
-        #for line in outp:
-            ## If this is a only-polyA-run, don't move stuff
-            #if 'only_polyA' in line[line.keys()[0]].keys():
-                #break
-            #for key, value in line.items():
-                #coverage[key] = value['coverage']
-                #final_outp_polyA[key] = value['polyA']
-                #final_outp_length[key] = value['length']
+        # Now copy over the output that was in temp-files but that you want to
+        # have in output files
+        for line in outp:
+            # If this is a only-polyA-run, don't move stuff
+            if 'only_polyA' in line[line.keys()[0]].keys():
+                break
+            for key, value in line.items():
+                coverage[key] = value['coverage']
+                final_outp_polyA[key] = value['polyA']
+                final_outp_length[key] = value['length']
 
-        ## Copy output from temp-dir do output-dir
-        #save_output(final_outp_polyA, output_dir)
-        #save_output(final_outp_length, output_dir)
+        # Copy output from temp-dir do output-dir
+        save_output(final_outp_polyA, output_dir)
+        save_output(final_outp_length, output_dir)
 
     ##################################################################
 
