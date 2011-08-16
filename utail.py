@@ -1878,13 +1878,13 @@ def map_reads(processed_reads, avrg_read_len, settings):
     elif 100 < avrg_read_len:
         mismatch_nr = 3
 
-    ## mapping trimmed reads
-    ## DEBUG skipping this step for speedy work :) XXX
-    command = "gem-mapper -I {0} -i {1} -o {2} -q ignore -m {3}"\
-            .format(settings.gem_index, processed_reads, mapped_reads, mismatch_nr)
+    ### mapping trimmed reads
+    ### DEBUG skipping this step for speedy work :) XXX
+    #command = "gem-mapper -I {0} -i {1} -o {2} -q ignore -m {3}"\
+            #.format(settings.gem_index, processed_reads, mapped_reads, mismatch_nr)
 
-    p = Popen(command.split())
-    p.wait()
+    #p = Popen(command.split())
+    #p.wait()
 
     # Accept mismatches according to average read length
     acceptables = {1: set(('1:0', '0:1')), 2: set(('1:0:0', '0:1:0', '0:0:1')),
@@ -1921,9 +1921,18 @@ def map_reads(processed_reads, avrg_read_len, settings):
             reads_file.write('\t'.join([chrom, beg, str(int(beg)+len(seq)), name,
                                       '0', strand]) + '\n')
 
+    # Write to logfile
     vals = (noisecount, allcount, noisecount/float(allcount))
-    print ('\nNoise reads: {0}\nTotal reads: {1}\nNoise ratio: {2:.2f}\n'\
-           .format(*vals))
+
+    noiseinf = '\nNoise reads: {0}\nTotal reads: {1}\nNoise ratio: {2:.2f}\n'\
+           .format(*vals)
+
+    noiselog = open('NOISELOG.LOG', 'ab')
+    noiselog.write('-'*80+'\n')
+    noiselog.write(polybed_path)
+    noiselog.write(noiseinf)
+    noiselog.write('-'*80+'\n')
+    noiselog.close()
 
     return polybed_path
 

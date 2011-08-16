@@ -1630,10 +1630,12 @@ def only_introns_exons(transcripts, genes, chr1, gene_limit):
 
         for (ex_or_int, handle) in exinthandles:
 
+            total_nr = len(ex_or_int)
+
             for nr, entry in enumerate(ex_or_int):
                 nr = nr+1 # 1-centered numbering ;)
                 chrm, beg, end, strand = entry
-                name = ':'.join([ts.t_type, ts_id, str(nr)])
+                name = ':'.join([ts.t_type, ts_id, str(nr)+'OF'+str(total_nr)])
                 bedformat = '\t'.join([chrm, str(beg), str(end), name, str(nr),
                                   strand])
 
@@ -1682,6 +1684,10 @@ def main():
         # problem: the files are too big. 50 mbytes regions? omgmfg.
         # solution: only get ... 1 transcript per gene? you might be unlucky and
         # chose lots of bad transcripts. let's hope for the best
+        # TODO also output the exon-exon junction regions. Output a region that
+        # is the merger of +/-60 nt on both sides of an exon/intron merger. This
+        # region will help control for poly(A) reads that land in intron/exon
+        # junctions.
         gene_limit = 1
 
         only_introns_exons(transcripts, genes, chr1, gene_limit)
