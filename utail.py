@@ -992,7 +992,7 @@ def zcat_wrapper(dset_id, bed_reads, read_limit, out_path, polyA, polyA_path,
     # 4) Commence with a minimum UTR length of 4 and 1:5 ratio
     # 5) let these be optional in the final version of Utail
     # 7) ratio denominator must b
-    # 8) TODO if 1/5, also accept and iteratively trim 2/10!
+    # 8) also accept and iteratively trim 2/10 2/12!
 
     min_length = 5
     ratio_denominator = 6
@@ -1878,7 +1878,8 @@ def map_reads(processed_reads, avrg_read_len, settings):
     elif 100 < avrg_read_len:
         mismatch_nr = 3
 
-    # mapping trimmed reads
+    ## mapping trimmed reads
+    ## DEBUG skipping this step for speedy work :) XXX
     command = "gem-mapper -I {0} -i {1} -o {2} -q ignore -m {3}"\
             .format(settings.gem_index, processed_reads, mapped_reads, mismatch_nr)
 
@@ -1895,22 +1896,90 @@ def map_reads(processed_reads, avrg_read_len, settings):
 
     reads_file = open(polybed_path, 'wb')
 
+    # count the number of noisy reads and total reads
+    noisecount = 0
+    allcount = 0
+
     for line in open(mapped_reads + '.0.map', 'rb'):
         (at, tail_info, seq, mapinfo, position) = line.split('\t')
 
         # Acceptable reads and poly(A) reads are mutually exclusive.
         if mapinfo in acceptable:
+            allcount += 1
             # Get chromosome, strand, and beg
             (chrom, rest) = position.split(':')
             strand = getstrand[rest[0]]
             beg = start_re.match(rest[1:]).group()
+
+            ## Don't write if this was a noisy read
+            if read_is_noise(chrom, strand, beg, seq, at, tail_info, settings):
+                noisecount += 1
+                continue
 
             # Write to file in .bed format
             name = ' '.join([at, tail_info])
             reads_file.write('\t'.join([chrom, beg, str(int(beg)+len(seq)), name,
                                       '0', strand]) + '\n')
 
+    vals = (noisecount, allcount, noisecount/float(allcount))
+    print ('\nNoise reads: {0}\nTotal reads: {1}\nNoise ratio: {2:.2f}\n'\
+           .format(*vals))
+
     return polybed_path
+
+def read_is_noise(chrm, strand, beg, seq, at, tail_info, settings):
+    """
+    Get the original sequence. If the A/T count on the geneomic sequence is
+    within 30% of the A/T count on the genome, ignore the read. This corresponds
+    to 4:1, 5:1, 6:1, 7:2, 8:2, 9:2, 10:3, 11:3, 12:3, 14:, 4
+    40 % would be
+    to 4:1, 5:2, 6:2, 7:2, 8:4, 9:3, 10:4, 11:4, 12:5, 14:, 5
+    of course, this is a simply solution. In fact, the longer the tail, the less
+    likely it is that the reads follow each other. But this will have to do.
+
+    However, keep in mind that you accept all kinds of reads, irrespective of
+    quality measure. God, to do this properly, you need to take qualities into
+    account ...
+    """
+    frac = 0.3
+    # get the sequences! note: the sequence fetcher automatically
+    # reverse-transribes regions on the - strand. In other words, it
+    # always returns sequences in the 5->3 direction.
+    # However
+    seq_len = len(seq)
+    beg = int(beg)
+    end = beg+seq_len
+    # for getting the nucleotide counts fast
+    nuc_dicts = dict(b.split('=') for b in tail_info.split(':'))
+    strip_len = sum([int(val) for val in nuc_dicts.values()])
+
+    ## it came from the - strand
+    if (at == 'T' and strand == '+') or (at == 'A' and strand == '-'):
+        # get beg-strip_len:beg
+        seq_dict = {'seq': (chrm, beg-strip_len-1, beg, strand)}
+        d = genome.get_seqs(seq_dict, settings.hgfasta_path)
+
+    ## it came from the + strand
+    if (at == 'T' and strand == '-') or (at == 'A' and strand == '+'):
+        # get beg+seq_len:beg+seq_len+strip_len
+        seq_dict = {'seq': (chrm, end, end+strip_len+1, strand)}
+        d = genome.get_seqs(seq_dict, settings.hgfasta_path)
+
+    genome_count = d['seq'].count(at)
+    tail_count = int(nuc_dicts[at])
+
+    winsize = int(math.floor(tail_count*frac))
+    window = range(tail_count-winsize, tail_count) +\
+            range(tail_count, tail_count+winsize)
+
+    # return as true noise 
+    if genome_count in window:
+        return True
+    # return as not-noise
+    else:
+        return False
+
+    pass
 
 def get_bed_reads(dset_reads, dset_id, read_limit, tempdir, polyA, get_length,
                   polyA_path):
@@ -2172,27 +2241,22 @@ def cluster_polyAs(settings, utr_polyAs, utrs, polyA):
 
     for utr_id, polyAs in utr_polyAs.iteritems():
 
-
         plus_sites = []
         minus_sites = []
 
         # you know the strand of the poly(A) reads from the A/T and strand they
-        # map to
+        # map to 
         for tup in polyAs:
 
-            # it came from the - strand
-            if tup[3] == 'T' and tup[6] == '+':
-                minus_sites.append((tup[1], tup[4]))
+            (chrm, beg, end, at, tail_info, val, strand) = tup
 
-            if tup[3] == 'A' and tup[6] == '-':
-                minus_sites.append((tup[1], tup[4]))
+            # it came from the - strand
+            if (at == 'T' and strand == '+') or (at == 'A' and strand == '-'):
+                minus_sites.append((beg, tail_info))
 
             # it came from the + strand
-            if tup[3] == 'T' and tup[6] == '-':
-                plus_sites.append((tup[2], tup[4]))
-
-            if tup[3] == 'A' and tup[6] == '+':
-                plus_sites.append((tup[2], tup[4]))
+            if (at == 'T' and strand == '-') or (at == 'A' and strand == '+'):
+                plus_sites.append((end, tail_info))
 
         polyA_reads[utr_id] = {'plus_strand': cluster_loop(sorted(plus_sites)),
                                'minus_strand': cluster_loop(sorted(minus_sites))}
@@ -2341,10 +2405,10 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, settings, annotation,
 
         # 1) Process reads by removing those with low-quality, and removing the
         #    leading Ts and/OR trailing As.
-        print('Processing and remapping poly(A)-reads for {0}...'.format(dset_id))
         processed_reads, avrg_read_len = process_reads(p_polyA_bed)
 
         # 2) Map the surviving reads to the genome and return unique ones
+        print('Remapping poly(A)-reads for {0} + noise filtering...'.format(dset_id))
         polyA_bed_path = map_reads(processed_reads, avrg_read_len, settings)
 
         # 3) If caching is on, save the polyA_bed_path to the cache dir
@@ -3227,7 +3291,7 @@ def main():
 
     # some debugging settings
     #settings.chr1 = True
-    #settings.read_limit = 500000
+    settings.read_limit = 5000
 
     # You can chose to not simulate. Only purpose is to make bigwigs.
     #simulate = False
@@ -3277,8 +3341,8 @@ def piperunner(settings, annotation, simulate, DEBUGGING, beddir, tempdir,
     # If this is true, the poly(A) reads will be saved after getting them. That
     # will save all that reading. They will only be saved if you run with no
     # restriction in reads.
-    polyA_cache = True
-    #polyA_cache = False
+    #polyA_cache = True
+    polyA_cache = False
 
     # Extract the name of the bed-region you are checking for poly(A) reads
     # you might have to extract it differently, because 'intergenic' doesn't
