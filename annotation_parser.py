@@ -567,7 +567,7 @@ def write_beds(transcripts, bed_dir, chr_sizes, *opts):
 
     # Create merged versions of all paths if requested
     if merge:
-        paths = merge_output(bed_dir, paths, stranded)
+        paths = merge_output(paths, stranded)
     print('finished merging')
 
     # Remove overlap between the .bed files
@@ -878,7 +878,7 @@ def extend_aTTS(inpot, chr_sizes, extend_by):
 
     return inpot
 
-def merge_output(bed_dir, output, stranded):
+def merge_output(output, stranded):
     """ Run mergeBed on all the files in output and replace original """
     # mergeBed will delete the two life-important dots!!
     # I must reintroduce them 
@@ -1544,26 +1544,22 @@ def get_seqs(utr_dict, hgfasta):
     Use the *pyfasta* module to get sequences quickly from an indexed version
     of the human genome fasta file.
 
-    :returns: *utr_dict*, an exon -> sequence dictionary
+    :returns: *utr_dict*, a region -> sequence dictionary
     """
     f = Fasta(hgfasta, record_class=FastaRecord)
     #f = Fasta(hgfasta)
     seq_dict = {}
-    for ts_id, ts_param in utr_dict.iteritems():
-        (chrm, beg, end, strand) = ts_param
+    for reg_id, reg_param in utr_dict.iteritems():
+        (chrm, beg, end, strand) = reg_param
         if strand == '+':
-            seq_dict[ts_id] = f.sequence({'chr':chrm,'start':beg+1, 'stop':end-1,
+            seq_dict[reg_id] = f.sequence({'chr':chrm,'start':beg+1, 'stop':end-1,
                                           'strand':strand}).upper()
         if strand == '-':
-            seq_dict[ts_id] = f.sequence({'chr':chrm,'start':beg+2, 'stop':end,
+            seq_dict[reg_id] = f.sequence({'chr':chrm,'start':beg+2, 'stop':end,
                                           'strand':strand}).upper()
     return seq_dict
 
-def split_annotation(transcripts, chr1):
-
-    # Create bed-files for introns and exons in 3-5 utr and cds
-    bed_dir = '/users/rg/jskancke/phdproject/3UTR/annotation_split'
-    chr_s = '/users/rg/jskancke/phdproject/3UTR/the_project/ext_files/hg19'
+def split_annotation(transcripts, chr1, bed_dir, chr_s):
 
     # make the bed-dir if doesn't exist
     if not os.path.exists(bed_dir):
@@ -1582,8 +1578,7 @@ def split_annotation(transcripts, chr1):
 
         write_beds(transcripts, bed_dir, chr_s, *opts)
 
-def only_introns_exons(transcripts, genes, chr1, gene_limit):
-    output_dir = '/home/jorgsk/work/pipeline_files/genomic_regions'
+def only_introns_exons(transcripts, chr1, gene_limit, output_dir):
 
     if chr1:
         chr1 = '_chr1'
@@ -1613,7 +1608,6 @@ def only_introns_exons(transcripts, genes, chr1, gene_limit):
         if gene_count[ts.gene_id] > gene_limit:
             continue
 
-        t_type = ts.t_type
         strand = ts.strand
 
         if strand == '+':
@@ -1630,10 +1624,13 @@ def only_introns_exons(transcripts, genes, chr1, gene_limit):
 
         for (ex_or_int, handle) in exinthandles:
 
+            total_nr = len(ex_or_int)
+
             for nr, entry in enumerate(ex_or_int):
                 nr = nr+1 # 1-centered numbering ;)
                 chrm, beg, end, strand = entry
-                bedformat = '\t'.join([chrm, str(beg), str(end), str(nr), t_type,
+                name = ':'.join([ts.t_type, ts_id, str(nr)+'OF'+str(total_nr)])
+                bedformat = '\t'.join([chrm, str(beg), str(end), name, str(nr),
                                   strand])
 
                 handle.write(bedformat + '\n')
@@ -1642,10 +1639,96 @@ def only_introns_exons(transcripts, genes, chr1, gene_limit):
     int_handle.close()
     ex_handle.close()
 
+def exon_intron_junctions(transcripts, chr1, output_dir):
+    """
+    Write 60nt on both sides of exon-intron junctions. Merge them. Strip from
+    them 3utr-exonic regions. Merge again.
+    """
+    pass
+    if chr1:
+        chr1 = '_chr1'
+    else:
+        chr1 = ''
+
+    out_junctions = 'exon_intron_junctions'+chr1+'.bed'
+    junc_path = os.path.join(output_dir, out_junctions)
+    junc_handle = open(junc_path, 'wb')
+
+    # path dict for keeping trakck of tempoary files
+    paths = {'junctions': junc_path}
+
+    # go through each transcritp. note rtanscript type and name. write each exon
+    # and intron to separate files in the order 5' 1, ..., N 3'
+
+    nr = 0
+    for ts_id, ts in transcripts.iteritems():
+
+        introns = ts.get_cds_introns()
+
+        for entry in introns:
+            (chrm, beg, end, strand) = entry
+
+            # write 60nt on both sides
+            ex_side1 = (chrm, int(beg)-60, beg, strand)
+            int_side1 = (chrm, beg, int(beg)+60, strand)
+
+            ex_side2 = (chrm, end, int(end)+60, strand)
+            int_side2= (chrm, int(end)-60, end, strand)
+
+            for g in [ex_side1, int_side1, ex_side2, int_side2]:
+                (chrm, beg, end, strand) = g
+
+                name = 'junction_{0}'.format(nr)
+                nr += 1
+
+                bedformat = '\t'.join([chrm, str(beg), str(end), name, '0',
+                                  strand])
+
+                junc_handle.write(bedformat + '\n')
+
+    junc_handle.close()
+
+    # merge the output
+    stranded = False
+    paths = merge_output(paths, stranded)
+
+    # intersect it with 3utr exonic
+    utrex = '/home/jorgsk/work/pipeline_files/genomic_regions/non_stranded/'\
+            '3UTR-exonic_non_stranded.bed'
+    paths['three_utr_exonic'] = utrex
+
+    # 2) From intron-exon junctions, remove 3utr exonic 
+    junction = ['junctions']
+    three_ex = ['three_utr_exonic']
+
+    keyword = 'no_3UTR_exons'
+    paths = subtractor(junction, three_ex, keyword, paths, stranded)
+
+    # 3) merge again
+    paths = merge_output(paths, stranded)
+
+    # Rename the files and give them new names, decree'd by the gods
+    outhandle = open(os.path.join(output_dir, 'junctions'+chr1+'.bed'), 'wb')
+    count = 0
+    for line in open(paths['junctions'], 'rb'):
+        (chrm, beg, end, nam, val, strand) = line.split()
+        name = 'junction{0}'.format(count)
+        count += 1
+
+        outhandle.write('\t'.join([chrm, beg, end, name, '0', strand]) + '\n')
+
+    outhandle.close()
+
+    # Delete the temporary files
+    for name, path in paths.items():
+        if name is not 'three_utr_exonic':
+            os.remove(path)
+
 def main():
 
     for chr1 in [True, False]:
-    #for chr1 in [True]:
+    ##for chr1 in [True]:
+    #for chr1 in [False]:
 
         t1 = time.time()
 
@@ -1668,23 +1751,20 @@ def main():
         print('finished getting transcripts')
 
         # normal annoatation splitting
-        #split_annotation(transcripts, chr1)
+        output_dir = '/home/jorgsk/work/pipeline_files/genomic_regions'
+        # hg19 must be stripped of header and tail strange regions
+        hg19_file = '/home/jorgsk/work/pipeline_files/hg19.genome'
 
-        # special annotation splitting. Split one into introns and one into
-        # exons. Name the exons/introns according to their transcript_ID +
-        # exon/intron number as determined in the 5' to 3' order. 1 in 5' end
-        # and so on. Do the same for 5' and 3', although here there will be
-        # fewer cases.
-        # This order is essential. How to deal with cases with overlap?
-        # Initially, don't deal with overlap. Simply create a sample.
+        #split_annotation(transcripts, chr1, output_dir, hg19_file)
 
-        # problem: the files are too big. 50 mbytes regions? omgmfg.
-        # solution: only get ... 1 transcript per gene? you might be unlucky and
-        # chose lots of bad transcripts. let's hope for the best
-        gene_limit = 1
+        #gene_limit = 1
+        # XXX problem: how to collect and merge with 50 transcripts per gene and you
+        # need the order?
+        #output_dir = os.path.join(output_dir, 'non_stranded')
+        #only_introns_exons(transcripts, chr1, gene_limit, output_dir)
 
-        only_introns_exons(transcripts, genes, chr1, gene_limit)
-
+        # Write exon-intron junctions and merge them
+        #exon_intron_junctions(transcripts, chr1, output_dir)
 
         print time.time() - t1
 

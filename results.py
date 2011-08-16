@@ -5543,7 +5543,7 @@ def join_regions(paths, only_these, outdir, extendby=False):
 
     return joined_merged_path
 
-def gencode_report(settings, speedrun, svm):
+def gencode_report(settings, speedrun):
     """ Make figures for the GENCODE report. The report is an overview of
     evidence for polyadenylation from the Gingeras RNA-seq experiments.
 
@@ -5577,6 +5577,8 @@ def gencode_report(settings, speedrun, svm):
     # gencode, and output all the numbers.
     venn_polysites(settings, speedrun)
 
+    # split-mapped reads:     2.94e+07 (0.010)
+
     #5UTR exons:              8.18e+06 (0.003)
     #3UTR introns:            1.19e+07 (0.004)
     #3UTR exons:              2.99e+07 (0.010)
@@ -5605,6 +5607,43 @@ def gencode_report(settings, speedrun, svm):
     # XXX forget it all and focus on the TRAMP-like polyadenylation in the
     # nucleus :)
 
+def noncanonical_pA(settings, speedrun):
+    """ Non mRNA-transcript-termination-related polyadenylation has been found
+    for rRNA in human cells, both in the cytoplasm and the nucleus. Can you
+    positively identify polyadenylation.
+
+    The two curious things you have are:
+        1) Elevated poly(A) reads in CDS-intronic regions that are NOT from
+        exon-exon junctions
+        2) Elevated poly(A) reads in the poly(A)MINUS-fraction in the nucleus
+        fractions.
+
+    # Point 1) is obvious in a sense: you expect to have reads from introns in
+    # the nucleus, because introns are cleaved off and degraded here. However,
+    # you do not expect to see poly(A) reads themselves here! The question is,
+    # what do these poly(A) reads represent? You have screened away the
+    # accidental reads that map to the genome. The 'noise', if you like.
+    # Further, at least for one nucleoplasmic dataset (K562, 025NP), you have
+    # found that only 1/3 of your reads correspond to split-mapped reads (which
+    # begs the question: how many split-mapped reads are poly(A) reads?). This
+    # leaves 2/3rds which have no other explanation than that they are
+    # polyadenylation events. In the light of the recent discovery of
+    # polyadenylation in humans, I interpret these reads as stemming from
+    # degradation-related polyadenylation.
+
+    # Point 2) is part of this evidence. We have polyadenylation events that
+    # don't stem from long poly(A) tails! :) Once we cut away the noise and the
+    # split-mapped reads, this is what we're left with.
+
+    # To really be able to work with non-splitmapped reads, you should make a
+    # script that utilizes the UTR_SETTINGS paths to carrie/genome/... , but
+    # instead fetches the files under splitmapping. The script simply converts
+    # to bed, merges, then intersects with the mapped poly(A) reads. Or should
+    # you do this later? At least save the original poly(A) reads somewhere.
+    """
+    pass
+    debug()
+
 def main():
     # The path to the directory the script is located in
     here = os.path.dirname(os.path.realpath(__file__))
@@ -5620,7 +5659,11 @@ def main():
     settings = Settings(os.path.join(here, 'UTR_SETTINGS'), savedir, outputdir,
                         here, chr1)
 
-    gencode_report(settings, speedrun=False, svm=False)
+    # XXX venn-plot ++ here! don't forget !:)
+    gencode_report(settings, speedrun=False)
+
+    # noncanonical polyadenylation!
+    noncanonical_pA(settings, speedrun=False)
 
     # Get the dsetswith utrs and their clusters from the length and polyA files
     # Optionally get SVM information as well
@@ -5679,24 +5722,7 @@ def main():
 
     ##### get the before/after coverage ratios for trusted epsilon ends
     #before_after_ratio(dsets)
-
-    # RESULT the before/after ratio is not as informative as we had hoped.
-    # I should print out a good few of them that have ratios in the gray zone
-    # and check them in the browser. However, this could just mean that the
-    # ratio is not important for classifying ends. The cause of this could be
-    # the intrinsic variablity in the read coverage.
-    # TODO check it in the browser to see if our intutition is correct ... !:)
-    # For the non-beyond_aTTS ones.
-
-    # TODO the only way to compare polyA presence between cell compartments
-    # would be to do so for 3UTRs with rpkm > 40 or so. You won't have many
-    # samples, but they should hold true. It would be easy. Do what you did for
-    # novelcount but do it for each sub-compartment. Then query somewhere else
-    # to get the 3UTR RPKM. Compare polyA usage for those with high enough RPKM.
-
-    # When you have done that -- the only thing that remains could be
-    # investigating the 3UTRs that seeem to have longer length than in the
-    # annotation. Would be fun if we found some variation here as well.
+    # RESULT these are not useful values. rna seq is too stochastic
 
     #utr_length_comparison(settings, dsets)
 
@@ -5718,6 +5744,41 @@ if __name__ == '__main__':
     main()
 
 # DISCUSSION #
+# XXX README COMING BACK FROM MALAGA
+
+# The new poly(A) investigation: looking for small poly(A) tail remnants. It has
+# been shown that human rRNA have poly(A) tails in cytoplasm and nucleus. These
+# tails are likely degradation-related, as poly(A) tails assist the exosome in
+# degradation. This degradation happens chiefly in the nucleus at least in
+# yeast. If you find increased poladenylation in the nucleus, perhaps in the
+# poly(A) minus sets (the degradation-coupled poly(A) tails are short), you
+# could have found some evidence for this. The only caveat is that you have to
+# watch out for splice sites. Maybe you can filter with the splice sites found
+# by the gem mapper. Then show that along transcripts, poly(A) sites are
+# distributed differently in the nucleus and cytocolic fractions (and chromatin
+# and nucleoplasm and nuclolus). Also show that the poly(A) reads are of
+# differnt type (length and composition wise).
+
+# The general merit of the method is a WholeCell comparison to mimick Fu et al.
+# 2011. Just merge your sites together and show the increase in poly(A) sites
+# and also show the merger of annotated sites with annotations
+
+# You have shown already that you have a high specificity for annotated poly(A)
+# sites in annotated 3UTRs.
+
+# Next, you must show that your gene-internal reads are not simply split-map
+# reads. Simply use the gem-mapped split-map reads and do a bed-intersect.
+
+# The reason you have more maps in the nucleus to the introns is simply because
+# they don't exist in the cytoplasm! But the question is what is the nature of
+# these poly(A) reads.
+
+# evidence against split-mapped reads: In the cytoplasm you expect to have only
+# split-map poly(A) errors. They will fall in in annotated exon-intron
+# junctions. Simply make a region like this with annotation_parser. By comparing
+# the # of poly(A) sites in the 3UTR to the number across the exon-exon
+# junctions, you should get a reasonably number of the number of split-mapped
+# reads.
 
 # On internal representation:
     # Your main dataset will be the cell compartments; therefore, it makes sense

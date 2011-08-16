@@ -1,0 +1,62 @@
+You find in extraordinary large amount of poly(A) reads in the nucleus and
+nucleoplasm, yet not in the cytoplasm, in CDS-introns.
+
+These could be remnants of degraded mRNAs that are not allowed to escape the
+nucleus.
+
+One source could be mis-polyadenylated sequences that are subsequently
+degraded.
+
+Another, probably bigger source, is that polyadenylation is used as part of the
+degradation process. A poly(A) tail makes it easier for the exosome to degrade
+RNA fragments. This is remnisent of what happens in bacteria.
+
+In yeast, the TRAMP poly(A) machinery has been identifier as a poly(A) adder to
+RNA-to-be-degraded. No human homolog has been found yet, I believe, although
+there are sequencse homologies.
+
+Your data would give nice credit to the idea that there is
+degradatio-by-poly(A) in the nucleus.
+
+Compare the poly(A) clusters you get in the nucleus/chromatin with the clusters
+you get in the cytoplasm. Are they different?
+
+You have also saved a paper showing that polyadenylation happens in the
+cytoplamsn of humans as part of the degradation pathway. Hey ho!
+
+In yeast, TRAMP (polyadenylater) associates with Rrp6p for degradation in the
+nucleus, whereas in mammals the Rrp6p ortholog, PM/ Scl100, is observed in both
+the cytoplasm and nucleus (cite: RNA quality control in eukaryotes). The
+homolog is observed in the cytoplasm and nucleus, and the small poly(A)s are
+observed in the cytoplasm and nucleus in human/mammal! This points toward
+poly(A) tail degradation by a similar mechanism.
+
+Short poly(A) tails have been shown for pre-messenger RNA as well, with an
+unknown processing mechanism. These ranged from 1-7 in size, and some of them
+were not pure poly(A), they were poly(A) with other nucleotides as well.
+
+In the 2010 article, they worked with a rRNA or beta globin gene. They find
+polyadenylation here in certain sites both in the nucleus and cytoplasm,
+indicating that the degradation sites are conserved. Perhaps due to structures?
+It coul be that the poly(A) tail is only there to facilitate degradation of
+RNAS with struvtures in the 3' end because the exonucleases can't work well
+with structured ends.
+
+I think you need to do the following:
+
+1) Show that the poly(A) sites in nucleus/chromatin/cytoplasm are different
+2) Compare nuc/chr/cyt for 3UTR and CDS intronic next to each other, for visual
+effect.
+4) Show the distribution of poly(A) locations in the CDS intronic regions. For
+example, if there are 5 introns, plot the occurence in each of the introns.
+Since different genes have different # of introns, make some kind of measure
+for this. The idea is that you show that there is only a weak distribution of
+the intronic poly(A) sites toward the 3'end. If the pol(A) tails come from
+cleavage+polyadenylation you expect them to be located toward the 3' end.
+3) Show that the poly(A) tails at the end of the 3UTRs are more pure poly(A),
+they have more poly(A) read coverage. Conversely, show that the intronic
+poly(A) tails are more 'choppy'
+
+Show how this is different in poly(A)+ and poly(A)- datasets! :)
+
+
