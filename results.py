@@ -5543,7 +5543,7 @@ def join_regions(paths, only_these, outdir, extendby=False):
 
     return joined_merged_path
 
-def gencode_report(settings, speedrun, svm):
+def gencode_report(settings, speedrun):
     """ Make figures for the GENCODE report. The report is an overview of
     evidence for polyadenylation from the Gingeras RNA-seq experiments.
 
@@ -5577,6 +5577,8 @@ def gencode_report(settings, speedrun, svm):
     # gencode, and output all the numbers.
     venn_polysites(settings, speedrun)
 
+    # split-mapped reads:     2.94e+07 (0.010)
+
     #5UTR exons:              8.18e+06 (0.003)
     #3UTR introns:            1.19e+07 (0.004)
     #3UTR exons:              2.99e+07 (0.010)
@@ -5605,6 +5607,43 @@ def gencode_report(settings, speedrun, svm):
     # XXX forget it all and focus on the TRAMP-like polyadenylation in the
     # nucleus :)
 
+def noncanonical_pA(settings, speedrun):
+    """ Non mRNA-transcript-termination-related polyadenylation has been found
+    for rRNA in human cells, both in the cytoplasm and the nucleus. Can you
+    positively identify polyadenylation.
+
+    The two curious things you have are:
+        1) Elevated poly(A) reads in CDS-intronic regions that are NOT from
+        exon-exon junctions
+        2) Elevated poly(A) reads in the poly(A)MINUS-fraction in the nucleus
+        fractions.
+
+    # Point 1) is obvious in a sense: you expect to have reads from introns in
+    # the nucleus, because introns are cleaved off and degraded here. However,
+    # you do not expect to see poly(A) reads themselves here! The question is,
+    # what do these poly(A) reads represent? You have screened away the
+    # accidental reads that map to the genome. The 'noise', if you like.
+    # Further, at least for one nucleoplasmic dataset (K562, 025NP), you have
+    # found that only 1/3 of your reads correspond to split-mapped reads (which
+    # begs the question: how many split-mapped reads are poly(A) reads?). This
+    # leaves 2/3rds which have no other explanation than that they are
+    # polyadenylation events. In the light of the recent discovery of
+    # polyadenylation in humans, I interpret these reads as stemming from
+    # degradation-related polyadenylation.
+
+    # Point 2) is part of this evidence. We have polyadenylation events that
+    # don't stem from long poly(A) tails! :) Once we cut away the noise and the
+    # split-mapped reads, this is what we're left with.
+
+    # To really be able to work with non-splitmapped reads, you should make a
+    # script that utilizes the UTR_SETTINGS paths to carrie/genome/... , but
+    # instead fetches the files under splitmapping. The script simply converts
+    # to bed, merges, then intersects with the mapped poly(A) reads. Or should
+    # you do this later? At least save the original poly(A) reads somewhere.
+    """
+    pass
+    debug()
+
 def main():
     # The path to the directory the script is located in
     here = os.path.dirname(os.path.realpath(__file__))
@@ -5620,7 +5659,11 @@ def main():
     settings = Settings(os.path.join(here, 'UTR_SETTINGS'), savedir, outputdir,
                         here, chr1)
 
-    gencode_report(settings, speedrun=False, svm=False)
+    # XXX venn-plot ++ here! don't forget !:)
+    gencode_report(settings, speedrun=False)
+
+    # noncanonical polyadenylation!
+    noncanonical_pA(settings, speedrun=False)
 
     # Get the dsetswith utrs and their clusters from the length and polyA files
     # Optionally get SVM information as well
