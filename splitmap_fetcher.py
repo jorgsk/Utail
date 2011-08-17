@@ -25,9 +25,13 @@ import ConfigParser
 import os
 from subprocess import Popen, PIPE
 
-savedir = '/home/jorgsk/work/3UTR/splitmapped_reads'
 here = os.path.dirname(os.path.realpath(__file__))
+savedir = os.path.join(here, 'splitmapped_reads')
 settings_file = os.path.join(here, 'UTR_SETTINGS')
+
+# create the directory if it doesn't exist
+if not os.path.isdir(savedir):
+    os.makedirs(savedir)
 
 conf = ConfigParser.ConfigParser()
 conf.optionxform = str
@@ -50,7 +54,6 @@ for (dset, dpaths) in datasets.items():
     root_path = os.path.dirname(os.path.dirname(dpaths[0]))
     splitdir = os.path.join(root_path, 'splitmapping')
     gtfpaths[dset] = glob.glob(splitdir+'/*single.unique.gtf.gz*')
-
 
 bedpaths = {}
 
@@ -77,10 +80,9 @@ for dset, gtf_paths in gtfpaths.items():
     bedpaths[dset] = outfile
 
 # call mergeBed on the dset files (use annotation_parser version)
+from annotation_parser import merge_output
+
+stranded = True
+bedpaths = merge_output(bedpaths, stranded)
 
 
-
-
-## check if the datset files are actually there...
-#for dset, files in datasets.items():
-    #[verify_access(f) for f in files]

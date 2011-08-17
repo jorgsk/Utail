@@ -20,7 +20,6 @@ plt.ion() # turn on the interactive mode so you can play with plots
 from operator import attrgetter
 from operator import itemgetter
 import math
-import cPickle as pickle
 
 import numpy as np
 
