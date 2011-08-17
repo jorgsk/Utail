@@ -3370,39 +3370,39 @@ def piperunner(settings, annotation, simulate, DEBUGGING, beddir, tempdir,
                          annotation, DEBUGGING, polyA_cache, here)
 
             ###### FOR DEBUGGING ######
-            akk = pipeline(*arguments)
+            #akk = pipeline(*arguments)
             ###########################
 
-            #result = my_pool.apply_async(pipeline, arguments)
-            #results.append(result)
+            result = my_pool.apply_async(pipeline, arguments)
+            results.append(result)
 
         #debug()
-        #my_pool.close()
-        #my_pool.join()
+        my_pool.close()
+        my_pool.join()
 
-         ##Get the paths from the final output
-        #outp = [result.get() for result in results]
+         #Get the paths from the final output
+        outp = [result.get() for result in results]
 
-        ## Print the total elapsed time
-        #print('Total elapsed time: {0}\n'.format(time.time()-t1))
+        # Print the total elapsed time
+        print('Total elapsed time: {0}\n'.format(time.time()-t1))
 
-        ## create output dictionaries
-        #coverage, final_outp_length, final_outp_polyA = {}, {}, {}
+        # create output dictionaries
+        coverage, final_outp_length, final_outp_polyA = {}, {}, {}
 
-        ## Now copy over the output that was in temp-files but that you want to
-        ## have in output files
-        #for line in outp:
-            ## If this is a only-polyA-run, don't move stuff
-            #if 'only_polyA' in line[line.keys()[0]].keys():
-                #break
-            #for key, value in line.items():
-                #coverage[key] = value['coverage']
-                #final_outp_polyA[key] = value['polyA']
-                #final_outp_length[key] = value['length']
+        # Now copy over the output that was in temp-files but that you want to
+        # have in output files
+        for line in outp:
+            # If this is a only-polyA-run, don't move stuff
+            if 'only_polyA' in line[line.keys()[0]].keys():
+                break
+            for key, value in line.items():
+                coverage[key] = value['coverage']
+                final_outp_polyA[key] = value['polyA']
+                final_outp_length[key] = value['length']
 
-        ## Copy output from temp-dir do output-dir
-        #save_output(final_outp_polyA, output_dir)
-        #save_output(final_outp_length, output_dir)
+        # Copy output from temp-dir do output-dir
+        save_output(final_outp_polyA, output_dir)
+        save_output(final_outp_length, output_dir)
 
     ###################################################################
 
