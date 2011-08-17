@@ -883,7 +883,7 @@ def annotation_dist(rpoint, annotated_polyA_sites, strand):
     # If you get here, you didn't find any annotated distances
     return 'NA'
 
-def get_pas_and_distance(rpoint, pas_patterns, sequence, settings, pm_strand):
+def get_pas_and_distance(pas_patterns, sequence, settings, pm_strand):
     """
     Go through the -40 from the polya read average. Collect PAS and distance
     as you find them. Must supply poly(A) sites relative to UTR-beg. The
@@ -891,23 +891,11 @@ def get_pas_and_distance(rpoint, pas_patterns, sequence, settings, pm_strand):
     """
 
     pases = []
-
-    if pm_strand == 'plus_strand':
-        pas_seq = sequence[rpoint-40:rpoint]
-
-        # special case if the polya read is is early in the sequence
-        if rpoint < 40:
-            pas_seq = sequence[:rpoint]
-
-    # if negative strand, take the reverse complement 
-    if pm_strand == 'minus_strand':
-        pas_seq = sequence[rpoint:rpoint+40]
-        pas_seq = reverseComplement(pas_seq)
-
     temp_pas = []
+
     for pas_exp in pas_patterns:
         temp_pas.append([(m.group(), m.start()) for m in
-                        pas_exp.finditer(pas_seq)])
+                        pas_exp.finditer(sequence)])
 
     if sum(temp_pas, []) != []:
         has_pas = sum(temp_pas, [])
@@ -939,7 +927,6 @@ def get_pas_and_distance(rpoint, pas_patterns, sequence, settings, pm_strand):
         except ValueError:
             zipases = zip(*pases)
             return (sum(zipases[0], ()), sum(zipases[1], ()))
-
 
 def reverseComplement(sequence):
     complement = {'A':'T','C':'G','G':'C','T':'A','N':'N'}
@@ -2775,16 +2762,14 @@ def only_polyA_writer(dset_id, annotation, pA_seqs, polyA_reads, settings,
                                                            annotated_pA_sites,
                                                            strand)
 
-                rpoint = cls_center - beg
-
                 # getting PAS. If annotation exists, look at the annotated strand.
                 # If not, look at the "other strand" than the poly(A) read maps to.
                 sequence = pA_seqs[feature_id][pm_strand][cls_center]
-                (nearby_PAS, PAS_distance) = get_pas_and_distance(rpoint,
-                                                                  pas_patterns,
+                (nearby_PAS, PAS_distance) = get_pas_and_distance(pas_patterns,
                                                                   sequence,
                                                                   settings,
                                                                  pm_strand)
+
                 if nearby_PAS != 'NA':
                     nearby_PAS = ' '.join(nearby_PAS)
                     PAS_distance = ' '.join([str(di) for di in PAS_distance])
@@ -3261,12 +3246,13 @@ def main():
     This method is called if script is run as __main__.
     """
 
-    # IDEA: are some poly(A) cluster's enormous count the result of PCR
-    # amplification gone awry? Compare the biological replicates!
-
     # Set debugging mode. This affects the setting that are in the debugging
     # function (called below). It also affects the 'temp' and 'output'
     # directories, respectively.
+
+    # TODO why don't my poly(A) sites have AATAAA any more? 60% of your clusters
+    # are near annotated sites, but only 20% have PAS. Smth is WRONG. Must be
+    # debug'd.
 
     #DEBUGGING = True
     DEBUGGING = False
@@ -3376,7 +3362,7 @@ def piperunner(settings, annotation, simulate, DEBUGGING, beddir, tempdir,
             #result = my_pool.apply_async(pipeline, arguments)
             #results.append(result)
 
-        #debug()
+        debug()
         #my_pool.close()
         #my_pool.join()
 
