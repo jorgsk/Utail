@@ -208,7 +208,7 @@ class Only(object):
     def __init__(self, input_line):
 
         (chrm, beg, end, utr_ID, strand, polyA_coordinate,
-         polyA_coordinate_strand, annotated_polyA_distance, nearby_PAS,
+         polyA_coordinate_strand, tail_info, annotated_polyA_distance, nearby_PAS,
          PAS_distance, number_supporting_reads, nr_unique_supporting_reads,
          unique_reads_spread) = input_line.split('\t')
 
@@ -217,6 +217,7 @@ class Only(object):
         self.end = str_to_intfloat(end)
         self.ID = utr_ID
         self.strand = polyA_coordinate_strand
+        self.tail_info = tail_info
 
         self.polyA_coordinate = str_to_intfloat(polyA_coordinate)
         self.annotated_polyA_distance = annotated_polyA_distance
@@ -1938,6 +1939,9 @@ def super_falselength(settings, region, subset=[], speedrun=False, svm=False):
     """ Return the super clusters with information only from the poly(A) files
     without using length (coverage) information.
 
+    Region is a list of genomic regions to be treated. Datasets are obtained
+    from 'settings'. You can leave out some datasets by putting their names in
+    the subset-list.
     """
 
     dsets = AutoVivification()
@@ -2135,9 +2139,6 @@ def get_super_3utr(dsets, super_cluster, dset_2super):
                 for cl in utr.clusters:
 
                     # superkey for dset_2super
-                    # hey: it's no longer the utr.strand -- it's the cluster
-                    # strand. you still want clusters of different strands to be
-                    # associated to the same utr as in the output file.
                     superkey = cell_line+' '+comp + utr.chrm + cl.strand +\
                             str(cl.polyA_coordinate)
 
@@ -3712,62 +3713,6 @@ def polyadenylation_comparison(dsets, super_3utr, settings):
     #### See the effects of excluding pA sites with 1, 2, 3, etc, coverage
     #cluster_size_sensitivity(dsets) NOT dsetsREADY
 
-    pass
-
-def reads(settings):
-    """
-    * number of reads for each compartment
-    * number of putative poly(A) reads for each compartment
-    * ratio of the two above
-    * number of putative poly(A) reads that map to pAclusters
-    * number of pAclusters with different sizes
-    * number of pAclusters in 'wrong' direction, as a function of the numbers of
-    * poly(A) reads in that cluster
-    """
-
-    pass
-
-def UTR_processing(settings):
-    """
-    * number of annotated 3UTRs (and number of genes)
-        * multi and single exon
-    * number of surviving 3UTRs from clustering
-        * multi and single exon
-    * number of survivers from overlap-screening
-        * multi and single exon
-    """
-
-    pass
-
-def other_methods_comparison(settings):
-    """
-    * number of matching polyA sites in polA_db
-    * number of matching polyA sites in recent publications
-    * number of novel polyA sites, per tissue/cell_line
-    """
-
-    pass
-
-def data_annotation_correspondence(settings):
-    """
-    * number of utrs found compared to total
-    * number of utrs that seem longer than annotation
-    """
-
-    pass
-
-def rouge_polyA_sites(settings):
-    """
-    * polyA pAclusters in the different annotation regions
-    * comparison with polyA_db and recent publications.
-    * "extended 3UTRs": non-overlapping 3'end downstream regions with read
-        coverage and poly(A) pAclusters
-    * novel polyA sites in annotated 3UTRs: compared to polyA_db and
-        publications
-    * presence of PAS and PAS type for novel sites
-    """
-
-    pass
 
 def get_reads_from_file(ds, dsets, finder, pAread_file, utr_bed, utr_exons):
     """
@@ -4074,7 +4019,7 @@ def merge_clusters(dsets):
     """
     Merge all clusters from all datasets into one huge cluster.
 
-    NEW: take into account the strand of the cluster
+    takes into account the strand of the cluster
     """
 
     all_clusters = {} # keys = cluster_centers
@@ -4829,12 +4774,12 @@ def get_polyA_stats(settings):
 
     return polyA_stats
 
-def get_dsetreads(settings):
+def get_dsetreads(settings, region):
     """ For each dataset, get the number of total reads
     """
 
     dsetreads = {}
-    polyA_files = settings.polyAstats_files('3UTR-exonic')
+    polyA_files = settings.polyAstats_files(region)
     for dset, dsetpath in polyA_files.items():
 
         filedict = dict((line.split('\t')[0], line.split('\t')[1])
@@ -4851,29 +4796,221 @@ def get_dsetclusters(subset, region, settings, speedrun):
 
     dsetclusters = {}
 
-    all_clusters = 0
-    good_clusters = 0
+    # count if the below variables are in same or in opposite strand: in the end
+    # sum them. This is only valid for those genomic regions where you know the
+    # strand.
+    total_reads = {'same': 0, 'opposite': 0, 'sum': 0}
+    cl_t = {'same': 0, 'opposite': 0, 'sum': 0}
+    cl_t_annotated = {'same': 0, 'opposite': 0, 'sum': 0}
+    cl_t_annot_with_PAS = {'same': 0, 'opposite': 0, 'sum': 0}
+    cl_t_with_PAS = {'same': 0, 'opposite': 0, 'sum': 0}
+
+    cl_2 = {'same': 0, 'opposite': 0, 'sum': 0}
+    cl_2_annotated = {'same': 0, 'opposite': 0, 'sum': 0}
+    cl_2_annot_with_PAS = {'same': 0, 'opposite': 0, 'sum': 0}
+    cl_2_with_PAS = {'same': 0, 'opposite': 0, 'sum': 0}
+
+    cl_aor2 = {'same': 0, 'opposite': 0, 'sum': 0}
+    cl_aor2_annotated = {'same': 0, 'opposite': 0, 'sum': 0}
+    cl_aor2_annot_with_PAS = {'same': 0, 'opposite': 0, 'sum': 0}
+    cl_aor2_with_PAS = {'same': 0, 'opposite': 0, 'sum': 0}
 
     dsets, super_3utr = super_falselength(settings, region, subset,
                                           speedrun, svm=False)
 
+    # Get all kinds of statistics from the grouping, for clusters that land in
+    # the same and opposite strand. the same/opposite distinction only makes
+    # sense when the genomic region you investiage have got the directionality
+    # built in to it
     for utr_name, utr in super_3utr[region].iteritems():
 
         for cls in utr.clusters:
 
+            if cls.strand == utr.strand:
+                keyw = 'same'
+            else:
+                keyw = 'opposite'
+
             # Count all clusters
-            all_clusters += 1
+            cl_t[keyw] += 1
+            total_reads[keyw] += cls.nr_support_reads
+
+            if cls.PAS_distance[0] != 'NA':
+                cl_t_with_PAS[keyw] += 1
+
+            if cls.annotated_polyA_distance != 'NA':
+                cl_t_annotated[keyw] += 1
+
+                if cls.PAS_distance[0] != 'NA':
+                    cl_t_annot_with_PAS[keyw] += 1
+
+            # Count clusters with 2 or more reads
+            if cls.nr_support_reads > 2:
+
+                cl_2[keyw] += 1
+
+                if cls.PAS_distance[0] != 'NA':
+                    cl_2_with_PAS[keyw] += 1
+
+                if cls.annotated_polyA_distance != 'NA':
+                    cl_2_annotated[keyw] += 1
+
+                    if cls.PAS_distance[0] != 'NA':
+                        cl_2_annot_with_PAS[keyw] += 1
 
             # Count clusters with 2 or more reads or annotated
             if cls.nr_support_reads > 2 or\
                cls.annotated_polyA_distance != 'NA':
 
-                good_clusters += 1
+                cl_aor2[keyw] += 1
 
-    dsetclusters['all clusters'] = all_clusters
-    dsetclusters['good clusters'] = good_clusters
+                if cls.PAS_distance[0] != 'NA':
+                    cl_aor2_with_PAS[keyw] += 1
+
+                if cls.annotated_polyA_distance != 'NA':
+                    cl_aor2_annotated[keyw] += 1
+
+                    if cls.PAS_distance[0] != 'NA':
+                        cl_aor2_annot_with_PAS[keyw] += 1
+
+    total_reads = {'same': 0, 'opposite': 0, 'sum': 0}
+
+    dsetclusters['total_reads'] = total_reads
+
+    dsetclusters['total_clusters'] = cl_t
+    dsetclusters['total_clusters_wPAS'] = cl_t_with_PAS
+    dsetclusters['total_clusters_annotated'] = cl_t_annotated
+    dsetclusters['total_clusters_annotated_wPAS'] = cl_t_annot_with_PAS
+
+    dsetclusters['2more_clusters'] = cl_2
+    dsetclusters['2more_clusters_wPAS'] = cl_2_with_PAS
+    dsetclusters['2more_clusters_annotated'] = cl_2_annotated
+    dsetclusters['2more_clusters_annotated_wPAS'] = cl_2_annot_with_PAS
+
+    dsetclusters['aor2_clusters'] = cl_aor2
+    dsetclusters['aor2_clusters_wPAS'] = cl_aor2_with_PAS
+    dsetclusters['aor2_clusters_annotated'] = cl_aor2_annotated
+    dsetclusters['aor2_clusters_annotated_wPAS'] = cl_aor2_annot_with_PAS
 
     return dsetclusters
+
+def super_cluster_statprinter(dsetclusters, region):
+                #GM12878
+                #CytoplasmReplicate
+                #Total poly(A) sites: 170
+                #Total poly(A) sites with 2+ reads or annotated: 35 (0.21)
+                #Total poly(A) reads (per site): 300 (1.76)
+                #Annotated poly(A) sites: 10 (0.06)
+                #poly(A) sites with PAS: 29 (0.17)
+                #Annotated poly(A) sites with PAS: 5 (0.50)
+
+    print region
+    key = dsetclusters.keys()[0]
+    statdict = dsetclusters.values()[0]
+
+    reads_same = statdict['total_reads']['same']
+    reads_opposite = statdict['total_reads']['opposite']
+    reads_sum = reads_same + reads_opposite
+    reads = (reads_sum, reads_same, reads_opposite)
+
+    keys = ['total_clusters', '2more_clusters', 'aor2_clusters']
+
+
+    for key in keys:
+
+    # All clusters
+    all_cl_same = statdict['total_clusters']['same']
+    all_cl_opposite = statdict['total_clusters']['opposite']
+    all_cl_sum = all_cl_same + all_cl_opposite
+    all_cl = (all_cl_sum, all_cl_same, all_cl_opposite)
+
+    all_cl_wPAS_same = statdict['total_clusters_wPAS']['same']
+    all_cl_wPAS_opposite = statdict['total_clusters_wPAS']['opposite']
+    all_cl_wPAS_sum = all_cl_wPAS_same + all_cl_wPAS_opposite
+    all_cl_wPAS = (all_cl_wPAS_sum, all_cl_wPAS_same, all_cl_wPAS_opposite)
+
+    all_cl_annot_same = statdict['total_clusters_annotated']['same']
+    all_cl_annot_opposite = statdict['total_clusters_annotated']['opposite']
+    all_cl_annot_sum = all_cl_annot_same + all_cl_annot_opposite
+    all_cl_annot = (all_cl_annot_sum, all_cl_annot_same, all_cl_annot_opposite)
+
+    all_cl_annot_wPAS_same = statdict['total_clusters_annotated_wPAS']['same']
+    all_cl_annot_wPAS_opposite = statdict['total_clusters_annotated_wPAS']['opposite']
+    all_cl_annot_wPAS_sum = all_cl_annot_wPAS_same + all_cl_annot_wPAS_opposite
+    all_cl_annot_wPAS = (all_cl_annot_wPAS_sum, all_cl_annot_wPAS_same,
+                         all_cl_annot_wPAS_opposite)
+
+    # 2 or more clusters
+    two_cl_same = statdict['2more_clusters']['same']
+    two_cl_opposite = statdict['2more_clusters']['opposite']
+    two_cl_sum = two_cl_same + two_cl_opposite
+    two_cl = (two_cl_sum, two_cl_same, two_cl_opposite)
+
+    two_cl_wPAS_same = statdict['2more_clusters_wPAS']['same']
+    two_cl_wPAS_opposite = statdict['2more_clusters_wPAS']['opposite']
+    two_cl_wPAS_sum = two_cl_wPAS_same + two_cl_wPAS_opposite
+    two_cl_wPAS = (two_cl_wPAS_sum, two_cl_wPAS_same, two_cl_wPAS_opposite)
+
+    two_cl_annot_same = statdict['2more_clusters_annotated']['same']
+    two_cl_annot_opposite = statdict['2more_clusters_annotated']['opposite']
+    two_cl_annot_sum = two_cl_annot_same + two_cl_annot_opposite
+    two_cl_annot = (two_cl_annot_sum, two_cl_annot_same, two_cl_annot_opposite)
+
+    two_cl_annot_wPAS_same = statdict['2more_clusters_annotated_wPAS']['same']
+    two_cl_annot_wPAS_opposite = statdict['2more_clusters_annotated_wPAS']['opposite']
+    two_cl_annot_wPAS_sum = two_cl_annot_wPAS_same + two_cl_annot_wPAS_opposite
+    two_cl_annot_wPAS = (two_cl_annot_wPAS_sum, two_cl_annot_wPAS_same,
+                         two_cl_annot_wPAS_opposite)
+
+    # 2 or more OR annotated clusters
+    aor2_cl_same = statdict['aor2_clusters']['same']
+    aor2_cl_opposite = statdict['aor2_clusters']['opposite']
+    aor2_cl_sum = aor2_cl_same + aor2_cl_opposite
+    aor2_cl = (aor2_cl_sum, aor2_cl_same, aor2_cl_opposite)
+
+    aor2_cl_wPAS_same = statdict['aor2_clusters_wPAS']['same']
+    aor2_cl_wPAS_opposite = statdict['aor2_clusters_wPAS']['opposite']
+    aor2_cl_wPAS_sum = aor2_cl_wPAS_same + aor2_cl_wPAS_opposite
+    aor2_cl_wPAS = (aor2_cl_wPAS_sum, aor2_cl_wPAS_same, aor2_cl_wPAS_opposite)
+
+    aor2_cl_annot_same = statdict['aor2_clusters_annotated']['same']
+    aor2_cl_annot_opposite = statdict['aor2_clusters_annotated']['opposite']
+    aor2_cl_annot_sum = aor2_cl_annot_same + aor2_cl_annot_opposite
+    aor2_cl_annot = (aor2_cl_annot_sum, aor2_cl_annot_same, aor2_cl_annot_opposite)
+
+    aor2_cl_annot_wPAS_same = statdict['aor2_clusters_annotated_wPAS']['same']
+    aor2_cl_annot_wPAS_opposite = statdict['aor2_clusters_annotated_wPAS']['opposite']
+    aor2_cl_annot_wPAS_sum = aor2_cl_annot_wPAS_same + aor2_cl_annot_wPAS_opposite
+    aor2_cl_annot_wPAS = (aor2_cl_annot_wPAS_sum, aor2_cl_annot_wPAS_same,
+                         aor2_cl_annot_wPAS_opposite)
+
+    print key
+    print('Reads:{0} (same: {1}, opposite: {2}\n'.format(*reads))
+    print(' ### All clusters ###\n')
+    print('Total Clusters:\t\t {0} (same: {1}, opposite: {2})'.format(*all_cl))
+    print('With PAS:\t\t  {0} (same {1}, opposite {2})'.format(*all_cl_wPAS))
+    print('Annotated:\t\t  {0} (same {1}, opposite {2})'.format(*all_cl_annot))
+    print('Annotated with PAS:\t  {0} (same {1}, opposite {2})'.\
+          format(*all_cl_annot_wPAS))
+
+    print('\n ### Clusters with 2 or more coverage OR annotated ###\n')
+    print('Total Clusters:\t\t {0} (same {1}, opposite {2})'.format(*aor2_cl))
+    print('With PAS:\t\t  {0} (same {1}, opposite {2})'.format(*aor2_cl_wPAS))
+    print('Annotated:\t\t  {0} (same {1}, opposite {2})'.format(*aor2_cl_annot))
+    print('Annotated with PAS:\t  {0} (same {1}, opposite {2})'.\
+          format(*aor2_cl_annot_wPAS))
+
+    print('\n ### Clusters with 2 or more coverage ###\n')
+    print('Total Clusters:\t\t {0} (same {1}, opposite {2})'.format(*two_cl))
+    print('With PAS:\t\t  {0} (same {1}, opposite {2})'.format(*two_cl_wPAS))
+    print('Annotated:\t\t  {0} (same {1}, opposite {2})'.format(*two_cl_annot))
+    print('Annotated with PAS:\t  {0} (same {1}, opposite {2})'.\
+          format(*two_cl_annot_wPAS))
+
+    debug()
+
+    # TODO PRINT HERE
+
 
 def clusterladder(settings, speedrun):
     """
@@ -4882,7 +5019,7 @@ def clusterladder(settings, speedrun):
     p = Plotter()
 
     #1) Make a dictionary: dataset: nr of total reads
-    dsetreads = get_dsetreads(settings)
+    dsetreads = get_dsetreads(settings, region='3UTR')
 
     #2) Make super-clusters for your datasets of choice
 
@@ -4920,7 +5057,8 @@ def clusterladder(settings, speedrun):
     all_minus = sum([k562minus, gm12878minus, helaS3minus], [])
     all_minusCy = sum([k562minusCy, gm12878minusCy, helaS3minusCy], [])
 
-    regions = ['3UTR-exonic', 'anti-3UTR-exonic']
+    #regions = ['3UTR-exonic', 'anti-3UTR-exonic']
+    regions = ['3UTR']
 
     data_grouping = {'Poly(A) plus': all_clCy,
                   'Poly(A) minus': all_minusCy}
@@ -4959,7 +5097,7 @@ def clusterladder(settings, speedrun):
 
             # sort the dsets in cell_lines by # of reads
             def mysorter(dset):
-                return get_dsetreads(settings)[dset]
+                return get_dsetreads(settings, region='3UTR')[dset]
 
             #all_dsets = sorted(cln, key=mysorter, reverse=True)
             all_dsets = sorted(cln, key=mysorter)
@@ -4975,6 +5113,14 @@ def clusterladder(settings, speedrun):
                 key = ':'.join(subset)
                 dsetclusters[key] = get_dsetclusters(subset, region, settings,
                                                      speedrun)
+
+                super_cluster_statprinter(dsetclusters, region)
+
+                # NEW! Print out some statistics like this for each clustering.
+                # Print both for annotated and non-annotated sides, andd:
+                #
+
+            debug()
             col = colors[indx2]
 
             label = ' '.join([title, reg2nicereg[region]])
@@ -5552,11 +5698,11 @@ def gencode_report(settings, speedrun):
     Two main figures:
         1) Total number of new poly(A) sites in 3UTRs and outside (+2 reads or
         annotated) both with and without normalization to region size
-        2) # of new poly(A) sites obtained with increasing number of reads
+        2) of new poly(A) sites obtained with increasing number of reads
     """
 
     # 1) nr of polyA sites obtained with increasing readnr
-    #clusterladder(settings, speedrun)
+    clusterladder(settings, speedrun)
     # RESULT: make two plots: one from each of the 'data_groupign' below. One
     # shows best how discovery tapers out, the other shows that poly(A) minus
     # controls have few poly(A) reads. Also list how many of those poly(A) minus
@@ -5574,7 +5720,7 @@ def gencode_report(settings, speedrun):
     # merge the two regions. make a script that merges these three files with
     # the gencode poly(A) and the poly(A) DB (and also merge the poly(A)DB with
     # gencode, and output all the numbers.
-    venn_polysites(settings, speedrun)
+    #venn_polysites(settings, speedrun)
 
     # split-mapped reads:     2.94e+07 (0.010)
 
@@ -5662,7 +5808,7 @@ def main():
     gencode_report(settings, speedrun=False)
 
     # noncanonical polyadenylation!
-    noncanonical_pA(settings, speedrun=False)
+    #noncanonical_pA(settings, speedrun=False)
 
     # Get the dsetswith utrs and their clusters from the length and polyA files
     # Optionally get SVM information as well
@@ -5679,8 +5825,11 @@ def main():
         #pickle.dump((dsets, super_3utr), open(pickfile, 'wb'), protocol=2)
     #else:
         #(dsets, super_3utr) = pickle.load(open(pickfile))
-    #dsets, super_3utr = super_falselength(settings, speedrun=False, svm=False)
-    #dsets, super_3utr = super_falselength(settings, speedrun=True, svm=False)
+
+    #region = '3UTR'
+    #subset = []
+    #dsets, super_3utr = super_falselength(settings, region, subset,
+                                          #speedrun=True, svm=False)
 
     # TODO to make this faster and consume less memory, don't save whole
     # clusters. save only the information you need. add as necessary. when
@@ -5690,10 +5839,7 @@ def main():
     # statistics on the number of reads that fall in which strand and so forth.
     #polyAstats = get_polyA_stats(settings)
 
-    # Basic poly(A) read statistics for the datasetes
-    # XXX There is something fishy about the 3UTR exon datasets. there are
-    # poly(A) reads on both strands in equal amounts. aaaaah... this is because
-    # it's just + :) nothing fishy at all!
+    ##Basic poly(A) read statistics for the datasetes
     #for side in ['annotated', 'opposite']:
         #polyA_summary(dsets, super_3utr, polyAstats, settings, side)
 
@@ -5734,9 +5880,7 @@ def main():
 
     #UTR_processing(settings)
 
-    #other_methods_comparison(settings)
 
-    #rouge_polyA_sites(settings)
     debug()
 
 if __name__ == '__main__':
