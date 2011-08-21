@@ -42,6 +42,66 @@ It coul be that the poly(A) tail is only there to facilitate degradation of
 RNAS with struvtures in the 3' end because the exonucleases can't work well
 with structured ends.
 
+Further, from RNA-seq evidence, the C elegans paper found polyadenylation at
+the end of histone 3UTRs. They interpret this as standard processing, not as
+degradation related, but speculate that this will be found in higher metazoans.
+Maybe you can have a look, if the histone genes are included in your set.
+
+Further, from the plant rna-seq paper, they detect poly(A) sites in introns,
+and speculate why they are there. They do full-cell sequencing. Perhaps their
+non-explainable PAC (poly(A) site clusters) come from the nucleus only.
+
+The Ozolac Cell december 2010 paper get lots of PAT reads. About the intronic
+ones in yeast, they say:
+"Intronic polyadenylation sites are possibly due to a dynamic interplay
+between splicing and polyadenylation (Tian et al., 2007) and may represent
+transcripts encoding shorter proteins". 
+
+They do find some reads in human rRNA, a 2500, and speculate "fraction of rRNAs
+are polyadenylated, perhaps for the purposes of degradation", with the relevant
+citations. So the cat is out of the box.
+
+Another point is that the previous RNA-seq experiments have worked with whole
+cell. Whole cell experiments emphasize the cytocolic compartment in terms of
+RNA-volume, something which gives a lower resolution to what happens in the
+nucleus, simply because there are fewer reads there than in the cytosol. Try to
+show this contrast using your whole cell data.
+
+Another point is that you adress split-mapped reads. This is not commonly
+adressed in the studies you have looked at, and could explain some of the reads
+landing in their exons. This approach removes false positives, but also some
+positives (if you care to, measure against annotated poly(A) sites)
+
+A big TODO is checking the orientation of the poly(A) reads relative to the
+introns in which they land. You need thus generate an intron-single strand
+region to verify your result. UPDATE you have presently done this. The result
+is as follows (last number the ones with same strand):
+
+11990 onlypolyA_GM12878_Nucleus_CDS-intronic 7322
+12121 onlypolyA_GM12878_NucleusReplicate_CDS-intronic 8000
+29932 onlypolyA_K562_Chromatin_CDS-intronic 20077
+16472 onlypolyA_K562_ChromatinReplicate_CDS-intronic 9118
+26059 onlypolyA_K562_Nucleoplasm_CDS-intronic 18826
+34598 onlypolyA_K562_NucleoplasmReplicate_CDS-intronic 23555
+7066 onlypolyA_K562_Nucleus_CDS-intronic 3283
+12640 onlypolyA_K562_NucleusMinus_CDS-intronic 6829
+8325 onlypolyA_K562_NucleusMinusReplicate_CDS-intronic 5286
+6541 onlypolyA_K562_NucleusReplicate_CDS-intronic 3471
+
+As can be seen, there is an enrichment in all of them, but the enrichment is
+weak. Chromatin is clearer than nucleus, and nucleoplasm is clearer than
+chromatin. In nucleoplasm roughly 70% map to the strand we think. By
+comparison, for 3UTRs it's around 90%. What about 5UTR introns? 5UTR introns
+display the same behavor as CDS introns, thank god. Compare the two replicas:
+do you find any that match?
+
+Most of those reads in the intergenic region have only 1 representative. The
+data for the rRNA seems to indicate that the poly(A) sites are site specific,
+at least for a given RNA. In that case, we could se a clustering of these sites
+among different datasets. That would be a solid indication. A further further
+step would be to fold the RNAs and look for structures that could force such a
+polyadenylation.
+
 I think you need to do the following:
 
 1) Show that the poly(A) sites in nucleus/chromatin/cytoplasm are different

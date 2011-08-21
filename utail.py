@@ -2319,6 +2319,45 @@ def downstream_sequence(settings, polyA_clusters, feature_coords):
 
     return pA_seqs
 
+def splitmapsubtract(just_dset, cache_dir, splitdir, polyA, outdir):
+
+    splitpart = '_splitmapped_reads_merged.bed'
+    splitfile = os.path.join(splitdir, just_dset+splitpart)
+
+    # make an output dir in the polyA cache dir
+    if not os.path.isdir(outdir):
+        os.makedirs(outdir)
+
+    outfile_name = os.path.split(os.path.splitext(polyA)[0]+'_splitfiltered.bed')[1]
+    outfile_path = os.path.join(outdir, outfile_name)
+
+    # if it exists, return it
+    if os.path.isfile(outfile_path):
+        return outfile_path
+
+    elif os.path.isfile(splitfile):
+
+        # Write a log file of how many reads are removed
+        loghandle = open(os.path.join(outdir, 'splitLOG.log'), 'ab')
+        before = sum(1 for line in open(polyA, 'rb'))
+
+        # the -v option returns all reads that DON't overlap
+        cmd = ['intersectBed', '-u', '-s', '-a', polyA, '-b', splitfile]
+        p = Popen(cmd, stdout = open(outfile_path, 'wb'))
+        p.wait()
+
+        after = sum(1 for line in open(outfile_path, 'rb'))
+        diff = before - after
+
+        # write to the logfile
+        loghandle.write(just_dset+'\t')
+        loghandle.write('\t'.join([str(before), str(after), str(diff)])+'\n')
+        loghandle.close()
+
+        return outfile_path
+    else:
+        print('\nNo {0} file found for splitmerging'.format(splitfile))
+
 
 def pipeline(dset_id, dset_reads, tempdir, output_dir, settings, annotation,
              DEBUGGING, polyA_cache, here):
@@ -2368,6 +2407,25 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, settings, annotation,
         # holds no reads.
         if os.path.isfile(polyA_cached_path):
             polyA = polyA_cached_path
+
+        # THIS IS PRIMARILY FOR MY OWN ANALYSIS
+        # if the directory splitmapped reads exists, and a splitmapped file
+        # inside there exists as well, filter out the poly(A) reads that map to
+        # splitmapped regions
+        # TODO: result: you don't achieve anything.
+        # For 3UTR EXONIC: before 6000/15000 were not mapping to annotated sites
+        # (they were 'NA'). After, 2700/7100 were 'NA'. The ratio in both cases
+        # is roughly 40%. Your screening did not improve this ratio, which is
+        # odd. Maybe the splitmapping data cannot be trusted. How does this fare
+        # for the intronic data?
+        splitdir = os.path.join(here, 'splitmapped_reads')
+        if os.path.isdir(splitdir):
+
+            #where you output the filtered files
+            outdir = os.path.join(cache_dir, 'splitmap_filtered')
+
+            polyA = splitmapsubtract(just_dset, cache_dir, splitdir, polyA,
+                                     outdir)
 
     # Get the normal reads (in bed format), if this option is set. Get the polyA
     # reads if this option is set. As well get the total number of reads for
@@ -2419,6 +2477,16 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, settings, annotation,
             outhandle = open(at_count_path, 'wb')
             outhandle.write('{0}\t{1}\t{2}'.format(total_reads, acount, tcount))
             outhandle.close()
+
+        # THIS IS PRIMARILY FOR MY OWN ANALYSIS
+        # if the directory splitmapped reads exists, and a splitmapped file
+        # inside there exists as well, filter out the poly(A) reads that map to
+        # splitmapped regions
+        splitdir = os.path.join(here, 'splitmapped_reads')
+        #if os.path.isdir(splitdir):
+
+            #polyA_bed_path = splitmapsubtract(just_dset, cache_dir, splitdir,
+                                              #polyA_bed_path, outdir)
 
         utr_polyAs, at_numbers = get_polyA_utr(polyA_bed_path, utrfile_path)
 
@@ -3250,10 +3318,6 @@ def main():
     # function (called below). It also affects the 'temp' and 'output'
     # directories, respectively.
 
-    # TODO why don't my poly(A) sites have AATAAA any more? 60% of your clusters
-    # are near annotated sites, but only 20% have PAS. Smth is WRONG. Must be
-    # debug'd.
-
     #DEBUGGING = True
     DEBUGGING = False
 
@@ -3356,15 +3420,15 @@ def piperunner(settings, annotation, simulate, DEBUGGING, beddir, tempdir,
                          annotation, DEBUGGING, polyA_cache, here)
 
             ###### FOR DEBUGGING ######
-            akk = pipeline(*arguments)
+            #akk = pipeline(*arguments)
             ###########################
 
-            #result = my_pool.apply_async(pipeline, arguments)
-            #results.append(result)
+            result = my_pool.apply_async(pipeline, arguments)
+            results.append(result)
 
-        debug()
-        #my_pool.close()
-        #my_pool.join()
+        #debug()
+        my_pool.close()
+        my_pool.join()
 
          ##Get the paths from the final output
         #outp = [result.get() for result in results]
