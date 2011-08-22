@@ -11,3 +11,8 @@ doc/_templates/
 *.swp
 version*/
 .panf*
+*.aux
+*.bbl
+*.blg
+*.log
+*.ps
