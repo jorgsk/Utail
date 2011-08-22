@@ -208,7 +208,7 @@ class Only(object):
     def __init__(self, input_line):
 
         (chrm, beg, end, utr_ID, strand, polyA_coordinate,
-         polyA_coordinate_strand, annotated_polyA_distance, nearby_PAS,
+         polyA_coordinate_strand, tail_info, annotated_polyA_distance, nearby_PAS,
          PAS_distance, number_supporting_reads, nr_unique_supporting_reads,
          unique_reads_spread) = input_line.split('\t')
 
@@ -217,6 +217,7 @@ class Only(object):
         self.end = str_to_intfloat(end)
         self.ID = utr_ID
         self.strand = polyA_coordinate_strand
+        self.tail_info = tail_info
 
         self.polyA_coordinate = str_to_intfloat(polyA_coordinate)
         self.annotated_polyA_distance = annotated_polyA_distance
@@ -1938,6 +1939,9 @@ def super_falselength(settings, region, subset=[], speedrun=False, svm=False):
     """ Return the super clusters with information only from the poly(A) files
     without using length (coverage) information.
 
+    Region is a list of genomic regions to be treated. Datasets are obtained
+    from 'settings'. You can leave out some datasets by putting their names in
+    the subset-list.
     """
 
     dsets = AutoVivification()
@@ -1958,6 +1962,7 @@ def super_falselength(settings, region, subset=[], speedrun=False, svm=False):
             maxlines = 1000
 
         linenr = 0
+
         for dset_name in settings.datasets:
 
             # If you have specified a subset of the datasets, skip those that
@@ -2135,9 +2140,6 @@ def get_super_3utr(dsets, super_cluster, dset_2super):
                 for cl in utr.clusters:
 
                     # superkey for dset_2super
-                    # hey: it's no longer the utr.strand -- it's the cluster
-                    # strand. you still want clusters of different strands to be
-                    # associated to the same utr as in the output file.
                     superkey = cell_line+' '+comp + utr.chrm + cl.strand +\
                             str(cl.polyA_coordinate)
 
@@ -3712,62 +3714,6 @@ def polyadenylation_comparison(dsets, super_3utr, settings):
     #### See the effects of excluding pA sites with 1, 2, 3, etc, coverage
     #cluster_size_sensitivity(dsets) NOT dsetsREADY
 
-    pass
-
-def reads(settings):
-    """
-    * number of reads for each compartment
-    * number of putative poly(A) reads for each compartment
-    * ratio of the two above
-    * number of putative poly(A) reads that map to pAclusters
-    * number of pAclusters with different sizes
-    * number of pAclusters in 'wrong' direction, as a function of the numbers of
-    * poly(A) reads in that cluster
-    """
-
-    pass
-
-def UTR_processing(settings):
-    """
-    * number of annotated 3UTRs (and number of genes)
-        * multi and single exon
-    * number of surviving 3UTRs from clustering
-        * multi and single exon
-    * number of survivers from overlap-screening
-        * multi and single exon
-    """
-
-    pass
-
-def other_methods_comparison(settings):
-    """
-    * number of matching polyA sites in polA_db
-    * number of matching polyA sites in recent publications
-    * number of novel polyA sites, per tissue/cell_line
-    """
-
-    pass
-
-def data_annotation_correspondence(settings):
-    """
-    * number of utrs found compared to total
-    * number of utrs that seem longer than annotation
-    """
-
-    pass
-
-def rouge_polyA_sites(settings):
-    """
-    * polyA pAclusters in the different annotation regions
-    * comparison with polyA_db and recent publications.
-    * "extended 3UTRs": non-overlapping 3'end downstream regions with read
-        coverage and poly(A) pAclusters
-    * novel polyA sites in annotated 3UTRs: compared to polyA_db and
-        publications
-    * presence of PAS and PAS type for novel sites
-    """
-
-    pass
 
 def get_reads_from_file(ds, dsets, finder, pAread_file, utr_bed, utr_exons):
     """
@@ -4074,7 +4020,7 @@ def merge_clusters(dsets):
     """
     Merge all clusters from all datasets into one huge cluster.
 
-    NEW: take into account the strand of the cluster
+    takes into account the strand of the cluster
     """
 
     all_clusters = {} # keys = cluster_centers
@@ -4829,12 +4775,12 @@ def get_polyA_stats(settings):
 
     return polyA_stats
 
-def get_dsetreads(settings):
+def get_dsetreads(settings, region):
     """ For each dataset, get the number of total reads
     """
 
     dsetreads = {}
-    polyA_files = settings.polyAstats_files('3UTR-exonic')
+    polyA_files = settings.polyAstats_files(region)
     for dset, dsetpath in polyA_files.items():
 
         filedict = dict((line.split('\t')[0], line.split('\t')[1])
@@ -4844,15 +4790,61 @@ def get_dsetreads(settings):
 
     return dsetreads
 
+def avrg_tail(new_tail, sum_tail):
+    """ Add new tail to sum tail
+    """
+    # Add all nucleotides to the sum
+    # is this an a-tail or a t-tail?
+    nuc_dict = dict([b.split('=') for b in new_tail.split(':')])
+
+    def sortbyme(val):
+        return float(val[1])
+    tail_type = sorted(nuc_dict.items(), key=sortbyme, reverse=True)[0][0]
+
+    sum_tail[tail_type][0] += 1 # count each one
+    sum_tail[tail_type][1] += float(nuc_dict['G'])
+    sum_tail[tail_type][2] += float(nuc_dict['A'])
+    sum_tail[tail_type][3] += float(nuc_dict['T'])
+    sum_tail[tail_type][4] += float(nuc_dict['C'])
+
+    return sum_tail
+
 def get_dsetclusters(subset, region, settings, speedrun):
     """ Get counts for all clusters and 'good' clusters (2 or more reads or
     annotated).
     """
 
-    dsetclusters = {}
+    # count if the below variables are in same or in opposite strand: in the end
+    # sum them. This is only valid for those genomic regions where you know the
+    # strand.
+    from copy import deepcopy
 
-    all_clusters = 0
-    good_clusters = 0
+    # idea: use attrgetter to get the stuff you need from classes.
+
+    # just the total reads. this is something separate.
+    total_reads = {'same': 0, 'opposite': 0}
+
+    # info on the number of 
+    info_dict = {'same': 0, 'opposite': 0}
+
+    tail_lens = {'same': {'A': [0,0,0,0,0], 'T': [0,0,0,0,0]},
+                 'opposite':{'A': [0,0,0,0,0], 'T': [0,0,0,0,0]}} # total,g,a,t,c
+
+    # method: each category in categories1 have each of the subcategories in
+    # subcategories. these subcategories will have one of two dicsts: info_dict
+    # and tail_lens.
+
+    categories1 = ['Total clusters', 'morethan1', 'morethan1OA', 'only1']
+    subcategories = ['All', 'annotated', 'wPAS', 'annotated_wPAS']
+
+    bigcl = {}
+    for cat1 in categories1:
+        bigcl[cat1] = {}
+        bigcl['total_reads'] = total_reads
+        for cat2 in subcategories:
+            bigcl[cat1][cat2] = {}
+            bigcl[cat1][cat2]['info_dict'] = deepcopy(info_dict)
+            bigcl[cat1][cat2]['tail_lens'] = deepcopy(tail_lens)
 
     dsets, super_3utr = super_falselength(settings, region, subset,
                                           speedrun, svm=False)
@@ -4861,19 +4853,253 @@ def get_dsetclusters(subset, region, settings, speedrun):
 
         for cls in utr.clusters:
 
+            if cls.strand == utr.strand:
+                keyw = 'same'
+            else:
+                keyw = 'opposite'
+
+            total_reads[keyw] += cls.nr_support_reads
+
+            # count the poly(A) tails (now you're doing it wrong. the A and T
+            # are counted separate, so you'd have an A-average of very very
+            # little. It would be better to do this more carefully, since you're
+            # going to use this information to give some kind of argument.
+
             # Count all clusters
-            all_clusters += 1
+            bigcl['Total clusters']['All']['info_dict'][keyw] += 1
+
+            # Count tails
+            taildict = bigcl['Total clusters']['All']['tail_lens'][keyw]
+            taildict = avrg_tail(cls.tail_info, taildict)
+
+            if cls.PAS_distance[0] != 'NA':
+                bigcl['Total clusters']['wPAS']['info_dict'][keyw] += 1
+
+                taildict = bigcl['Total clusters']['wPAS']['tail_lens'][keyw]
+                taildict = avrg_tail(cls.tail_info, taildict)
+
+            if cls.annotated_polyA_distance != 'NA':
+                bigcl['Total clusters']['annotated']['info_dict'][keyw] += 1
+
+                taildict = bigcl['Total clusters']['annotated']['tail_lens'][keyw]
+                taildict = avrg_tail(cls.tail_info, taildict)
+
+                if cls.PAS_distance[0] != 'NA':
+                    bigcl['Total clusters']['annotated_wPAS']['info_dict'][keyw] += 1
+
+                    taildict = bigcl['Total clusters']['annotated_wPAS']\
+                            ['tail_lens'][keyw]
+
+                    taildict = avrg_tail(cls.tail_info, taildict)
+
+            # Count clusters with 2 or more reads
+            if cls.nr_support_reads > 1:
+
+                # Count all clusters
+                bigcl['morethan1']['All']['info_dict'][keyw] += 1
+
+                # Count tails
+                taildict = bigcl['morethan1']['All']['tail_lens'][keyw]
+                taildict = avrg_tail(cls.tail_info, taildict)
+
+                if cls.PAS_distance[0] != 'NA':
+                    bigcl['morethan1']['wPAS']['info_dict'][keyw] += 1
+
+                    taildict = bigcl['morethan1']['wPAS']['tail_lens'][keyw]
+                    taildict = avrg_tail(cls.tail_info, taildict)
+
+                if cls.annotated_polyA_distance != 'NA':
+                    bigcl['morethan1']['annotated']['info_dict'][keyw] += 1
+
+                    taildict = bigcl['morethan1']['annotated']['tail_lens'][keyw]
+                    taildict = avrg_tail(cls.tail_info, taildict)
+
+                    if cls.PAS_distance[0] != 'NA':
+                        bigcl['morethan1']['annotated_wPAS']['info_dict'][keyw] += 1
+
+                        taildict = bigcl['morethan1']['annotated_wPAS']\
+                                ['tail_lens'][keyw]
+
+                        taildict = avrg_tail(cls.tail_info, taildict)
 
             # Count clusters with 2 or more reads or annotated
-            if cls.nr_support_reads > 2 or\
+            if cls.nr_support_reads > 1 or\
                cls.annotated_polyA_distance != 'NA':
 
-                good_clusters += 1
+                # Count all clusters
+                bigcl['morethan1OA']['All']['info_dict'][keyw] += 1
 
-    dsetclusters['all clusters'] = all_clusters
-    dsetclusters['good clusters'] = good_clusters
+                # Count tails
+                taildict = bigcl['morethan1OA']['All']['tail_lens'][keyw]
+                taildict = avrg_tail(cls.tail_info, taildict)
 
-    return dsetclusters
+                if cls.PAS_distance[0] != 'NA':
+                    bigcl['morethan1OA']['wPAS']['info_dict'][keyw] += 1
+
+                    taildict = bigcl['morethan1OA']['wPAS']['tail_lens'][keyw]
+                    taildict = avrg_tail(cls.tail_info, taildict)
+
+                if cls.annotated_polyA_distance != 'NA':
+                    bigcl['morethan1OA']['annotated']['info_dict'][keyw] += 1
+
+                    taildict = bigcl['morethan1OA']['annotated']['tail_lens'][keyw]
+                    taildict = avrg_tail(cls.tail_info, taildict)
+
+                    if cls.PAS_distance[0] != 'NA':
+                        bigcl['morethan1OA']['annotated_wPAS']['info_dict'][keyw] += 1
+
+                        taildict = bigcl['morethan1OA']['annotated_wPAS']\
+                                ['tail_lens'][keyw]
+
+                        taildict = avrg_tail(cls.tail_info, taildict)
+
+            # Count clusters with only 1 read
+            if cls.nr_support_reads == 1:
+
+                # Count all clusters
+                bigcl['only1']['All']['info_dict'][keyw] += 1
+
+                # Count tails
+                taildict = bigcl['only1']['All']['tail_lens'][keyw]
+                taildict = avrg_tail(cls.tail_info, taildict)
+
+                if cls.PAS_distance[0] != 'NA':
+                    bigcl['only1']['wPAS']['info_dict'][keyw] += 1
+
+                    taildict = bigcl['only1']['wPAS']['tail_lens'][keyw]
+                    taildict = avrg_tail(cls.tail_info, taildict)
+
+                if cls.annotated_polyA_distance != 'NA':
+                    bigcl['only1']['annotated']['info_dict'][keyw] += 1
+
+                    taildict = bigcl['only1']['annotated']['tail_lens'][keyw]
+                    taildict = avrg_tail(cls.tail_info, taildict)
+
+                    if cls.PAS_distance[0] != 'NA':
+                        bigcl['only1']['annotated_wPAS']['info_dict'][keyw] += 1
+
+                        taildict = bigcl['only1']['annotated_wPAS']\
+                                ['tail_lens'][keyw]
+
+                        taildict = avrg_tail(cls.tail_info, taildict)
+
+    return bigcl
+
+def super_cluster_statprinter(dsetclusters, region, thiskey):
+
+    this_combo = thiskey
+    statdict = dsetclusters[thiskey]
+
+    keys = ['Total clusters', 'morethan1OA', 'morethan1', 'only1']
+
+    subkeys =  ['All', 'wPAS', 'annotated', 'annotated_wPAS']
+
+    datakeys = ['info_dict', 'tail_lens']
+
+    headers = {'Total clusters': '### All clustes ###',
+               'morethan1': '### Clusters with 2 or more coverage ###',
+               'only1': '### Clusters with only 1 coverage ###',
+               'morethan1OA': '### Clusters with 2 or more or annotated ###'}
+
+    subheaders = {'wPAS': 'With PAS',
+                  'All': 'All',
+                  'annotated': 'Annotated',
+                  'annotated_wPAS': 'Annotated with PAS'}
+
+    reads_same = statdict['total_reads']['same']
+    reads_opposite = statdict['total_reads']['opposite']
+    reads_sum = reads_same + reads_opposite
+    reads = (reads_sum, reads_same, reads_opposite)
+
+    # you need it for percentages
+    total_sum = statdict['Total clusters']['All']['info_dict']['opposite']\
+            +\
+            statdict['Total clusters']['All']['info_dict']['same']
+
+    # just initating this value
+    local_sum = total_sum
+
+    print('########################################################')
+    print region
+    print this_combo
+
+    print('Reads:{0} (same: {1}, opposite: {2})'.format(*reads))
+
+
+    for key in keys:
+
+        print('\n'+headers[key])
+
+        for dkey in datakeys:
+
+            for subkey in subkeys:
+
+                if dkey == 'info_dict':
+
+                    same = statdict[key][subkey][dkey]['same']
+                    opposite = statdict[key][subkey][dkey]['opposite']
+                    so_sum = same + opposite
+
+                    # All clusters
+                    if subkey == 'All':
+                        so_pcnt = format(so_sum/float(total_sum), '.2f')
+                        # must store the local sum for when not total clusters
+                        local_sum = so_sum
+                    else:
+                        so_pcnt = format(so_sum/float(local_sum), '.2f')
+
+                    same_pcnt = format(same/float(so_sum), '.2f')
+                    oppo_pcnt = format(opposite/float(so_sum), '.2f')
+
+                    so = (so_sum, so_pcnt, same, same_pcnt, opposite, oppo_pcnt)
+                    print(subheaders[subkey]+':\t{0} ({1})\tsame {2} ({3})'\
+                          '\topposite {4} ({5})').format(*so)
+
+                if dkey == 'tail_lens':
+                    same = statdict[key][subkey][dkey]['same']
+                    osite = statdict[key][subkey][dkey]['opposite']
+                    keys = ['A', 'T']
+                    so_sum = {}
+                    for k in keys:
+                        so_sum[k] = [same[k][i]+osite[k][i] for i in range(5)]
+
+                    print(subheaders[subkey])
+
+                    def divme(a,b):
+                        try:
+                            return format(a/b, '.2f')
+                        except ZeroDivisionError:
+                            return '0'
+
+                    indx = {'T':3, 'A':2}
+                    for k in keys:
+                        snr = same[k][0]
+                        ssnr = str(snr)
+
+                        #sprint = ssnr+' '+str([divme(v, snr) for v in same[k][1:]])
+                        sprint = ssnr+' '+divme(same[k][indx[k]], snr)
+                        br = osite[k][0]
+                        sor = str(br)
+                        #oprint = sor+' '+str([divme(v, br) for v in osite[k][1:]])
+                        oprint = sor+' '+divme(osite[k][indx[k]], br)
+
+                        sr = so_sum[k][0]
+                        ssr = str(sr)
+                        #smprint = ssr+' '+str([divme(v, sr) for v in so_sum[k][1:]])
+                        smprint = ssr+' '+divme(so_sum[k][indx[k]], sr)
+
+                        #print(k+':')
+                        #print('\tsame:\t\t' +sprint)
+                        #print('\topposite:\t' +oprint)
+                        #print('\tsum:\t\t' +smprint+'\n')
+                        print(k+'\tsame: '+sprint+'\topposite: '+oprint+'\tsum: '+smprint)
+
+
+    print('########################################################\n')
+
+
+    # TODO PRINT HERE
+
 
 def clusterladder(settings, speedrun):
     """
@@ -4882,7 +5108,7 @@ def clusterladder(settings, speedrun):
     p = Plotter()
 
     #1) Make a dictionary: dataset: nr of total reads
-    dsetreads = get_dsetreads(settings)
+    dsetreads = get_dsetreads(settings, region='3UTR')
 
     #2) Make super-clusters for your datasets of choice
 
@@ -4921,23 +5147,26 @@ def clusterladder(settings, speedrun):
     all_minusCy = sum([k562minusCy, gm12878minusCy, helaS3minusCy], [])
 
     regions = ['3UTR-exonic', 'anti-3UTR-exonic']
+    ##regions = ['3UTR']
+    #regions = ['cds-intronic']
+    #data_grouping {'':}
+    print('Loaded datasets:')
+    for ds in settings.datasets:
+        print(ds)
+    #debug()
 
     data_grouping = {'Poly(A) plus': all_clCy,
                   'Poly(A) minus': all_minusCy}
-
-    #data_grouping = {'': all_cl}
-
 
     # For the plot
     reg2nicereg = {'3UTR-exonic': 'Annotated 3UTR regions',
                  'anti-3UTR-exonic': 'in rest of genome',
                    'Whole genome': 'Whole genome'}
-
     linestyle = {'3UTR-exonic': '--',
                  'anti-3UTR-exonic': ':',
                    'Whole genome': '-'}
 
-    (fig, ax) = plt.subplots(1)
+    #(fig, ax) = plt.subplots(1)
     colors = ['m', 'r', 'b', 'g', 'k']
 
     # keep a dictionary with reference to all the plots
@@ -4946,8 +5175,8 @@ def clusterladder(settings, speedrun):
     # store values for summing in the end
     clusterstorage = []
 
-    speedrun = True
-    #speedrun = False
+    #speedrun = True
+    speedrun = False
 
     # IDEA: just plot 3UTR and sum. the not-3utr can be imagined.
 
@@ -4959,7 +5188,7 @@ def clusterladder(settings, speedrun):
 
             # sort the dsets in cell_lines by # of reads
             def mysorter(dset):
-                return get_dsetreads(settings)[dset]
+                return get_dsetreads(settings, region='3UTR')[dset]
 
             #all_dsets = sorted(cln, key=mysorter, reverse=True)
             all_dsets = sorted(cln, key=mysorter)
@@ -4969,12 +5198,17 @@ def clusterladder(settings, speedrun):
             # A dictionary with all clusters and +2 or annot clusters
             dsetclusters = {}
 
+            print title
+
             for subset in subsets:
 
                 # Get the number of 'good' and 'all' clusters
                 key = ':'.join(subset)
                 dsetclusters[key] = get_dsetclusters(subset, region, settings,
                                                      speedrun)
+
+            debug()
+            # TODO you need to fix this the below with the new dsetcluster layout
             col = colors[indx2]
 
             label = ' '.join([title, reg2nicereg[region]])
@@ -5542,6 +5776,38 @@ def join_regions(paths, only_these, outdir, extendby=False):
 
     return joined_merged_path
 
+def cumul_stats_printer(settings, speedrun):
+
+    #region = 'CDS-intronic'
+    region = '3UTR'
+
+    print('Loaded datasets:')
+    for ds in settings.datasets:
+        print(ds)
+
+    # cytoplasmic and replicates
+    all_dsets = [ds for ds in settings.datasets if 'Cytoplasm' in ds]
+    #all_dsets = [ds for ds in settings.datasets if 'Nucleoplasm' in ds]
+    #debug()
+
+
+    subsets = [all_dsets[:end] for end in range(1, len(all_dsets)+1)]
+
+    dsetclusters = {}
+
+    #speedrun = True
+    speedrun = False
+
+    for subset in subsets:
+
+        # Get the number of 'good' and 'all' clusters
+        key = ':'.join(subset)
+        dsetclusters[key] = get_dsetclusters(subset, region, settings,
+                                             speedrun)
+
+        # NEW! Print out some statistics like this for each clustering.
+        super_cluster_statprinter(dsetclusters, region, key)
+
 def gencode_report(settings, speedrun):
     """ Make figures for the GENCODE report. The report is an overview of
     evidence for polyadenylation from the Gingeras RNA-seq experiments.
@@ -5552,8 +5818,12 @@ def gencode_report(settings, speedrun):
     Two main figures:
         1) Total number of new poly(A) sites in 3UTRs and outside (+2 reads or
         annotated) both with and without normalization to region size
-        2) # of new poly(A) sites obtained with increasing number of reads
+        2) of new poly(A) sites obtained with increasing number of reads
     """
+
+    # 0) Core stats. print core stats about your datasets, separate and
+    # cumulated
+    cumul_stats_printer(settings, speedrun)
 
     # 1) nr of polyA sites obtained with increasing readnr
     #clusterladder(settings, speedrun)
@@ -5574,7 +5844,7 @@ def gencode_report(settings, speedrun):
     # merge the two regions. make a script that merges these three files with
     # the gencode poly(A) and the poly(A) DB (and also merge the poly(A)DB with
     # gencode, and output all the numbers.
-    venn_polysites(settings, speedrun)
+    #venn_polysites(settings, speedrun)
 
     # split-mapped reads:     2.94e+07 (0.010)
 
@@ -5662,7 +5932,7 @@ def main():
     gencode_report(settings, speedrun=False)
 
     # noncanonical polyadenylation!
-    noncanonical_pA(settings, speedrun=False)
+    #noncanonical_pA(settings, speedrun=False)
 
     # Get the dsetswith utrs and their clusters from the length and polyA files
     # Optionally get SVM information as well
@@ -5679,8 +5949,11 @@ def main():
         #pickle.dump((dsets, super_3utr), open(pickfile, 'wb'), protocol=2)
     #else:
         #(dsets, super_3utr) = pickle.load(open(pickfile))
-    #dsets, super_3utr = super_falselength(settings, speedrun=False, svm=False)
-    #dsets, super_3utr = super_falselength(settings, speedrun=True, svm=False)
+
+    #region = '3UTR'
+    #subset = []
+    #dsets, super_3utr = super_falselength(settings, region, subset,
+                                          #speedrun=True, svm=False)
 
     # TODO to make this faster and consume less memory, don't save whole
     # clusters. save only the information you need. add as necessary. when
@@ -5690,10 +5963,7 @@ def main():
     # statistics on the number of reads that fall in which strand and so forth.
     #polyAstats = get_polyA_stats(settings)
 
-    # Basic poly(A) read statistics for the datasetes
-    # XXX There is something fishy about the 3UTR exon datasets. there are
-    # poly(A) reads on both strands in equal amounts. aaaaah... this is because
-    # it's just + :) nothing fishy at all!
+    ##Basic poly(A) read statistics for the datasetes
     #for side in ['annotated', 'opposite']:
         #polyA_summary(dsets, super_3utr, polyAstats, settings, side)
 
@@ -5734,9 +6004,7 @@ def main():
 
     #UTR_processing(settings)
 
-    #other_methods_comparison(settings)
 
-    #rouge_polyA_sites(settings)
     debug()
 
 if __name__ == '__main__':
