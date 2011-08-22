@@ -4814,8 +4814,6 @@ def get_dsetclusters(subset, region, settings, speedrun):
     annotated).
     """
 
-    dsetclusters = {}
-
     # count if the below variables are in same or in opposite strand: in the end
     # sum them. This is only valid for those genomic regions where you know the
     # strand.
@@ -4824,60 +4822,32 @@ def get_dsetclusters(subset, region, settings, speedrun):
     # idea: use attrgetter to get the stuff you need from classes.
 
     # just the total reads. this is something separate.
-    total_reads = {'same': 0, 'opposite': 0, 'sum': 0}
+    total_reads = {'same': 0, 'opposite': 0}
 
     # info on the number of 
-    info_dict = {'same': 0, 'opposite': 0, 'sum': 0}
+    info_dict = {'same': 0, 'opposite': 0}
 
-    tail_lens = {'A': [0,0,0,0,0], 'T': [0,0,0,0,0]} # total,g,a,t,c
-
-    # TODO: instead of adding tail_lens on top of the counts, make it separate.
-    # count for all the structures you have so far. I think it's worrying that
-    # the tail length distribution is longer and has a similar A/T distribution.
-    # it implies too many strange things. good note: it seems that the CDS
-    # intronic also has a skewed A/T ratio, just like the genuine reads. do
-    # these things stem from polyadenlyation?
+    tail_lens = {'same': {'A': [0,0,0,0,0], 'T': [0,0,0,0,0]},
+                 'opposite':{'A': [0,0,0,0,0], 'T': [0,0,0,0,0]}} # total,g,a,t,c
 
     # method: each category in categories1 have each of the subcategories in
     # subcategories. these subcategories will have one of two dicsts: info_dict
     # and tail_lens.
 
-
-    categories1 = ['Total clusters', 'morethan1', 'morethan1 or annot', 'only1']
+    categories1 = ['Total clusters', 'morethan1', 'morethan1OA', 'only1']
     subcategories = ['All', 'annotated', 'wPAS', 'annotated_wPAS']
-    subdicts1 = info_dict
-    subdicts2 = tail_lens
 
-
-    # total clusters
-    cl_t = deepcopy(info_dict)
-    cl_t_annotated = deepcopy(info_dict)
-    cl_t_annot_with_PAS = deepcopy(info_dict)
-    cl_t_with_PAS = deepcopy(info_dict)
-
-    # total clusters with > 1 read coverage
-    cl_2 = deepcopy(info_dict)
-    cl_2_annotated = deepcopy(info_dict)
-    cl_2_annot_with_PAS = deepcopy(info_dict)
-    cl_2_with_PAS = deepcopy(info_dict)
-
-    # total clusters with == 1 read coverage
-    cl_1 = deepcopy(info_dict)
-    cl_1_annotated = deepcopy(info_dict)
-    cl_1_annot_with_PAS = deepcopy(info_dict)
-    cl_1_with_PAS = deepcopy(info_dict)
-
-    # total clusters with > 1 read coverage OR annotated
-    cl_aor2 = deepcopy(info_dict)
-    cl_aor2_annotated = deepcopy(info_dict)
-    cl_aor2_annot_with_PAS = deepcopy(info_dict)
-    cl_aor2_with_PAS = deepcopy(info_dict)
+    bigcl = {}
+    for cat1 in categories1:
+        bigcl[cat1] = {}
+        bigcl['total_reads'] = total_reads
+        for cat2 in subcategories:
+            bigcl[cat1][cat2] = {}
+            bigcl[cat1][cat2]['info_dict'] = deepcopy(info_dict)
+            bigcl[cat1][cat2]['tail_lens'] = deepcopy(tail_lens)
 
     dsets, super_3utr = super_falselength(settings, region, subset,
                                           speedrun, svm=False)
-
-    all_opposite_with_PAS = 0
-    all_same_with_PAS = 0
 
     for utr_name, utr in super_3utr[region].iteritems():
 
@@ -4888,121 +4858,153 @@ def get_dsetclusters(subset, region, settings, speedrun):
             else:
                 keyw = 'opposite'
 
-            # Count all clusters
-            cl_t[keyw] += 1
+            total_reads[keyw] += cls.nr_support_reads
+
             # count the poly(A) tails (now you're doing it wrong. the A and T
             # are counted separate, so you'd have an A-average of very very
             # little. It would be better to do this more carefully, since you're
             # going to use this information to give some kind of argument.
-            cl_t['tail_lens'] = avrg_tail(cls.tail_info, cl_t['tail_lens'])
-            print cl_t['tail_lens']
 
-            total_reads[keyw] += cls.nr_support_reads
+            # Count all clusters
+            bigcl['Total clusters']['All']['info_dict'][keyw] += 1
+
+            # Count tails
+            taildict = bigcl['Total clusters']['All']['tail_lens'][keyw]
+            taildict = avrg_tail(cls.tail_info, taildict)
 
             if cls.PAS_distance[0] != 'NA':
-                cl_t_with_PAS[keyw] += 1
-                if keyw == 'opposite':
-                    all_opposite_with_PAS += 1
-                else:
-                    all_same_with_PAS += 1
+                bigcl['Total clusters']['wPAS']['info_dict'][keyw] += 1
+
+                taildict = bigcl['Total clusters']['wPAS']['tail_lens'][keyw]
+                taildict = avrg_tail(cls.tail_info, taildict)
 
             if cls.annotated_polyA_distance != 'NA':
-                cl_t_annotated[keyw] += 1
+                bigcl['Total clusters']['annotated']['info_dict'][keyw] += 1
+
+                taildict = bigcl['Total clusters']['annotated']['tail_lens'][keyw]
+                taildict = avrg_tail(cls.tail_info, taildict)
 
                 if cls.PAS_distance[0] != 'NA':
-                    cl_t_annot_with_PAS[keyw] += 1
+                    bigcl['Total clusters']['annotated_wPAS']['info_dict'][keyw] += 1
+
+                    taildict = bigcl['Total clusters']['annotated_wPAS']\
+                            ['tail_lens'][keyw]
+
+                    taildict = avrg_tail(cls.tail_info, taildict)
 
             # Count clusters with 2 or more reads
             if cls.nr_support_reads > 1:
 
-                cl_2[keyw] += 1
-                cl_2['tail_lens'] = avrg_tail(cls.tail_info,
-                                              cl_2['tail_lens'])
+                # Count all clusters
+                bigcl['morethan1']['All']['info_dict'][keyw] += 1
+
+                # Count tails
+                taildict = bigcl['morethan1']['All']['tail_lens'][keyw]
+                taildict = avrg_tail(cls.tail_info, taildict)
 
                 if cls.PAS_distance[0] != 'NA':
-                    cl_2_with_PAS[keyw] += 1
+                    bigcl['morethan1']['wPAS']['info_dict'][keyw] += 1
+
+                    taildict = bigcl['morethan1']['wPAS']['tail_lens'][keyw]
+                    taildict = avrg_tail(cls.tail_info, taildict)
 
                 if cls.annotated_polyA_distance != 'NA':
-                    cl_2_annotated[keyw] += 1
+                    bigcl['morethan1']['annotated']['info_dict'][keyw] += 1
+
+                    taildict = bigcl['morethan1']['annotated']['tail_lens'][keyw]
+                    taildict = avrg_tail(cls.tail_info, taildict)
 
                     if cls.PAS_distance[0] != 'NA':
-                        cl_2_annot_with_PAS[keyw] += 1
+                        bigcl['morethan1']['annotated_wPAS']['info_dict'][keyw] += 1
+
+                        taildict = bigcl['morethan1']['annotated_wPAS']\
+                                ['tail_lens'][keyw]
+
+                        taildict = avrg_tail(cls.tail_info, taildict)
 
             # Count clusters with 2 or more reads or annotated
             if cls.nr_support_reads > 1 or\
                cls.annotated_polyA_distance != 'NA':
 
-                cl_aor2[keyw] += 1
-                cl_aor2['tail_lens'] = avrg_tail(cls.tail_info,
-                                                 cl_aor2['tail_lens'])
+                # Count all clusters
+                bigcl['morethan1OA']['All']['info_dict'][keyw] += 1
+
+                # Count tails
+                taildict = bigcl['morethan1OA']['All']['tail_lens'][keyw]
+                taildict = avrg_tail(cls.tail_info, taildict)
 
                 if cls.PAS_distance[0] != 'NA':
-                    cl_aor2_with_PAS[keyw] += 1
+                    bigcl['morethan1OA']['wPAS']['info_dict'][keyw] += 1
+
+                    taildict = bigcl['morethan1OA']['wPAS']['tail_lens'][keyw]
+                    taildict = avrg_tail(cls.tail_info, taildict)
 
                 if cls.annotated_polyA_distance != 'NA':
-                    cl_aor2_annotated[keyw] += 1
+                    bigcl['morethan1OA']['annotated']['info_dict'][keyw] += 1
+
+                    taildict = bigcl['morethan1OA']['annotated']['tail_lens'][keyw]
+                    taildict = avrg_tail(cls.tail_info, taildict)
 
                     if cls.PAS_distance[0] != 'NA':
-                        cl_aor2_annot_with_PAS[keyw] += 1
+                        bigcl['morethan1OA']['annotated_wPAS']['info_dict'][keyw] += 1
 
+                        taildict = bigcl['morethan1OA']['annotated_wPAS']\
+                                ['tail_lens'][keyw]
+
+                        taildict = avrg_tail(cls.tail_info, taildict)
+
+            # Count clusters with only 1 read
             if cls.nr_support_reads == 1:
 
-                cl_1[keyw] += 1
-                cl_1['tail_lens'] = avrg_tail(cls.tail_info,
-                                              cl_1['tail_lens'])
+                # Count all clusters
+                bigcl['only1']['All']['info_dict'][keyw] += 1
+
+                # Count tails
+                taildict = bigcl['only1']['All']['tail_lens'][keyw]
+                taildict = avrg_tail(cls.tail_info, taildict)
 
                 if cls.PAS_distance[0] != 'NA':
-                    cl_1_with_PAS[keyw] += 1
+                    bigcl['only1']['wPAS']['info_dict'][keyw] += 1
+
+                    taildict = bigcl['only1']['wPAS']['tail_lens'][keyw]
+                    taildict = avrg_tail(cls.tail_info, taildict)
 
                 if cls.annotated_polyA_distance != 'NA':
-                    cl_1_annotated[keyw] += 1
+                    bigcl['only1']['annotated']['info_dict'][keyw] += 1
+
+                    taildict = bigcl['only1']['annotated']['tail_lens'][keyw]
+                    taildict = avrg_tail(cls.tail_info, taildict)
 
                     if cls.PAS_distance[0] != 'NA':
-                        cl_1_annot_with_PAS[keyw] += 1
+                        bigcl['only1']['annotated_wPAS']['info_dict'][keyw] += 1
 
-    dsetclusters['total_reads'] = total_reads
+                        taildict = bigcl['only1']['annotated_wPAS']\
+                                ['tail_lens'][keyw]
 
-    dsetclusters['total_clusters'] = cl_t
-    dsetclusters['total_clusters_wPAS'] = cl_t_with_PAS
-    dsetclusters['total_clusters_annotated'] = cl_t_annotated
-    dsetclusters['total_clusters_annotated_wPAS'] = cl_t_annot_with_PAS
+                        taildict = avrg_tail(cls.tail_info, taildict)
 
-    dsetclusters['2more_clusters'] = cl_2
-    dsetclusters['2more_clusters_wPAS'] = cl_2_with_PAS
-    dsetclusters['2more_clusters_annotated'] = cl_2_annotated
-    dsetclusters['2more_clusters_annotated_wPAS'] = cl_2_annot_with_PAS
-
-    dsetclusters['just1_clusters'] = cl_1
-    dsetclusters['just1_clusters_wPAS'] = cl_1_with_PAS
-    dsetclusters['just1_clusters_annotated'] = cl_1_annotated
-    dsetclusters['just1_clusters_annotated_wPAS'] = cl_1_annot_with_PAS
-
-    dsetclusters['aor2_clusters'] = cl_aor2
-    dsetclusters['aor2_clusters_wPAS'] = cl_aor2_with_PAS
-    dsetclusters['aor2_clusters_annotated'] = cl_aor2_annotated
-    dsetclusters['aor2_clusters_annotated_wPAS'] = cl_aor2_annot_with_PAS
-
-    return dsetclusters
+    return bigcl
 
 def super_cluster_statprinter(dsetclusters, region, thiskey):
 
     this_combo = thiskey
     statdict = dsetclusters[thiskey]
 
-    keys = ['total_clusters', 'aor2_clusters', '2more_clusters',
-            'just1_clusters']
+    keys = ['Total clusters', 'morethan1OA', 'morethan1', 'only1']
 
-    subkeys =  ['Total clusters', 'wPAS', 'annotated', 'annotated_wPAS']
+    subkeys =  ['All', 'wPAS', 'annotated', 'annotated_wPAS']
 
-    headers = {'total_clusters': '### All clustes ###',
-               '2more_clusters': '### Clusters with 2 or more coverage ###',
-               'just1_clusters': '### Clusters with only 1 coverage ###',
-               'aor2_clusters': '### Clusters with 2 or more or annotated ###'}
+    datakeys = ['info_dict', 'tail_lens']
+
+    headers = {'Total clusters': '### All clustes ###',
+               'morethan1': '### Clusters with 2 or more coverage ###',
+               'only1': '### Clusters with only 1 coverage ###',
+               'morethan1OA': '### Clusters with 2 or more or annotated ###'}
 
     subheaders = {'wPAS': 'With PAS',
-                 'Total clusters': 'Total clusters',
-                 'annotated': 'Annotated',
-                 'annotated_wPAS': 'Annotated with PAS'}
+                  'All': 'All',
+                  'annotated': 'Annotated',
+                  'annotated_wPAS': 'Annotated with PAS'}
 
     reads_same = statdict['total_reads']['same']
     reads_opposite = statdict['total_reads']['opposite']
@@ -5010,9 +5012,9 @@ def super_cluster_statprinter(dsetclusters, region, thiskey):
     reads = (reads_sum, reads_same, reads_opposite)
 
     # you need it for percentages
-    total_sum = statdict['total_clusters']['opposite']\
+    total_sum = statdict['Total clusters']['All']['info_dict']['opposite']\
             +\
-            statdict['total_clusters']['same']
+            statdict['Total clusters']['All']['info_dict']['same']
 
     # just initating this value
     local_sum = total_sum
@@ -5023,37 +5025,76 @@ def super_cluster_statprinter(dsetclusters, region, thiskey):
 
     print('Reads:{0} (same: {1}, opposite: {2})'.format(*reads))
 
+
     for key in keys:
 
         print('\n'+headers[key])
 
-        for subkey in subkeys:
+        for dkey in datakeys:
 
-            # All clusters
-            if subkey == 'Total clusters':
-                finalkey = key
+            for subkey in subkeys:
 
-                debug()
-                same = statdict[finalkey]['same']
-                opposite = statdict[finalkey]['opposite']
-                so_sum = same + opposite
-                so_pcnt = format(so_sum/float(total_sum), '.2f')
-                # must store the local sum for when not total clusters
-                local_sum = so_sum
+                if dkey == 'info_dict':
 
-            else:
-                finalkey = key + '_' + subkey
+                    same = statdict[key][subkey][dkey]['same']
+                    opposite = statdict[key][subkey][dkey]['opposite']
+                    so_sum = same + opposite
 
-                same = statdict[finalkey]['same']
-                opposite = statdict[finalkey]['opposite']
-                so_sum = same + opposite
-                so_pcnt = format(so_sum/float(local_sum), '.2f')
+                    # All clusters
+                    if subkey == 'All':
+                        so_pcnt = format(so_sum/float(total_sum), '.2f')
+                        # must store the local sum for when not total clusters
+                        local_sum = so_sum
+                    else:
+                        so_pcnt = format(so_sum/float(local_sum), '.2f')
 
-            same_pcnt = format(same/float(so_sum), '.2f')
-            oppo_pcnt = format(opposite/float(so_sum), '.2f')
-            so = (so_sum, so_pcnt, same, same_pcnt, opposite, oppo_pcnt)
-            print(subheaders[subkey]+':\t{0} ({1})\tsame {2} ({3})'\
-                  '\topposite {4} ({5})').format(*so)
+                    same_pcnt = format(same/float(so_sum), '.2f')
+                    oppo_pcnt = format(opposite/float(so_sum), '.2f')
+
+                    so = (so_sum, so_pcnt, same, same_pcnt, opposite, oppo_pcnt)
+                    print(subheaders[subkey]+':\t{0} ({1})\tsame {2} ({3})'\
+                          '\topposite {4} ({5})').format(*so)
+
+                if dkey == 'tail_lens':
+                    same = statdict[key][subkey][dkey]['same']
+                    osite = statdict[key][subkey][dkey]['opposite']
+                    keys = ['A', 'T']
+                    so_sum = {}
+                    for k in keys:
+                        so_sum[k] = [same[k][i]+osite[k][i] for i in range(5)]
+
+                    print(subheaders[subkey])
+
+                    def divme(a,b):
+                        try:
+                            return format(a/b, '.2f')
+                        except ZeroDivisionError:
+                            return '0'
+
+                    indx = {'T':3, 'A':2}
+                    for k in keys:
+                        snr = same[k][0]
+                        ssnr = str(snr)
+
+                        #sprint = ssnr+' '+str([divme(v, snr) for v in same[k][1:]])
+                        sprint = ssnr+' '+divme(same[k][indx[k]], snr)
+                        br = osite[k][0]
+                        sor = str(br)
+                        #oprint = sor+' '+str([divme(v, br) for v in osite[k][1:]])
+                        oprint = sor+' '+divme(osite[k][indx[k]], br)
+
+                        sr = so_sum[k][0]
+                        ssr = str(sr)
+                        #smprint = ssr+' '+str([divme(v, sr) for v in so_sum[k][1:]])
+                        smprint = ssr+' '+divme(so_sum[k][indx[k]], sr)
+
+                        #print(k+':')
+                        #print('\tsame:\t\t' +sprint)
+                        #print('\topposite:\t' +oprint)
+                        #print('\tsum:\t\t' +smprint+'\n')
+                        print(k+'\tsame: '+sprint+'\topposite: '+oprint+'\tsum: '+smprint)
+
+
     print('########################################################\n')
 
 
@@ -5166,10 +5207,8 @@ def clusterladder(settings, speedrun):
                 dsetclusters[key] = get_dsetclusters(subset, region, settings,
                                                      speedrun)
 
-                # NEW! Print out some statistics like this for each clustering.
-                super_cluster_statprinter(dsetclusters, region, key)
-
             debug()
+            # TODO you need to fix this the below with the new dsetcluster layout
             col = colors[indx2]
 
             label = ' '.join([title, reg2nicereg[region]])
@@ -5748,12 +5787,16 @@ def cumul_stats_printer(settings, speedrun):
 
     # cytoplasmic and replicates
     all_dsets = [ds for ds in settings.datasets if 'Cytoplasm' in ds]
+    #all_dsets = [ds for ds in settings.datasets if 'Nucleoplasm' in ds]
+    #debug()
+
 
     subsets = [all_dsets[:end] for end in range(1, len(all_dsets)+1)]
 
     dsetclusters = {}
 
-    speedrun = True
+    #speedrun = True
+    speedrun = False
 
     for subset in subsets:
 

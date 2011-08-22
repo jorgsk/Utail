@@ -119,4 +119,89 @@ poly(A) tails are more 'choppy'
 
 Show how this is different in poly(A)+ and poly(A)- datasets! :)
 
+THE BELOW: you see a dual picture: in the 3UTR the genuine signals have mostly
+T and the false signals have mostly A. The Ts are short and the As are long.
+
+In the CDS-intronic regions you see mostly Ts too! That's a good sign. Most map
+to the annotated strand as well. However, here the T's are definitely longer.
+Why is this?
+
+
+RESULTS FOR NUCLEOPLASM in CDS INTRONIC DIRECTIONALITY RETAINED
+####################################
+### Clusters with 2 or more coverage ###
+All:    3074 (0.08)     same 2279 (0.74)        opposite 795 (0.26)
+With PAS:       795 (0.26)      same 580 (0.73) opposite 215 (0.27)
+Annotated:      56 (0.02)       same 31 (0.55)  opposite 25 (0.45)
+Annotated with PAS:     48 (0.02)       same 24 (0.50)  opposite 24 (0.50)
+All
+A       same: 243 6.68  opposite: 328 6.92      sum: 571 6.82
+T       same: 2036 14.18        opposite: 467 7.59      sum: 2503 12.95
+With PAS
+A       same: 34 5.77   opposite: 78 6.76       sum: 112 6.46
+T       same: 546 13.45 opposite: 137 8.11      sum: 683 12.38
+Annotated
+A       same: 1 6.00    opposite: 0 0   sum: 1 6.00
+T       same: 30 9.24   opposite: 25 8.71       sum: 55 9.00
+Annotated with PAS
+A       same: 0 0       opposite: 0 0   sum: 0 0
+T       same: 24 9.06   opposite: 24 8.58       sum: 48 8.82
+
+### Clusters with only 1 coverage ###
+All:    36873 (0.92)    same 25755 (0.70)       opposite 11118 (0.30)
+With PAS:       9481 (0.26)     same 6414 (0.68)        opposite 3067 (0.32)
+Annotated:      187 (0.01)      same 121 (0.65) opposite 66 (0.35)
+Annotated with PAS:     151 (0.00)      same 95 (0.63)  opposite 56 (0.37)
+All
+A       same: 4972 14.91        opposite: 6067 13.37    sum: 11039 14.06
+T       same: 20783 15.32       opposite: 5051 10.07    sum: 25834 14.29
+With PAS
+A       same: 790 14.79 opposite: 1379 13.11    sum: 2169 13.72
+T       same: 5624 14.94        opposite: 1688 10.22    sum: 7312 13.85
+Annotated
+A       same: 2 41.00   opposite: 3 16.67       sum: 5 26.40
+T       same: 119 10.21 opposite: 63 10.60      sum: 182 10.35
+Annotated with PAS
+A       same: 1 47.00   opposite: 1 9.00        sum: 2 28.00
+T       same: 94 9.60   opposite: 55 10.58      sum: 149 9.96
+########################################################
+
+RESULTS FOR CYTOPLASM in UTR DIRECTIONALITY RETAINED
+### Clusters with 2 or more coverage ###
+All:    4980 (0.64)     same 4769 (0.96)        opposite 211 (0.04)
+With PAS:       4293 (0.86)     same 4223 (0.98)        opposite 70 (0.02)
+Annotated:      4060 (0.82)     same 4030 (0.99)        opposite 30 (0.01)
+Annotated with PAS:     3818 (0.77)     same 3795 (0.99)        opposite 23 (0.01)
+All
+A       same: 56 9.30   opposite: 91 9.89       sum: 147 9.67
+T       same: 4713 8.16 opposite: 120 8.34      sum: 4833 8.17
+With PAS
+A       same: 16 11.99  opposite: 17 5.90       sum: 33 8.85
+T       same: 4207 8.00 opposite: 53 8.31       sum: 4260 8.01
+Annotated
+A       same: 12 11.82  opposite: 2 4.25        sum: 14 10.74
+T       same: 4018 8.02 opposite: 28 8.12       sum: 4046 8.02
+Annotated with PAS
+A       same: 8 14.60   opposite: 2 4.25        sum: 10 12.53
+T       same: 3787 7.98 opposite: 21 8.50       sum: 3808 7.98
+
+### Clusters with only 1 coverage ###
+All:    2838 (0.36)     same 2096 (0.74)        opposite 742 (0.26)
+With PAS:       1426 (0.50)     same 1256 (0.88)        opposite 170 (0.12)
+Annotated:      1055 (0.37)     same 1001 (0.95)        opposite 54 (0.05)
+Annotated with PAS:     901 (0.32)      same 878 (0.97) opposite 23 (0.03)
+All
+A       same: 373 15.13 opposite: 515 15.31     sum: 888 15.24
+T       same: 1723 9.14 opposite: 227 8.54      sum: 1950 9.07
+With PAS
+A       same: 64 15.23  opposite: 89 15.36      sum: 153 15.31
+T       same: 1192 8.41 opposite: 81 7.86       sum: 1273 8.38
+Annotated
+A       same: 46 15.26  opposite: 24 11.42      sum: 70 13.94
+T       same: 955 8.45  opposite: 30 9.73       sum: 985 8.49
+Annotated with PAS
+A       same: 31 17.65  opposite: 9 7.00        sum: 40 15.25
+T       same: 847 8.25  opposite: 14 7.36       sum: 861 8.24
+
+
 
