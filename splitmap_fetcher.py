@@ -60,7 +60,8 @@ bedpaths = {}
 # call zcat on the files and merge them to bed
 for dset, gtf_paths in gtfpaths.items():
 
-    outfile = os.path.join(savedir, dset+'_splitmapped_reads.bed')
+    outpath = os.path.join(savedir, dset+'_splitmapped_reads.bed')
+    outhandle = open(outpath, 'wb')
 
     for path in gtf_paths:
         cmd = ['zcat', path]
@@ -75,9 +76,9 @@ for dset, gtf_paths in gtfpaths.items():
             bed_output = '\t'.join([chrm, beg, end, '0', '0', strand]) + '\n'
 
             # write to std out
-            outfile.write(bed_output)
+            outhandle.write(bed_output)
 
-    bedpaths[dset] = outfile
+    bedpaths[dset] = outpath
 
 # call mergeBed on the dset files (use annotation_parser version)
 from annotation_parser import merge_output

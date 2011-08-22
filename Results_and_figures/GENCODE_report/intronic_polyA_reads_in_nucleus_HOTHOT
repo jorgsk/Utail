@@ -119,6 +119,10 @@ poly(A) tails are more 'choppy'
 
 Show how this is different in poly(A)+ and poly(A)- datasets! :)
 
+# NOTE: another possibility is spurious polyadenylation in introns. mistaken
+# polyadenylation at AA rich sites in introns, like that line 1
+# retrotransposon.
+
 THE BELOW: you see a dual picture: in the 3UTR the genuine signals have mostly
 T and the false signals have mostly A. The Ts are short and the As are long.
 

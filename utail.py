@@ -93,15 +93,14 @@ class Settings(object):
         self.chr1 = True
         #self.chr1 = False
         #self.read_limit = False
-        self.read_limit = 5000000
+        self.read_limit = 50000000 # less than 10000 no reads map
         self.max_cores = 5
-        self.get_length = False
-        #self.get_length = True
-        #self.get_length = True
+        #self.get_length = False
+        self.get_length = True
         self.extendby = 10
         #self.extendby = 100
         self.polyA = True
-        #self.polyA = False
+        self.polyA = False
         #self.polyA = '/users/rg/jskancke/phdproject/3UTR/the_project/polyA_files'\
                 #'/polyA_reads_K562_Whole_Cell_processed_mapped.bed'
         #self.polyA = '/users/rg/jskancke/phdproject/3UTR/the_project/polyA_files'\
@@ -200,7 +199,7 @@ class UTR(object):
     """
 
     def __init__(self, chrm, beg, end, strand, val, utr_ID, rpkm, first_covr,
-                 polyA_reads, a_polyA_sites):
+                 polyA_reads, a_polyA_sites, sequence):
 
         # variables you have to initialize
         self.chrm = chrm
@@ -213,6 +212,8 @@ class UTR(object):
         sval, sextendby = val.split('+')
         (self.val, self.extendby) = int(sval), int(sextendby)
         extendby = self.extendby
+
+        self.sequence = sequence
 
         self.utr_ID = utr_ID
         self.strand = strand
@@ -589,13 +590,10 @@ class FullLength(object):
         if rel_pos == 0:
             self.eps_ustream_coverage = 0
 
-
     def get_pas_epsilon(self, pas_patterns, this_utr):
         #"""
         #Return all close-by PAS and their distances.
         #"""
-
-        # TODO XXX call to genome.get_seqs here, or re-invent the wheel
 
         if this_utr.strand == '+':
             rel_pos = this_utr.rel_pos
@@ -620,7 +618,6 @@ class FullLength(object):
 
             self.has_PAS = ' '.join([str(pas) for pas in has_PAS])
             self.PAS_dist = ' '.join([str(dist) for dist in PAS_dist])
-
 
     def write_output(self, outobject, this_utr):
         """
@@ -951,6 +948,9 @@ def zcat_wrapper(dset_id, bed_reads, read_limit, out_path, polyA, polyA_path,
     acount = 0
     tcount = 0
 
+    # TODO If the out_path exists, print to screen that you're using the version in
+    # the temp-dir. Continue with the get_legnth flag as false.
+
     # if get_length is false AND! polyA is given, return nothing
     if not get_length and polyA != True:
         return total_mapped_reads, total_reads, acount, tcount
@@ -1021,7 +1021,7 @@ def zcat_wrapper(dset_id, bed_reads, read_limit, out_path, polyA, polyA_path,
             # Write to file
             out_file.write('\t'.join([chrom, beg, str(int(beg)+len(seq)), '0',
                                       '0', strand]) + '\n')
-            total_reads = total_reads + 1
+            total_mapped_reads +=1
 
         # When looking for poly(A) reads, filter by non-uniquely mapped reads
         if polyA == True:
@@ -1159,7 +1159,7 @@ def join_multiexon_utr(multi_exon_utr, total_nr_reads):
     return main_utr
 
 def output_writer(dset_id, coverage, annotation, rpkm, polyA_reads, settings,
-                  total_nr_reads, output_dir, polyA):
+                  total_nr_reads, output_dir, polyA, utr_seqs):
     """
     Putting together all the info on the 3UTRs and writing to files. Write
     one file mainly about the length of the 3UTR, and write another file about
@@ -1203,15 +1203,18 @@ def output_writer(dset_id, coverage, annotation, rpkm, polyA_reads, settings,
 
     # Create a UTR-instance
     this_utr = UTR(chrm, beg, end, strand, val, utr_ID, rpkm[utr_ID], covr,
-                   polyA_reads[utr_ID], a_polyA_sites_dict[utr_ID])
+                   polyA_reads[utr_ID], a_polyA_sites_dict[utr_ID],
+                   utr_seqs[utr_ID])
 
     # Create instances for writing to two output files
     length_output = FullLength(utr_ID)
-    pAread_output = PolyAReads(utr_ID)
+    if polyA:
+        pAread_output = PolyAReads(utr_ID)
 
     # Write the headers of the length and polyA output files
     length_output.write_header(length_outfile)
-    pAread_output.write_header(polyA_outfile)
+    if polyA:
+        pAread_output.write_header(polyA_outfile)
 
     # If tuning the cumulative length, open a file for this
     if settings.cumul_tuning:
@@ -1258,7 +1261,8 @@ def output_writer(dset_id, coverage, annotation, rpkm, polyA_reads, settings,
 
                     # Create instances for writing to file
                     length_output = FullLength(utr_ID)
-                    pAread_output = PolyAReads(utr_ID)
+                    if polyA:
+                        pAread_output = PolyAReads(utr_ID)
 
                 else:
                     # if incomplete, continue without writing anything
@@ -1270,46 +1274,50 @@ def output_writer(dset_id, coverage, annotation, rpkm, polyA_reads, settings,
                 length_output.calculate_output(pas_patterns, this_utr)
                 length_output.write_output(length_outfile, this_utr)
 
-                # If the utr is empty, skip the poly(A) writing
-                if this_utr.is_empty():
-                    pass
+                if polyA:
+                    # If the utr is empty, skip the poly(A) writing
+                    if this_utr.is_empty():
+                        pass
 
-                for side in ['plus_strand', 'minus_strand']:
-                    # skip if empty
-                    if this_utr.polyA_reads[side][0] == []:
-                        continue
+                    for side in ['plus_strand', 'minus_strand']:
+                        # skip if empty
+                        if this_utr.polyA_reads[side][0] == []:
+                            continue
 
-                    # calculate output for this strand
-                    pAread_output.calculateA_output(pas_patterns, this_utr, side)
+                        # calculate output for this strand
+                        pAread_output.calculateA_output(pas_patterns, this_utr,
+                                                        side)
 
-                    # Save output to files
-                    pAread_output.writeA_output(polyA_outfile, this_utr, side)
+                        # Save output to files
+                        pAread_output.writeA_output(polyA_outfile, this_utr, side)
 
                 # If tuning, calculate the tuning variables and write to file
-                if settings.cumul_tuning:
-                    calc_write_tuning(tuning_handle, length_output, this_utr)
+                # DEPRECATED if you'll ever need it, though, it's here
+                #if settings.cumul_tuning:
+                    #calc_write_tuning(tuning_handle, length_output, this_utr)
 
             # Update to the new utr and start the loop from scratch
             this_utr = UTR(chrm, beg, end, strand, val, utr_ID, rpkm[utr_ID],
-                           covr, polyA_reads[utr_ID], a_polyA_sites_dict[utr_ID])
+                           covr, polyA_reads[utr_ID],
+                           a_polyA_sites_dict[utr_ID], utr_seqs[utr_ID])
 
             # If not a multi exon, make output instances for writing to file
             if not this_utr.multi_exon:
                 length_output = FullLength(utr_ID)
-                pAread_output = PolyAReads(utr_ID)
+                if polyA:
+                    pAread_output = PolyAReads(utr_ID)
 
             # Assert that the next utr has correct info
             assert feature_coords[utr_ID] == (chrm, int(beg), int(end),
                                          strand), 'Mismatch'
-
     # Close opened files
     length_outfile.close()
-    polyA_outfile.close()
 
     if settings.cumul_tuning:
         tuning_handle.close()
 
-    return (polyA_outpath, length_outpath)
+    if polyA:
+        polyA_outfile.close()
 
 def calc_write_tuning(tuning_handle, length_output, this_utr):
     """
@@ -2358,6 +2366,19 @@ def splitmapsubtract(just_dset, cache_dir, splitdir, polyA, outdir):
     else:
         print('\nNo {0} file found for splitmerging'.format(splitfile))
 
+def use_polyA_cache(here, DEBUGGING, polyA_path):
+
+
+    #splitdir = os.path.join(here, 'splitmapped_reads')
+    #if os.path.isdir(splitdir):
+
+        ##where you output the filtered files
+        #outdir = os.path.join(cache_dir, 'splitmap_filtered')
+
+        #polyA = splitmapsubtract(just_dset, cache_dir, splitdir, polyA,
+                                 #outdir)
+    return polyA, cache_dir, polyA_cached_path
+
 
 def pipeline(dset_id, dset_reads, tempdir, output_dir, settings, annotation,
              DEBUGGING, polyA_cache, here):
@@ -2389,11 +2410,11 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, settings, annotation,
 
     if polyA_cache:
 
-        chere = here
         if DEBUGGING:
-            chere = os.path.join(here, 'DEBUGGING')
-
-        cache_dir = os.path.join(chere, 'polyA_cache')
+            cache_dir = os.path.join(os.path.join(here, 'DEBUGGING'),
+                                     'polyA_cache')
+        else:
+            cache_dir = os.path.join(here, 'polyA_cache')
 
         if not os.path.isdir(cache_dir):
             os.makedirs(cache_dir)
@@ -2407,25 +2428,6 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, settings, annotation,
         # holds no reads.
         if os.path.isfile(polyA_cached_path):
             polyA = polyA_cached_path
-
-        # THIS IS PRIMARILY FOR MY OWN ANALYSIS
-        # if the directory splitmapped reads exists, and a splitmapped file
-        # inside there exists as well, filter out the poly(A) reads that map to
-        # splitmapped regions
-        # TODO: result: you don't achieve anything.
-        # For 3UTR EXONIC: before 6000/15000 were not mapping to annotated sites
-        # (they were 'NA'). After, 2700/7100 were 'NA'. The ratio in both cases
-        # is roughly 40%. Your screening did not improve this ratio, which is
-        # odd. Maybe the splitmapping data cannot be trusted. How does this fare
-        # for the intronic data?
-        splitdir = os.path.join(here, 'splitmapped_reads')
-        if os.path.isdir(splitdir):
-
-            #where you output the filtered files
-            outdir = os.path.join(cache_dir, 'splitmap_filtered')
-
-            polyA = splitmapsubtract(just_dset, cache_dir, splitdir, polyA,
-                                     outdir)
 
     # Get the normal reads (in bed format), if this option is set. Get the polyA
     # reads if this option is set. As well get the total number of reads for
@@ -2478,11 +2480,8 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, settings, annotation,
             outhandle.write('{0}\t{1}\t{2}'.format(total_reads, acount, tcount))
             outhandle.close()
 
-        # THIS IS PRIMARILY FOR MY OWN ANALYSIS
-        # if the directory splitmapped reads exists, and a splitmapped file
-        # inside there exists as well, filter out the poly(A) reads that map to
-        # splitmapped regions
-        splitdir = os.path.join(here, 'splitmapped_reads')
+        # This split-mapping work didn't lead anywhere. It was a dead end.
+        #splitdir = os.path.join(here, 'splitmapped_reads')
         #if os.path.isdir(splitdir):
 
             #polyA_bed_path = splitmapsubtract(just_dset, cache_dir, splitdir,
@@ -2508,8 +2507,9 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, settings, annotation,
                           total_reads, feature_coords, output_path, settings)
 
     if get_length:
-        # Get RPKM and coverage, and write to file
-
+        # Get the sequences of the genomic regions in question; you'll be
+        # looking for poly(A) sites in them
+        utr_seqs = genome.get_seqs(annotation.feature_coords, settings.hgfasta_path)
         # Get the RPKM, if you get lengths
         print('Obtaining RPKM for {0} ...\n'.format(dset_id))
         rpkm = get_rpkm(bed_reads, utrfile_path, total_mapped_reads, feature_coords,
@@ -2523,24 +2523,16 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, settings, annotation,
         # and write to file the parameters you calculate
         # TODO fetch the utr seqs on demand inside the below function
         print('Writing output files... {0} ...\n'.format(dset_id))
-        output_files = output_writer(dset_id, coverage_path, annotation, rpkm,
-                                     polyA_clusters, settings,
-                                     total_mapped_reads, output_dir, polyA)
+        output_writer(dset_id, coverage_path, annotation, rpkm, polyA_clusters,
+                      settings, total_mapped_reads, output_dir, polyA, utr_seqs)
 
-        # Get the paths to the two output files explicitly
-        (polyA_output, length_output) = output_files
-
-        # Return a dictionary with the file paths of the output files
-        return {dset_id: {'coverage': coverage_path, 'length': length_output,
-                          'polyA':polyA_output}}
     else:
-        # Just get the poly(A) output
-        only_path = only_polyA_writer(dset_id, annotation, pA_seqs, polyA_clusters,
-                                    settings, output_dir)
-
-        return {dset_id: {'only_polyA': only_path}}
+        only_polyA_writer(dset_id, annotation, pA_seqs, polyA_clusters,
+                          settings, output_dir)
 
     print('Total time for {0}: {1}\n'.format(dset_id, time.time() - t0))
+
+    return 1
 
 
 def write_polyA_stats(polyA_reads, acount, tcount, at_numbers, total_nr_reads,
@@ -3318,8 +3310,8 @@ def main():
     # function (called below). It also affects the 'temp' and 'output'
     # directories, respectively.
 
-    #DEBUGGING = True
-    DEBUGGING = False
+    DEBUGGING = True
+    #DEBUGGING = False
 
     # with this option, always remake the bedfiles
     rerun_annotation_parser = False
@@ -3338,10 +3330,6 @@ def main():
 
     # Create the settings object from the settings file
     settings = Settings(*read_settings(settings_file))
-
-    # some debugging settings
-    #settings.chr1 = True
-    #settings.read_limit = 5000
 
     # You can chose to not simulate. Only purpose is to make bigwigs.
     #simulate = False
@@ -3391,8 +3379,8 @@ def piperunner(settings, annotation, simulate, DEBUGGING, beddir, tempdir,
     # If this is true, the poly(A) reads will be saved after getting them. That
     # will save all that reading. They will only be saved if you run with no
     # restriction in reads.
-    polyA_cache = True
-    #polyA_cache = False
+    #polyA_cache = True
+    polyA_cache = False
 
     # Extract the name of the bed-region you are checking for poly(A) reads
     # you might have to extract it differently, because 'intergenic' doesn't
@@ -3420,39 +3408,20 @@ def piperunner(settings, annotation, simulate, DEBUGGING, beddir, tempdir,
                          annotation, DEBUGGING, polyA_cache, here)
 
             ###### FOR DEBUGGING ######
-            #akk = pipeline(*arguments)
+            akk = pipeline(*arguments)
             ###########################
 
-            result = my_pool.apply_async(pipeline, arguments)
-            results.append(result)
+            #result = my_pool.apply_async(pipeline, arguments)
+            #results.append(result)
 
-        #debug()
-        my_pool.close()
-        my_pool.join()
+        debug()
+        #my_pool.close()
+        #my_pool.join()
 
-        #Get the paths from the final output
         outp = [result.get() for result in results]
 
         # Print the total elapsed time
         print('Total elapsed time: {0}\n'.format(time.time()-t1))
-
-        # create output dictionaries
-        coverage, final_outp_length, final_outp_polyA = {}, {}, {}
-
-        # Now copy over the output that was in temp-files but that you want to
-        # have in output files
-        for line in outp:
-            # If this is a only-polyA-run, don't move stuff
-            if 'only_polyA' in line[line.keys()[0]].keys():
-                break
-            for key, value in line.items():
-                coverage[key] = value['coverage']
-                final_outp_polyA[key] = value['polyA']
-                final_outp_length[key] = value['length']
-
-        # Copy output from temp-dir do output-dir
-        save_output(final_outp_polyA, output_dir)
-        save_output(final_outp_length, output_dir)
 
     ###################################################################
 

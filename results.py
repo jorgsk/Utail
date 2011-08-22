@@ -6047,6 +6047,18 @@ if __name__ == '__main__':
 # junctions, you should get a reasonably number of the number of split-mapped
 # reads.
 
+    # THIS IS PRIMARILY FOR MY OWN ANALYSIS
+    # TRYING TO SPLITMAP
+    # if the directory splitmapped reads exists, and a splitmapped file
+    # inside there exists as well, filter out the poly(A) reads that map to
+    # splitmapped regions
+    # TODO: result: you don't achieve anything.
+    # For 3UTR EXONIC: before 6000/15000 were not mapping to annotated sites
+    # (they were 'NA'). After, 2700/7100 were 'NA'. The ratio in both cases
+    # is roughly 40%. Your screening did not improve this ratio, which is
+    # odd. Maybe the splitmapping data cannot be trusted. How does this fare
+    # for the intronic data?
+
 # On internal representation:
     # Your main dataset will be the cell compartments; therefore, it makes sense
     # to organize your internal datasets to facilitate comparison within
