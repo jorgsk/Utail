@@ -93,14 +93,15 @@ class Settings(object):
         self.chr1 = True
         #self.chr1 = False
         #self.read_limit = False
-        self.read_limit = 50000000 # less than 10000 no reads map
-        self.max_cores = 5
+        #self.read_limit = 5000000 # less than 10000 no reads map
+        self.read_limit = 5000 # less than 10000 no reads map
+        self.max_cores = 2
         #self.get_length = False
         self.get_length = True
         self.extendby = 10
         #self.extendby = 100
-        self.polyA = True
         self.polyA = False
+        #self.polyA = False
         #self.polyA = '/users/rg/jskancke/phdproject/3UTR/the_project/polyA_files'\
                 #'/polyA_reads_K562_Whole_Cell_processed_mapped.bed'
         #self.polyA = '/users/rg/jskancke/phdproject/3UTR/the_project/polyA_files'\
@@ -800,8 +801,6 @@ class PolyAReads(object):
         as you find them. if side is negative, get the reverse complement
         """
 
-        # TODO XXX call to genome.get_seqs here, or re-invent the wheel
-
         all_pas = {}
         for rpoint in self.rel_polyRead_sites:
             if side == 'plus_strand':
@@ -949,7 +948,10 @@ def zcat_wrapper(dset_id, bed_reads, read_limit, out_path, polyA, polyA_path,
     tcount = 0
 
     # TODO If the out_path exists, print to screen that you're using the version in
-    # the temp-dir. Continue with the get_legnth flag as false.
+    # the temp-dir. Continue with the get_length flag as false. Note: this will
+    # disable speed-runs, where you want to do something quick. Why did I want
+    # to do it again? I don't remember.
+    #debug()
 
     # if get_length is false AND! polyA is given, return nothing
     if not get_length and polyA != True:
@@ -1174,12 +1176,12 @@ def output_writer(dset_id, coverage, annotation, rpkm, polyA_reads, settings,
     # Paths and file object for the two output files (length and one polyA)
 
     # Open the respective files if set in the settings
-    length_outpath = os.path.join(dirpath, 'length_'+dset_id)
+    length_outpath = os.path.join(output_dir, 'length_'+dset_id)
     length_outfile = open(length_outpath, 'wb')
 
     # Only make a poly(A) file if you're going to write to it
     if polyA:
-        polyA_outpath = os.path.join(dirpath, 'polyA_'+dset_id)
+        polyA_outpath = os.path.join(output_dir, 'polyA_'+dset_id)
         polyA_outfile = open(polyA_outpath, 'wb')
 
     # list of PAS hexamers
@@ -1917,17 +1919,18 @@ def map_reads(processed_reads, avrg_read_len, settings):
                                       '0', strand]) + '\n')
 
     # Write to logfile
-    vals = (noisecount, allcount, noisecount/float(allcount))
+    if allcount > 0:
+        vals = (noisecount, allcount, noisecount/float(allcount))
 
-    noiseinf = '\nNoise reads: {0}\nTotal reads: {1}\nNoise ratio: {2:.2f}\n'\
-           .format(*vals)
+        noiseinf = '\nNoise reads: {0}\nTotal reads: {1}\nNoise ratio: {2:.2f}\n'\
+               .format(*vals)
 
-    noiselog = open('NOISELOG.LOG', 'ab')
-    noiselog.write('-'*80+'\n')
-    noiselog.write(polybed_path)
-    noiselog.write(noiseinf)
-    noiselog.write('-'*80+'\n')
-    noiselog.close()
+        noiselog = open('NOISELOG.LOG', 'ab')
+        noiselog.write('-'*80+'\n')
+        noiselog.write(polybed_path)
+        noiselog.write(noiseinf)
+        noiselog.write('-'*80+'\n')
+        noiselog.close()
 
     return polybed_path
 
@@ -2366,19 +2369,6 @@ def splitmapsubtract(just_dset, cache_dir, splitdir, polyA, outdir):
     else:
         print('\nNo {0} file found for splitmerging'.format(splitfile))
 
-def use_polyA_cache(here, DEBUGGING, polyA_path):
-
-
-    #splitdir = os.path.join(here, 'splitmapped_reads')
-    #if os.path.isdir(splitdir):
-
-        ##where you output the filtered files
-        #outdir = os.path.join(cache_dir, 'splitmap_filtered')
-
-        #polyA = splitmapsubtract(just_dset, cache_dir, splitdir, polyA,
-                                 #outdir)
-    return polyA, cache_dir, polyA_cached_path
-
 
 def pipeline(dset_id, dset_reads, tempdir, output_dir, settings, annotation,
              DEBUGGING, polyA_cache, here):
@@ -2521,7 +2511,6 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, settings, annotation,
 
         # Collect read coverage for each 3UTR exon, join the multi-exon 3UTRs,
         # and write to file the parameters you calculate
-        # TODO fetch the utr seqs on demand inside the below function
         print('Writing output files... {0} ...\n'.format(dset_id))
         output_writer(dset_id, coverage_path, annotation, rpkm, polyA_clusters,
                       settings, total_mapped_reads, output_dir, polyA, utr_seqs)
@@ -3310,8 +3299,8 @@ def main():
     # function (called below). It also affects the 'temp' and 'output'
     # directories, respectively.
 
-    DEBUGGING = True
-    #DEBUGGING = False
+    #DEBUGGING = True
+    DEBUGGING = False
 
     # with this option, always remake the bedfiles
     rerun_annotation_parser = False
@@ -3379,8 +3368,8 @@ def piperunner(settings, annotation, simulate, DEBUGGING, beddir, tempdir,
     # If this is true, the poly(A) reads will be saved after getting them. That
     # will save all that reading. They will only be saved if you run with no
     # restriction in reads.
-    #polyA_cache = True
-    polyA_cache = False
+    polyA_cache = True
+    #polyA_cache = False
 
     # Extract the name of the bed-region you are checking for poly(A) reads
     # you might have to extract it differently, because 'intergenic' doesn't
@@ -3408,15 +3397,15 @@ def piperunner(settings, annotation, simulate, DEBUGGING, beddir, tempdir,
                          annotation, DEBUGGING, polyA_cache, here)
 
             ###### FOR DEBUGGING ######
-            akk = pipeline(*arguments)
+            #akk = pipeline(*arguments)
             ###########################
 
-            #result = my_pool.apply_async(pipeline, arguments)
-            #results.append(result)
+            result = my_pool.apply_async(pipeline, arguments)
+            results.append(result)
 
-        debug()
-        #my_pool.close()
-        #my_pool.join()
+        #debug()
+        my_pool.close()
+        my_pool.join()
 
         outp = [result.get() for result in results]
 

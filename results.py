@@ -5808,6 +5808,14 @@ def cumul_stats_printer(settings, speedrun):
         # NEW! Print out some statistics like this for each clustering.
         super_cluster_statprinter(dsetclusters, region, key)
 
+def rpkm_polyA_correlation(settings, speedrun):
+    """
+    Gather the poly(A) sites in 3UTRs for all cytoplasmic compartments.
+    Actually, don't bother. Just show the scatter for two compartments. You'll
+    need to read both length and non-length input files. Make a simple
+    dict[utr_id] = (#poly(A)_reads, #poly(A)_sites, RPKM)
+    """
+
 def gencode_report(settings, speedrun):
     """ Make figures for the GENCODE report. The report is an overview of
     evidence for polyadenylation from the Gingeras RNA-seq experiments.
@@ -5845,6 +5853,12 @@ def gencode_report(settings, speedrun):
     # the gencode poly(A) and the poly(A) DB (and also merge the poly(A)DB with
     # gencode, and output all the numbers.
     #venn_polysites(settings, speedrun)
+
+    # 3) scatter-plot of correlation between number of poly(A) sites expressed
+    # transcript 3UTRs and the RPKM of the 3UTRs. Also plot the number of
+    # poly(A) sites found. Will show that we get most of them from high RPKM
+    # sites but will also show a lot of stochasticity.
+    #rpkm_polyA_correlation(settings, speedrun)
 
     # split-mapped reads:     2.94e+07 (0.010)
 
