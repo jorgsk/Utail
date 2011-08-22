@@ -1,0 +1,81 @@
+\documentclass[a4paper]{article}
+
+% Support for Norwegian letters
+\usepackage[latin1]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath,amsfonts,amssymb,amsthm,booktabs,array,mathtools}
+% consider package mhchem for typesetting chemical formulas
+
+% Proper space and font for integral differential term
+\newcommand{\dd}{\; \mathrm{d}} 
+% Shorcut for ODEs with proper font
+\newcommand{\diff}[2]{\frac{\mathrm{d} #1}{\mathrm{d} #2}}
+% Shortcut for PDEs with proper font (shortcut: PDB)
+\newcommand{\pdiff}[2]{\frac{\partial #1}{\partial #2}}
+\newcommand{\pdiffn}[3]{\frac{\partial^{#3} #1}{\partial #2^{#3}}}
+
+% Absolute value and norm commands.
+% Read the mathtools.pdf to fix these!
+\providecommand{\abs}[1]{\lvert#1\rvert} 
+\providecommand{\norm}[1]{\lVert#1\rVert}
+
+% Set the depth of section numbering
+\setcounter{secnumdepth}{0}
+
+\begin{document} 
+Synopsis
+
+Gencode has a shitload of cell-lines and compartments. The compartmentalization
+si the most interesting one.
+
+Main points
+
+1) Sensitivity (we only get high-rpkm genes) diagram
+2) Coverage (Venn diagram)
+3) Differences in high RPKM genes
+4) Cytoplasm/nucleus differences in polyadenylation (compared to whole cell?)
+
+# TODO 0) get the RPKM version of Utail working! :D
+
+TODO 1) the rpkm-poly(A)tail connection
+and 3) % XXX % of these genes have XX poly(A) events and the difference in each
+%cell line was III sites per transcript on average
+
+We found signals of polyadenylation events in the GENCODE cell lines by
+trimming and remapping those reads that were originally unmappable and ended in
+a stretch of As or beginning with a stretch of Ts. We subsequently merged the
+polyadenylation sites into clusters in a similar way to Tian et. al
+\cite{tian_large-scale_2005}. Figure X shows the relationship between the 3UTR
+rpkm of transcripts and how many poly(A) sites are found in the 3UTR. As can be
+seen, we identify poly(A) sites for highly expressed transcripts, and the
+number of poly(A) sites in these genes average to XX, similar to what has been
+previosuly reported XXX. Of a total XYX clusters in he 3UTRs, X land at annotated
+poly(A) sites, while XUU may be novel ones. XYX pcnt of the clusters have one of the
+8 polyadenylation signals within 40 nt downstream (XY for an, and 42 for
+non-an), also in line with what has been reported previously, showing that the method is highly specific for detecting polyA sites.
+
+We wanted to compare poly(A) sites in the nucleus and cytoplasm. Poly(A) sites
+in the nucleus are expected to originate from stable mRNA that may exist in
+multiple copies. The poly(A) sites identified in the nucleus are expected to
+stem from mRNA diffusing toward the cytoplasm, mRNA undergoing
+processing, and possibly some RNA undergoing degradation
+\cite{shcherbik_polyadenylation_2010,slomovic_addition_2010}. We merged the
+poly(A) sites from 6 cell lines in the nucleus and cytoplasm, and compared the
+distribution of the polyadenylation sites in the genome, as can be seen in
+Figure YYXYXY. As can be seen, the nuclear regions capture polyadenylation
+signals both in the poly(A)+ and poly(A)- fractions, while in the cytoplasm
+most polyadenylation are in the poly(A)+ fraction, and the whole cell extracts
+resemple the cytoplasmic ones strongly.
+
+Given that we find polyadenylation sites reliably for high RPKM genes, we
+investigated differential usage of polyadenylation sites in these genes. We
+found xxx between the cell lines, indicating that the cell lines use similar
+3UTR isoforms, or that non-used isoforms are exressed to lowly to be observed
+with this method.
+
+\bibliographystyle{plain}
+\bibliography{/users/rg/jskancke/phdproject/bibtex/jorgsk}
+
+\end{document}
+
+
