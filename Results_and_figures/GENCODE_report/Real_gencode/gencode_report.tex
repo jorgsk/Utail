@@ -35,21 +35,45 @@ Main points
 3) Differences in high RPKM genes
 4) Cytoplasm/nucleus differences in polyadenylation (compared to whole cell?)
 
-# TODO 0) get the RPKM version of Utail working! :D
-
-TODO 1) the rpkm-poly(A)tail connection
 and 3) % XXX % of these genes have XX poly(A) events and the difference in each
 %cell line was III sites per transcript on average
+% how many percent of > 1 sites are supported by more than one cell line?
 
 We found signals of polyadenylation events in the GENCODE cell lines by
 trimming and remapping those reads that were originally unmappable and ended in
 a stretch of As or beginning with a stretch of Ts. We subsequently merged the
 polyadenylation sites into clusters in a similar way to Tian et. al
-\cite{tian_large-scale_2005}. Figure X shows the relationship between the 3UTR
-rpkm of transcripts and how many poly(A) sites are found in 3UTRs. As can be
-seen, we identify poly(A) sites for highly expressed transcripts, and the
-number of poly(A) sites in these genes average to XX, similar to what has been
-previosuly reported XXX. Of a total XYX clusters in he 3UTRs, X land at annotated
+\cite{tian_large-scale_2005}. In total, for all cell lines, we obtained XXX
+polyadenylation sites, were XXX \% were common among the cell lines. To compare
+our findings with annotated polyadenylation sites, we first merged and
+clustered 43187 sites from the polyAdb with 35791 sites from GENCODE to obtain
+a total of 50696 annotated polyA sites. XXX of our polyA sites fall at
+annotated ones (for 3UTR separate the number is XXX).
+
+Since the RNA-seq protocol for the Gingeras data is not optimized for 3' ends,
+we expected to find most poly(A) sites for transcripts with high RPKM. To
+measure this, we calculated the ratio of discovered to annotated poly(A) sites
+in the 3UTRs of transcripts with non-overlapping 3UTRs. Figure X shows the
+relationship between RPKM and poly(A) discovery ratio. As can be seen, there is
+a positive relationship between RPKM and poly(A) discovery (r = 0.53, p <
+$10^{-10}$), however there is considerable variation, even for high RPKM
+transcripts. We considered an RPKM of minimum 0.5 to count as expressed. The
+average number of poly(A) sites found per 3UTR was 1.7, and the average ratio
+of poly(A) sites to annotated was 0.9, probably reflecting both that the method
+is not exhaustive, and that not all annotated poly(A) sites are used by
+transcripts at a given time. The average number of poly(A) sites found per 3UTR
+was
+
+Figure X shows the relationship
+between the 3UTR rpkm of transcripts and how many poly(A) sites are found in
+3UTRs. As can be seen, we identify poly(A) sites for highly expressed
+transcripts, and the number of poly(A) sites in these genes average to XX,
+similar to what has been previosuly reported XXX. The correlation between RPKM
+and number of discovered poly(A) sites is 0.53 (p < ), which implies
+the higher the RPKM, the more likely it is to discover polyadenylation sites,
+likely because the RNA-seq protocol doees not favor the 3' ends.
+
+Of a total XYX clusters in he 3UTRs, X land at annotated
 poly(A) sites, while XUU may be novel ones. XYX pcnt of the clusters have one of the
 8 polyadenylation signals within 40 nt downstream (XY for an, and 42 for
 non-an), also in line with what has been reported previously, showing that the method is highly specific for detecting polyA sites.

@@ -884,7 +884,8 @@ class Plotter(object):
         # show how many more there are of the cis-strand one.
 
 
-    def rec_sensitivity(self, nrs, mean_clus_fracs, std_clus_fracs, intervals):
+    def rec_sensitivity(self, nrs, mean_clus_fracs, std_clus_fracs, intervals,
+                        here):
         """
         Plot how relative # of found intervals correlates with RPKM
         """
@@ -902,9 +903,12 @@ class Plotter(object):
         # Get the x_coordinates
         x_coords = range(1,len(intervals)+1)
 
-        fraclabel = 'Average polyadenylation sites found relative to annotated'
+        #fraclabel = 'Average polyadenylation sites found relative to annotation'
         # Make a line-plot of the fals_pos
-        ax.plot(x_coords, mean_clus_fracs, label=fraclabel, c='Green', lw=2)
+        #ax.plot(x_coords, mean_clus_fracs, label=fraclabel, c='Green', lw=2)
+        ax.plot(x_coords, mean_clus_fracs, c='Green', lw=2)
+        ax.errorbar(x_coords, mean_clus_fracs, yerr=std_clus_fracs, c='Green',
+                    lw=1, fmt=None)
 
         # Set y-ticks
         ax.set_ylim((0,3))
@@ -912,19 +916,23 @@ class Plotter(object):
         ax.set_yticks(yticks)
         ax.set_yticklabels([val for val in yticks])
         ax.yaxis.grid(True)
+        # Set the colors and fontsizes of the ticks
+        for t in ax.get_yticklabels():
+            t.set_color('Green')
+            t.set_fontsize(10)
 
         # Create a 'x-twinned' y axis.
         ax2 = ax.twinx()
         x_coords = range(1,len(utr_count)+1)
         ax2.bar(x_coords, utr_count, color='Blue', width=0.6,
                 align='center', label='# of 3UTRs in interval')
-        ax2.set_ylabel('Number of 3UTRs', size=15)
+        ax2.set_ylabel('Number of 3UTRs', size=13)
 
         # Set the colors and fontsizes of the ticks
         for tl in ax2.get_yticklabels():
             tl.set_color('Blue')
-            tl.set_fontsize(12)
-            tl.set_fontweight('bold')
+            tl.set_fontsize(10)
+            #tl.set_fontweight('bold')
 
         # Some hack to get the line-plot in front
         ax.set_zorder(ax2.get_zorder()+1) # put ax in front of ax2
@@ -933,17 +941,26 @@ class Plotter(object):
         # Set x-ticks
         ax.set_xticks(x_coords)
         xlabels = ['('+str(v[0])+', '+str(v[1])+']' for v in int_ranges]
+        xlabels[-1] = '('+str(int_ranges[-1][0])+', inf)'
         ax.set_xticklabels(xlabels)
-        ax.legend(loc='center right')
-        ax.set_ylabel('Sensitivity of poly(A) recovery', size=20)
-        ax.set_xlabel('RPKM ranges for 3UTRs', size=20)
+        ax.legend(loc='upper right')
+        ax.set_ylabel('Discovered/annotated poly(A) sites in 3UTRs', size=13)
+        ax.set_xlabel('RPKM ranges for 3UTRs', size=13)
 
         # Set xlim so that 
         ax.set_xlim((0.5, max(x_coords)+0.5))
 
-        title = 'We detect most poly(A) clusters for high-RPKM 3UTRs'
-        ax.set_title(title, size=22)
+        title = 'More poly(A) clusters are found for high-RPKM 3UTRs'
+        ax.set_title(title, size=15)
 
+        output_dir = os.path.join(here, 'Results_and_figures', 'GENCODE_report',
+                                  'Figures')
+        filename = 'More_polyA_clusters_for_high_RPKM_3UTRS'
+        filepath = os.path.join(output_dir, filename+'.pdf')
+        fig.savefig(filepath, format='pdf')
+        filepath = os.path.join(output_dir, filename+'.eps')
+        fig.savefig(filepath, format='eps', papertype='A4')
+        debug()
 
     def rpkm_dependent_epsilon(self, distances, rpkm_intervals, titles, order):
         """
@@ -5411,8 +5428,8 @@ def venn_polysites(settings, speedrun):
 
     all_ds = sum([k562, gm12878, helaS3], [])
 
-    #speedrun = True
-    speedrun = False
+    speedrun = True
+    #speedrun = False
 
     outdir = '/home/jorgsk/work/3UTR/Results_and_figures/GENCODE_report/venn_diagram'
 
@@ -5427,8 +5444,8 @@ def venn_polysites(settings, speedrun):
     regions = ['3UTR-exonic', 'anti-3UTR-exonic']
     for indx, region in enumerate(regions):
 
-        subset = all_ds
-        #subset = k562 # while debugging
+        #subset = all_ds
+        subset = k562 # while debugging
 
         dsets, super_3utr = super_falselength(settings, region, subset,
                                               speedrun, svm=False)
@@ -5847,20 +5864,33 @@ def rpkm_polyA_correlation(settings, speedrun):
                     apa_sites[core_key].append(pA)
 
     # use the good old reader
-    speedrun = True
-    #speedrun = False
+    #speedrun = True
+    speedrun = False
     region = '3UTR'
+    # TODO maybe include whole cell here as well? ta boozt the numbres :S
+    # must include dst subset. you must wait till they finish
+    dset_subset = [ds for ds in settings.datasets if ('Cytoplasm' in ds) or
+                   ('Whole_Cell' in ds)]
+
     dsets, super_3utr = get_utrs(settings, region, speedrun, svm=False)
+
+    # TODO: to be honest, you should do this for all dsets, one dset at a time.
+    # save absolutely all of them and to the std and mean.
+    # TODO also include the whole cell measurements. It's the only way to fly.
 
     # caveat: currently, the RPKM that is used is the one from the dataset where
     # the poly(A) cluster was first identified. Bah, that's probably not going
-    # to cause too much of a problem -- the rpkms are similar?
+    # to cause too much of a problem -- the rpkms are similar? ACtually it is a
+    # problem. What you must do is iterate through all the individual WC and C
+    # compartments and save the number. Get the mean of each and record the mean
+    # of each dataset for representation. This iseasy if you implement the
+    # dset_subset function for get_utrs, like you have for the other function.
 
     go = [] # rpkm, total_nr_reads, nr_clusters
     go2 = [] # rpkm, % of clusters covered
 
     for utr_id, utr in super_3utr.iteritems():
-        if utr.RPKM > 0.3:
+        if utr.RPKM > 0.5:
             clu_nr = len(utr.clusters)
 
             if clu_nr > 0:
@@ -5883,6 +5913,7 @@ def rpkm_polyA_correlation(settings, speedrun):
     go2 = np.array(go2)
     rpkms2 = go2[:,0]
     clus_frac = go2[:,1]
+    debug()
 
     print(stats.spearmanr(rpkms2, clus_frac))
 
@@ -5908,25 +5939,9 @@ def rpkm_polyA_correlation(settings, speedrun):
 
     # USe this good old plot :) code-reuse :)
     p = Plotter()
-    p.rec_sensitivity(nrs, mean_clus_fracs, std_clus_fracs, intervals)
+    p.rec_sensitivity(nrs, mean_clus_fracs, std_clus_fracs, intervals,
+                      settings.here)
 
-    # Below: adjust your intervals accordingly: maybe some intervals are empty
-
-    (fig, ax) = plt.subplots()
-    ax.bar(range(1, len(intervals)+1), nrs)
-    #ax[0].scatter(rpkms, cluster_nrs)
-    #ax[0].scatter(clus_frac, rpkms2)
-    #ax[0].scatter(rpkms2, clus_frac)
-    #ax[0].set_xlabel = 'RPKMs of 3UTR'
-    #ax[0].set_ylabel = 'Fraction of annotated poly(A) clusters in 3UTR'
-    #ax[0].set_title())
-
-    #ax[1].scatter(rpkms, cluster_nrs)
-    #ax[1].set_xlabel = 'RPKMs of annotated 3UTRs'
-    #ax[1].set_ylabel = 'Number of poly(A) reads in each 3UTR'
-    #ax[1].set_title(str(stats.spearmanr(rpkms, cluster_nrs)))
-
-    plt.draw()
     debug()
 
 def gencode_report(settings, speedrun):
@@ -5961,16 +5976,12 @@ def gencode_report(settings, speedrun):
     #XXX you have 4k sites with 1 read AND close to annotated site ... would boost your
     #numbers. consider including them.
 
-    # 2) output all the poly(A) sites from the whole genome for both regions.
-    # merge the two regions. make a script that merges these three files with
-    # the gencode poly(A) and the poly(A) DB (and also merge the poly(A)DB with
-    # gencode, and output all the numbers.
+    # 2) output all the poly(A) sites from the whole genome for 3UTR and
+    # non-3UTR
     #venn_polysites(settings, speedrun)
 
-    # 3) scatter-plot of correlation between number of poly(A) sites expressed
-    # transcript 3UTRs and the RPKM of the 3UTRs. Also plot the number of
-    # poly(A) sites found. Will show that we get most of them from high RPKM
-    # sites but will also show a lot of stochasticity.
+    # 3) plot of correlation between number of poly(A) sites expressed
+    # transcript 3UTRs and the RPKM of the 3UTRs.
     rpkm_polyA_correlation(settings, speedrun)
 
     # split-mapped reads:     2.94e+07 (0.010)
