@@ -22,6 +22,7 @@ from operator import itemgetter
 import math
 
 import numpy as np
+from scipy import stats
 
 # For making nice tables
 #from TableFactory import *
@@ -189,10 +190,6 @@ class UTR(object):
         # SVM info might be added
         self.svm_coordinates = []
 
-        # Array of nucleosome coverage
-        self.nucl_covr = np.zeros(self.length)
-        self.has_nucl = False #if you add coverage to the above array
-
     def __repr__(self):
         return self.ID[-8:]
 
@@ -241,7 +238,7 @@ class Cluster(object):
     def __init__(self, input_line, full_info = True):
         #
         (chrm, beg, end, ID, polyA_number, strand, polyA_coordinate,
-         number_supporting_reads, dstream_covrg, ustream_covrg,
+         polyA_strand, number_supporting_reads, dstream_covrg, ustream_covrg,
          annotated_polyA_distance, nearby_PAS, PAS_distance,
          rpkm) = input_line.split('\t')
 
@@ -380,13 +377,15 @@ class Settings(object):
         return utail.get_a_polyA_sites_path(utail_settings, beddir)
 
     # Return the paths of the length files
-    def length_files(self):
-        return dict((d, os.path.join(self.here, self.outputdir, 'length_'+d))
+    def length_files(self, region):
+        return dict((d, os.path.join(self.here, self.outputdir,
+                                     'length_'+d+'_'+region))
                     for d in self.datasets)
 
     # Return the paths of the polyA files
-    def polyA_files(self):
-        return dict((d, os.path.join(self.here, self.outputdir, 'polyA_' + d))
+    def polyA_files(self, region):
+        return dict((d, os.path.join(self.here, self.outputdir,
+                                     'polyA_' + d+'_'+region))
                     for d in self.datasets)
 
     # Return the paths of the onlypolyA files
@@ -885,88 +884,65 @@ class Plotter(object):
         # show how many more there are of the cis-strand one.
 
 
-    def rec_sensitivity(self, sensitivities, intervals, attributes):
+    def rec_sensitivity(self, nrs, mean_clus_fracs, std_clus_fracs, intervals):
         """
-        Plot how the false negative poly(A) cluster discovery rate varies with
-        the minimum value of the different attributes of the 3UTR.
+        Plot how relative # of found intervals correlates with RPKM
         """
-        # One plot for each attribute; but in that plot all datasets should be
-        # present. Potentially make different ranges for the different
-        # attributes.
 
-        #col_nr = len(sensitivities.keys())
-        #color_gen = gen_color()
-        #colors = [tuple(color_gen.next()) for i in range(col_nr)]
         colors = ['AntiqueWhite', 'Aquamarine', 'BlueViolet', 'Brown', 'Coral',
                   'CornflowerBlue', 'Cornsilk', 'Crimson', 'Cyan', 'DarkBlue',
                   'DarkCyan', 'DarkGoldenRod', 'Red']
 
-        for atr in attributes:
-            int_ranges = intervals[atr]
+        int_ranges = intervals
 
-            (fig, ax) = plt.subplots()
+        (fig, ax) = plt.subplots()
 
-            utr_count = []
+        utr_count = nrs
 
-            col_dict = dict(zip(sensitivities.keys(), colors))
+        # Get the x_coordinates
+        x_coords = range(1,len(intervals)+1)
 
+        fraclabel = 'Average polyadenylation sites found relative to annotated'
+        # Make a line-plot of the fals_pos
+        ax.plot(x_coords, mean_clus_fracs, label=fraclabel, c='Green', lw=2)
 
-            for (dset, atr_dict) in sensitivities.items():
+        # Set y-ticks
+        ax.set_ylim((0,3))
+        yticks = np.arange(0,3.5,0.5)
+        ax.set_yticks(yticks)
+        ax.set_yticklabels([val for val in yticks])
+        ax.yaxis.grid(True)
 
-                # unzip the false positive rate and nr of utrs
-                (fals_pos, utr_nrs) = zip(*atr_dict[atr])
+        # Create a 'x-twinned' y axis.
+        ax2 = ax.twinx()
+        x_coords = range(1,len(utr_count)+1)
+        ax2.bar(x_coords, utr_count, color='Blue', width=0.6,
+                align='center', label='# of 3UTRs in interval')
+        ax2.set_ylabel('Number of 3UTRs', size=15)
 
-                # save utr_nrs for making a bar plot later
-                utr_count.append(utr_nrs)
+        # Set the colors and fontsizes of the ticks
+        for tl in ax2.get_yticklabels():
+            tl.set_color('Blue')
+            tl.set_fontsize(12)
+            tl.set_fontweight('bold')
 
-                # Get the x_coordinates
-                x_coords = range(1,len(fals_pos)+1)
+        # Some hack to get the line-plot in front
+        ax.set_zorder(ax2.get_zorder()+1) # put ax in front of ax2
+        ax.patch.set_visible(False) # hide the 'canvas'
 
-                # Make a line-plot of the fals_pos
-                ax.plot(x_coords, fals_pos, label=dset, c=col_dict[dset], lw=2)
+        # Set x-ticks
+        ax.set_xticks(x_coords)
+        xlabels = ['('+str(v[0])+', '+str(v[1])+']' for v in int_ranges]
+        ax.set_xticklabels(xlabels)
+        ax.legend(loc='center right')
+        ax.set_ylabel('Sensitivity of poly(A) recovery', size=20)
+        ax.set_xlabel('RPKM ranges for 3UTRs', size=20)
 
-            # Set y-ticks
-            ax.set_ylim((0,1))
-            yticks = np.arange(0,1.1,0.1)
-            ax.set_yticks(yticks)
-            ax.set_yticklabels([format(val*100,'.0f')+'%' for val in yticks])
-            ax.yaxis.grid(True)
+        # Set xlim so that 
+        ax.set_xlim((0.5, max(x_coords)+0.5))
 
-            # Make a bar plot of utr_nrs on yaxis nr 2
-            # Get the counts of 3UTRs
-            mean_counts = np.mean(utr_count, axis=0)
-            std_counts = np.std(utr_count, axis=0)
-
-            # Create a 'x-twinned' y axis.
-            ax2 = ax.twinx()
-            x_coords = range(1,len(mean_counts)+1)
-            ax2.bar(x_coords, mean_counts, color='#4C3380', yerr=std_counts,
-                   width=0.6, align='center', label='# of 3UTRs')
-            ax2.set_ylabel('Number of 3UTRs', size=15)
-
-            # Set the colors and fontsizes of the ticks
-            for tl in ax2.get_yticklabels():
-                tl.set_color('#4C3380')
-                tl.set_fontsize(12)
-                tl.set_fontweight('bold')
-
-            # Some hack to get the line-plot in front
-            ax.set_zorder(ax2.get_zorder()+1) # put ax in front of ax2
-            ax.patch.set_visible(False) # hide the 'canvas'
-
-            # Set x-ticks
-            ax.set_xticks(x_coords)
-            xlabels = ['('+str(v[0])+', '+str(v[1])+']' for v in int_ranges]
-            ax.set_xticklabels(xlabels)
-            ax.legend(loc='center right')
-            ax.set_ylabel('Sensitivity of poly(A) recovery', size=20)
-            ax.set_xlabel('RPKM ranges for 3UTRs', size=20)
-
-            # Set xlim so that 
-            ax.set_xlim((0.5, max(x_coords)+0.5))
-
-            title = 'We detect most poly(A) clusters for high-RPKM 3UTRs\n{0}'
-            ax.set_title(title.format(dset), size=22)
+        title = 'We detect most poly(A) clusters for high-RPKM 3UTRs'
+        ax.set_title(title, size=22)
 
 
     def rpkm_dependent_epsilon(self, distances, rpkm_intervals, titles, order):
@@ -2007,7 +1983,7 @@ def super_falselength(settings, region, subset=[], speedrun=False, svm=False):
 
     return dsets, super_3utr
 
-def get_utrs(settings, speedrun=False, svm=False):
+def get_utrs(settings, region, speedrun=False, svm=False):
     """
     Return a list of UTR instances. Each UTR instance is
     instansiated with a list of UTR objects and the name of the datset.
@@ -2030,9 +2006,8 @@ def get_utrs(settings, speedrun=False, svm=False):
     # Do everything for the length files
     # XXX you must update these things to take the region (UTR etc) into
     # account, since it's now part of the filename
-    length_files = settings.length_files()
-    cluster_files = settings.polyA_files()
-
+    length_files = settings.length_files(region)
+    cluster_files = settings.polyA_files(region)
 
     if svm:
         # Get a dictionary indexed by utr_id with the svm locations
@@ -2162,6 +2137,11 @@ def get_super_3utr(dsets, super_cluster, dset_2super):
                     for (s_key, covr_dict) in utr.super_cover.items():
                         if s_key not in super_3utr[utr_id].super_cover:
                             super_3utr[utr_id].super_cover[s_key] = covr_dict
+
+                    # Also add the RPKM and average
+                    super_3utr[utr_id].RPKM =\
+                    (super_3utr[utr_id].RPKM+utr.RPKM)/2
+
     return super_3utr
 
 def verify_access(f):
@@ -3168,7 +3148,7 @@ def recovery_sensitivity(dsets):
     # NOTE for comparing between cell lines or between compartments, it could be
     # wise to move this plotting function into the previous for-loop and re-make
     # the sensitbity dict for each either 'cell line' or 'compartments'.
-    p.rec_sensitivity(sensitivity, intervals, attributes)
+    p.rec_senitivity(sensitivity, intervals, attributes)
 
 def wc_compartment_reproducability(dsets, super_clusters, dset_2super):
     """
@@ -5808,6 +5788,28 @@ def cumul_stats_printer(settings, speedrun):
         # NEW! Print out some statistics like this for each clustering.
         super_cluster_statprinter(dsetclusters, region, key)
 
+def apa_dict(settings):
+    """
+    Fetch dictionary of annotated poly(A) sites
+
+    OBS! Will use whatever genomic region is in UTR_SETTINGS
+    """
+    import utail as utail
+
+    utail_settings = utail.Settings(*utail.read_settings(settings.settings_file))
+    utail_annotation = utail.Annotation(utail_settings.annotation_path,
+                                        utail_settings.annotation_format,
+                                        utail_settings.annotated_polyA_sites)
+
+    chr1 = False
+    beddir = os.path.join(settings.here, 'source_bedfiles')
+    rerun_annotation_parser = False
+    region_file = 'NA'
+    utail_annotation.utrfile_path = utail.get_utr_path(utail_settings, beddir,
+                                           rerun_annotation_parser, region_file)
+    utail_annotation.feature_coords = utail_annotation.get_utrdict()
+    return utail_annotation.get_polyA_dict(chr1)
+
 def rpkm_polyA_correlation(settings, speedrun):
     """
     Gather the poly(A) sites in 3UTRs for all cytoplasmic compartments.
@@ -5815,6 +5817,117 @@ def rpkm_polyA_correlation(settings, speedrun):
     need to read both length and non-length input files. Make a simple
     dict[utr_id] = (#poly(A)_reads, #poly(A)_sites, RPKM)
     """
+
+    # obs nr1. you don't see what you thought you'd see. if this scatter plot is
+    # to believed, we don't see the tip of the ice-berg: rather, we see casual
+    # glipses, as patches of land spotted through shifting coulds as a plane is
+    # ascending into the skies.
+
+    # OK! what if we average the RPKM? And use more dataset?
+    # TODO! Average RPKM, use more dataset, and pray to GOD. Alternatively use
+    # only 1 dataet at a time. However, you're not getting any better than 0.5.
+    # 0.6 at most, which is not bad.
+
+    # Could it be that the number of poly(A) sites in the 3UTR is independent of
+    # the RPKM? Maybe you should compare with the % of "recaptured" poly(A)
+    # sites. What is the easiest way to find out about this? 
+    a_polyA_sites_dict = apa_dict(settings)
+
+    # sum the poly(A) sites for the murky few multi-exons out there
+    apa_sites = {}
+    for key, pAsites in a_polyA_sites_dict.iteritems():
+        core_key = '_'.join(key.split('_')[:-1])
+        if core_key not in apa_sites:
+            apa_sites[core_key] = pAsites
+        else:
+            if pAsites == []:
+                continue
+            else:
+                for pA in pAsites:
+                    apa_sites[core_key].append(pA)
+
+    # use the good old reader
+    speedrun = True
+    #speedrun = False
+    region = '3UTR'
+    dsets, super_3utr = get_utrs(settings, region, speedrun, svm=False)
+
+    # caveat: currently, the RPKM that is used is the one from the dataset where
+    # the poly(A) cluster was first identified. Bah, that's probably not going
+    # to cause too much of a problem -- the rpkms are similar?
+
+    go = [] # rpkm, total_nr_reads, nr_clusters
+    go2 = [] # rpkm, % of clusters covered
+
+    for utr_id, utr in super_3utr.iteritems():
+        if utr.RPKM > 0.3:
+            clu_nr = len(utr.clusters)
+
+            if clu_nr > 0:
+                covnr = sum([clu.nr_support_reads for clu in utr.clusters])
+            else:
+                covnr = 0
+            go.append((utr.RPKM, clu_nr, covnr))
+
+            if utr_id in apa_sites:
+                a_clu_nr = len(apa_sites[utr_id])
+                if a_clu_nr > 0:
+                    clu_frac = clu_nr/a_clu_nr
+                go2.append((utr.RPKM, clu_frac))
+
+    go = np.array(go)
+    rpkms = go[:,0]
+    cluster_nrs = go[:,1]
+    read_nrs = go[:,2]
+
+    go2 = np.array(go2)
+    rpkms2 = go2[:,0]
+    clus_frac = go2[:,1]
+
+    print(stats.spearmanr(rpkms2, clus_frac))
+
+    # Divide the RPKMs into intervals
+    #intervals = [(0,1), (1,3), (3,6), (6,10), (10,20), (20,40), (40,80),
+                               #(80, max(rpkms2)+100)]
+    intervals = [(0,5), (5,10), (10,15), (15,20), (20,25), (25,30), (30,35),
+                               (35, max(rpkms2)+100)]
+
+    clus_fracs = [[] for o in range(len(intervals))]
+
+    for (rpkm, cl_frac) in go2:
+        for ival_index, ival in enumerate(intervals):
+
+            if ival[0] < rpkm < ival[1]:
+                clus_fracs[ival_index].append(cl_frac)
+
+    clus_fracs = [np.array(cls_fr) for cls_fr in clus_fracs]
+
+    mean_clus_fracs = [np.mean(cl_frac) for cl_frac in clus_fracs]
+    std_clus_fracs = [np.std(cl_frac) for cl_frac in clus_fracs]
+    nrs = [len(cl_frac) for cl_frac in clus_fracs]
+
+    # USe this good old plot :) code-reuse :)
+    p = Plotter()
+    p.rec_sensitivity(nrs, mean_clus_fracs, std_clus_fracs, intervals)
+
+    # Below: adjust your intervals accordingly: maybe some intervals are empty
+
+    (fig, ax) = plt.subplots()
+    ax.bar(range(1, len(intervals)+1), nrs)
+    #ax[0].scatter(rpkms, cluster_nrs)
+    #ax[0].scatter(clus_frac, rpkms2)
+    #ax[0].scatter(rpkms2, clus_frac)
+    #ax[0].set_xlabel = 'RPKMs of 3UTR'
+    #ax[0].set_ylabel = 'Fraction of annotated poly(A) clusters in 3UTR'
+    #ax[0].set_title())
+
+    #ax[1].scatter(rpkms, cluster_nrs)
+    #ax[1].set_xlabel = 'RPKMs of annotated 3UTRs'
+    #ax[1].set_ylabel = 'Number of poly(A) reads in each 3UTR'
+    #ax[1].set_title(str(stats.spearmanr(rpkms, cluster_nrs)))
+
+    plt.draw()
+    debug()
 
 def gencode_report(settings, speedrun):
     """ Make figures for the GENCODE report. The report is an overview of
@@ -5831,7 +5944,7 @@ def gencode_report(settings, speedrun):
 
     # 0) Core stats. print core stats about your datasets, separate and
     # cumulated
-    cumul_stats_printer(settings, speedrun)
+    #cumul_stats_printer(settings, speedrun)
 
     # 1) nr of polyA sites obtained with increasing readnr
     #clusterladder(settings, speedrun)
@@ -5858,7 +5971,7 @@ def gencode_report(settings, speedrun):
     # transcript 3UTRs and the RPKM of the 3UTRs. Also plot the number of
     # poly(A) sites found. Will show that we get most of them from high RPKM
     # sites but will also show a lot of stochasticity.
-    #rpkm_polyA_correlation(settings, speedrun)
+    rpkm_polyA_correlation(settings, speedrun)
 
     # split-mapped reads:     2.94e+07 (0.010)
 
@@ -5952,7 +6065,9 @@ def main():
     # Optionally get SVM information as well
     # so that you will have the same 1000 3UTRs!
 
-    # For the 'old' output files use 'get_utrs'
+    # XXX For the 'old' output files use 'get_utrs'
+    # NOTE the difference is that with this one you have more information about
+    # the UTR object (RPKM etc) and consequently it will take longer time to run
     # dsets, super_3utr = get_utrs(settings, speedrun=False, svm=False)
 
     # for the onlypolyA files
