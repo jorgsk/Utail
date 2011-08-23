@@ -7,6 +7,7 @@ import os
 import ConfigParser
 import sys
 from itertools import combinations as combins
+from copy import deepcopy
 
 from subprocess import Popen, PIPE
 
@@ -1949,7 +1950,15 @@ def super_falselength(settings, region, subset=[], speedrun=False, svm=False):
         regionfiles = settings.only_files(region)
 
         # Check if all length files exist or that you have access
-        [verify_access(f) for f in regionfiles.values()]
+        for dset, fpath in regionfiles.items():
+            if subset == []:
+                verify_access(fpath)
+            else:
+                if dset not in subset:
+                    continue
+                else:
+                    verify_access(fpath)
+
         # limit the nr of reads from each dset if you want to be fast
         if speedrun:
             maxlines = 1000
@@ -2000,7 +2009,7 @@ def super_falselength(settings, region, subset=[], speedrun=False, svm=False):
 
     return dsets, super_3utr
 
-def get_utrs(settings, region, speedrun=False, svm=False):
+def get_utrs(settings, region, dset_subset=[], speedrun=False, svm=False):
     """
     Return a list of UTR instances. Each UTR instance is
     instansiated with a list of UTR objects and the name of the datset.
@@ -2009,9 +2018,11 @@ def get_utrs(settings, region, speedrun=False, svm=False):
     2) If present, read through the polyA file, updating the UTR object created
     in step 1
 
-    I would like a structure like this:
-
         dsets[cell_line][comp1][utr1])
+
+    Finally merge the dsets in dsets into a super_3utr structure.
+
+    If dset_subset is != [], restrict the analysis to those dsets in the subset
 
     """
     # parse the datasets to get the cell lines and compartments in this dataset
@@ -2031,14 +2042,27 @@ def get_utrs(settings, region, speedrun=False, svm=False):
         svm_dict = settings.svm_file()
 
     # Check if all length files exist or that you have access
-    [verify_access(f) for f in length_files.values()]
+    # if you specify a certain subset, don't check those that are not in the
+    # subset, since they will not be processed anyway
+    for dset, fpath in length_files.items():
+        if dset_subset != []:
+            if dset not in dset_subset:
+                continue
+        else:
+            verify_access(fpath)
 
     # limit the nr of reads from each dset if you want to be fast
     if speedrun:
         maxlines = 1000
 
     linenr = 0
+
     for dset_name in settings.datasets:
+
+        # Filter against dsets not in subset
+        if dset_subset != []:
+            if dset_name not in dset_subset:
+                continue
 
         lengthfile = open(length_files[dset_name], 'rb')
         clusterfile = open(cluster_files[dset_name], 'rb')
@@ -2155,9 +2179,9 @@ def get_super_3utr(dsets, super_cluster, dset_2super):
                         if s_key not in super_3utr[utr_id].super_cover:
                             super_3utr[utr_id].super_cover[s_key] = covr_dict
 
-                    # Also add the RPKM and average
-                    super_3utr[utr_id].RPKM =\
-                    (super_3utr[utr_id].RPKM+utr.RPKM)/2
+                    ## Also add the RPKM and average
+                    #super_3utr[utr_id].RPKM =\
+                    #(super_3utr[utr_id].RPKM+utr.RPKM)/2
 
     return super_3utr
 
@@ -5109,51 +5133,33 @@ def clusterladder(settings, speedrun):
 
     #2) Make super-clusters for your datasets of choice
 
-    k562minus = ['K562_CytoplasmMinus', 'K562_CytoplasmMinusReplicate',
-                  'K562_Whole_CellMinus', 'K562_Whole_CellMinusReplicate']
-    k562minusCy = [ds for ds in k562minus if 'Cytoplasm' in ds]
+    c = [ds for ds in settings.datasets if ('Cytoplasm' in ds and
+                                            not 'Minus' in ds)]
 
+    c_minus = [ds for ds in settings.datasets if ('Cytoplasm' in ds and
+                                            'Minus' in ds)]
 
-    gm12878minus = ['GM12878_CytoplasmMinus', 'GM12878_CytoplasmMinusReplicate',
-                  'GM12878_Whole_CellMinus', 'GM12878_Whole_CellMinusReplicate']
-    gm12878minusCy = [ds for ds in gm12878minus if 'Cytoplasm' in ds]
+    wc_c = [ds for ds in settings.datasets if (('Cytoplasm' in ds) or
+                   ('Whole_Cell' in ds)) and (not 'Minus' in ds)]
 
-    helaS3minus = ['HeLa-S3_CytoplasmMinus', 'HeLa-S3_CytoplasmMinusReplicate',
-                  'HeLa-S3_Whole_CellMinus', 'HeLa-S3_Whole_CellMinusReplicate']
-    helaS3minusCy = [ds for ds in helaS3minus if 'Cytoplasm' in ds]
+    wc_c_minus = [ds for ds in settings.datasets if (('Cytoplasm' in ds) or
+                   ('Whole_Cell' in ds)) and 'Minus' in ds]
 
-    k562 = ['K562_Cytoplasm', 'K562_CytoplasmReplicate',
-            'K562_Whole_Cell', 'K562_Whole_CellReplicate']
-    k562Cy = [ds for ds in k562 if 'Cytoplasm' in ds]
-            #'K562_Nucleus', 'K562_NucleusReplicate']
-
-    gm12878 = ['GM12878_Cytoplasm', 'GM12878_CytoplasmReplicate',
-               'GM12878_Whole_Cell', 'GM12878_Whole_CellReplicate']
-    gm12878Cy = [ds for ds in gm12878 if 'Cytoplasm' in ds]
-               #'GM12878_Nucleus', 'GM12878_NucleusReplicate']
-
-    helaS3 = ['HeLa-S3_Cytoplasm', 'HeLa-S3_CytoplasmReplicate',
-              'HeLa-S3_Whole_Cell', 'HeLa-S3_Whole_CellReplicate']
-    helaS3Cy = [ds for ds in helaS3 if 'Cytoplasm' in ds]
-              #'HeLa-S3_Nucleus', 'HeLa-S3_NucleusReplicate']
-
-    all_cl = sum([k562, gm12878, helaS3], [])
-    all_clCy = sum([k562Cy, gm12878Cy, helaS3Cy], [])
-
-    all_minus = sum([k562minus, gm12878minus, helaS3minus], [])
-    all_minusCy = sum([k562minusCy, gm12878minusCy, helaS3minusCy], [])
-
+    # TODO RUN THIS
     regions = ['3UTR-exonic', 'anti-3UTR-exonic']
+
     ##regions = ['3UTR']
     #regions = ['cds-intronic']
     #data_grouping {'':}
+
     print('Loaded datasets:')
     for ds in settings.datasets:
         print(ds)
     #debug()
 
-    data_grouping = {'Poly(A) plus': all_clCy,
-                  'Poly(A) minus': all_minusCy}
+    #data_grouping = {'Poly(A) plus': all_clCy,
+                  #'Poly(A) minus': all_minusCy}
+    data_grouping = {'Poly(A) plus': wc_c}
 
     # For the plot
     reg2nicereg = {'3UTR-exonic': 'Annotated 3UTR regions',
@@ -5190,6 +5196,7 @@ def clusterladder(settings, speedrun):
             #all_dsets = sorted(cln, key=mysorter, reverse=True)
             all_dsets = sorted(cln, key=mysorter)
 
+            #subsets = [all_dsets[:end] for end in range(1, len(all_dsets)+1)]
             subsets = [all_dsets[:end] for end in range(1, len(all_dsets)+1)]
 
             # A dictionary with all clusters and +2 or annot clusters
@@ -5432,13 +5439,15 @@ def venn_polysites(settings, speedrun):
     #speedrun = False
 
     outdir = '/home/jorgsk/work/3UTR/Results_and_figures/GENCODE_report/venn_diagram'
+    outdir = os.path.join(settings.here,
+                          'Results_and_figures/GENCODE_report/venn_diagram')
 
     # will hold the paths of all the files that result from merging sites with
     # one another. begin by adding the two sources of poly(A) sites
     paths = {'gencode':\
-             '/home/jorgsk/work/3UTR/annotated_polyAsites/gencode_polyA.bed',
+             os.path.join(settings.here, 'annotated_polyAsites/gencode_polyA.bed'),
              'polyAdb':\
-             '/home/jorgsk/work/3UTR/annotated_polyAsites/polyA_db.bed'}
+             os.path.join(settings.here, 'annotated_polyAsites/polyA_db.bed')}
 
     reg_data = {}
     regions = ['3UTR-exonic', 'anti-3UTR-exonic']
@@ -5775,41 +5784,80 @@ def join_regions(paths, only_these, outdir, extendby=False):
 
 def cumul_stats_printer(settings, speedrun):
 
-    #region = 'CDS-intronic'
-    region = '3UTR'
+    #region = '3UTR'
+    region = '3UTR-exonic'
+    region = 'CDS-intronic'
 
-    print('Loaded datasets:')
-    for ds in settings.datasets:
-        print(ds)
+    #print('Loaded datasets:')
+    #for ds in settings.datasets:
+        #print(ds)
 
     # cytoplasmic and replicates
-    all_dsets = [ds for ds in settings.datasets if 'Cytoplasm' in ds]
+    #all_dsets = [ds for ds in settings.datasets if 'Cytoplasm' in ds]
     #all_dsets = [ds for ds in settings.datasets if 'Nucleoplasm' in ds]
+    all_dsets = [ds for ds in settings.datasets if (('Cytoplasm' in ds) or
+                 ('Whole_Cell' in ds)) and (not 'Minus' in ds)]
     #debug()
 
-
-    subsets = [all_dsets[:end] for end in range(1, len(all_dsets)+1)]
+    #subsets = [all_dsets[:end] for end in range(1, len(all_dsets)+1)]
+    subsets = all_dsets
 
     dsetclusters = {}
 
-    #speedrun = True
-    speedrun = False
+    speedrun = True
+    #speedrun = False
 
-    for subset in subsets:
+    #       Normal version
+    #for subset in subsets:
 
-        # Get the number of 'good' and 'all' clusters
-        key = ':'.join(subset)
-        dsetclusters[key] = get_dsetclusters(subset, region, settings,
-                                             speedrun)
+        ## Get the number of 'good' and 'all' clusters
+        #key = ':'.join(subset)
+        #dsetclusters[key] = get_dsetclusters(subset, region, settings,
+                                             #speedrun)
 
-        # NEW! Print out some statistics like this for each clustering.
-        super_cluster_statprinter(dsetclusters, region, key)
+        ## NEW! Print out some statistics like this for each clustering.
+        #super_cluster_statprinter(dsetclusters, region, key)
+
+    #       Whole-genome version
+    # USE THIS ONLY FOR JOINING 3UTR-exonic and 3UTR-anti-exonic
+    dsetclusters['3UTR'] = get_dsetclusters(subsets, '3UTR-exonic', settings,
+                                            speedrun)
+
+    dsetclusters['anti-3UTR'] = get_dsetclusters(subsets, 'anti-3UTR-exonic',
+                                                 settings, speedrun)
+
+    dsetclusters['genome'] = dsetcluster_join(dsetclusters)
+
+    myprintclusters = {'genome': dsetclusters['genome']}
+
+    super_cluster_statprinter(myprintclusters, 'genome', 'genome')
+
+
+def dsetcluster_join(dsetclusters):
+    dsetclusters['genome'] = deepcopy(dsetclusters['3UTR'])
+    for key1, dict1 in dsetclusters['anti-3UTR'].items():
+        for key2, dict2 in dict1.items():
+            if type(dict2) is int:
+                dsetclusters['genome'][key1][key2] += dict2
+            else:
+                for key3, dict3 in dict2.items():
+                    for key4, dict4 in dict3.items():
+                        if type(dict4) is int:
+                            dsetclusters['genome'][key1][key2][key3][key4] += dict4
+                        else:
+                            for key5, dict5 in dict4.items():
+                                for indx, val in enumerate(dict5):
+                                    dsetclusters['genome'][key1][key2][key3][key4]\
+                                            [key5][indx] += val
+    return dsetclusters['genome']
 
 def apa_dict(settings):
     """
     Fetch dictionary of annotated poly(A) sites
 
-    OBS! Will use whatever genomic region is in UTR_SETTINGS
+    OBS! Will use whatever genomic region is in UTR_SETTINGS!
+    The method will force 3UTRs from annotation, so this path must be provided
+    in the UTR_SETTINGS file
     """
     import utail as utail
 
@@ -5822,6 +5870,8 @@ def apa_dict(settings):
     beddir = os.path.join(settings.here, 'source_bedfiles')
     rerun_annotation_parser = False
     region_file = 'NA'
+    # You need to set region_file_provided to false
+    utail_settings.regionfile_provided = False
     utail_annotation.utrfile_path = utail.get_utr_path(utail_settings, beddir,
                                            rerun_annotation_parser, region_file)
     utail_annotation.feature_coords = utail_annotation.get_utrdict()
@@ -5864,46 +5914,44 @@ def rpkm_polyA_correlation(settings, speedrun):
                     apa_sites[core_key].append(pA)
 
     # use the good old reader
-    #speedrun = True
-    speedrun = False
+    speedrun = True
+    #speedrun = False
     region = '3UTR'
     # TODO maybe include whole cell here as well? ta boozt the numbres :S
     # must include dst subset. you must wait till they finish
-    dset_subset = [ds for ds in settings.datasets if ('Cytoplasm' in ds) or
-                   ('Whole_Cell' in ds)]
+    dset_subsets = [ds for ds in settings.datasets if (('Cytoplasm' in ds) or
+                   ('Whole_Cell' in ds)) and (not 'Minus' in ds)]
 
-    dsets, super_3utr = get_utrs(settings, region, speedrun, svm=False)
+    #dset_subsets = [ds for ds in settings.datasets if ('Cytoplasm' in ds) and
+                   #(not 'Minus' in ds)]
 
-    # TODO: to be honest, you should do this for all dsets, one dset at a time.
-    # save absolutely all of them and to the std and mean.
-    # TODO also include the whole cell measurements. It's the only way to fly.
+    dsets, super_3utr = get_utrs(settings, region, dset_subsets, speedrun,
+                                 svm=False)
 
-    # caveat: currently, the RPKM that is used is the one from the dataset where
-    # the poly(A) cluster was first identified. Bah, that's probably not going
-    # to cause too much of a problem -- the rpkms are similar? ACtually it is a
-    # problem. What you must do is iterate through all the individual WC and C
-    # compartments and save the number. Get the mean of each and record the mean
-    # of each dataset for representation. This iseasy if you implement the
-    # dset_subset function for get_utrs, like you have for the other function.
-
+    # Now going through every single cytoplasm and whole cell alone
     go = [] # rpkm, total_nr_reads, nr_clusters
     go2 = [] # rpkm, % of clusters covered
 
-    for utr_id, utr in super_3utr.iteritems():
-        if utr.RPKM > 0.5:
-            clu_nr = len(utr.clusters)
+    for dubset in dset_subsets:
 
-            if clu_nr > 0:
-                covnr = sum([clu.nr_support_reads for clu in utr.clusters])
-            else:
-                covnr = 0
-            go.append((utr.RPKM, clu_nr, covnr))
+        dsets, super_3utr = get_utrs(settings, region, [dubset], speedrun,
+                                     svm=False)
 
-            if utr_id in apa_sites:
-                a_clu_nr = len(apa_sites[utr_id])
-                if a_clu_nr > 0:
-                    clu_frac = clu_nr/a_clu_nr
-                go2.append((utr.RPKM, clu_frac))
+        for utr_id, utr in super_3utr.iteritems():
+            if utr.RPKM > 0.5:
+                clu_nr = len(utr.clusters)
+
+                if clu_nr > 0:
+                    covnr = sum([clu.nr_support_reads for clu in utr.clusters])
+                else:
+                    covnr = 0
+                go.append((utr.RPKM, clu_nr, covnr))
+
+                if utr_id in apa_sites:
+                    a_clu_nr = len(apa_sites[utr_id])
+                    if a_clu_nr > 0:
+                        clu_frac = clu_nr/a_clu_nr
+                    go2.append((utr.RPKM, clu_frac))
 
     go = np.array(go)
     rpkms = go[:,0]
@@ -5913,7 +5961,9 @@ def rpkm_polyA_correlation(settings, speedrun):
     go2 = np.array(go2)
     rpkms2 = go2[:,0]
     clus_frac = go2[:,1]
-    debug()
+
+    print('\nMean discovered/annotated ratio: {0:.2f}'.format(np.mean(clus_frac)))
+    print('Mean discovered: {0:.2f}\n'.format(np.mean(cluster_nrs)))
 
     print(stats.spearmanr(rpkms2, clus_frac))
 
@@ -5942,7 +5992,6 @@ def rpkm_polyA_correlation(settings, speedrun):
     p.rec_sensitivity(nrs, mean_clus_fracs, std_clus_fracs, intervals,
                       settings.here)
 
-    debug()
 
 def gencode_report(settings, speedrun):
     """ Make figures for the GENCODE report. The report is an overview of
@@ -5959,7 +6008,7 @@ def gencode_report(settings, speedrun):
 
     # 0) Core stats. print core stats about your datasets, separate and
     # cumulated
-    #cumul_stats_printer(settings, speedrun)
+    cumul_stats_printer(settings, speedrun)
 
     # 1) nr of polyA sites obtained with increasing readnr
     #clusterladder(settings, speedrun)
@@ -5982,7 +6031,7 @@ def gencode_report(settings, speedrun):
 
     # 3) plot of correlation between number of poly(A) sites expressed
     # transcript 3UTRs and the RPKM of the 3UTRs.
-    rpkm_polyA_correlation(settings, speedrun)
+    #rpkm_polyA_correlation(settings, speedrun)
 
     # split-mapped reads:     2.94e+07 (0.010)
 
@@ -6003,7 +6052,7 @@ def gencode_report(settings, speedrun):
     # this leaves. 3UTR is 1 percent of the genome
 
     # XXX 16/0.01 = 1600. 13/0.99 = 13.13. 1600/13.13 = 121 fold enrichment of
-    # poly(A) sites in annotated 3UTRs.
+     #poly(A) sites in annotated 3UTRs.
 
     # XXX Overlap between the regions? you merged the polyA sites for the 3 celllines
     # for both regions (3UTR and anti-3UTR). you extended by 10nt and merged the
@@ -6076,7 +6125,7 @@ def main():
     # Optionally get SVM information as well
     # so that you will have the same 1000 3UTRs!
 
-    # XXX For the 'old' output files use 'get_utrs'
+    # XXX For the length + polyA (not only) output files:
     # NOTE the difference is that with this one you have more information about
     # the UTR object (RPKM etc) and consequently it will take longer time to run
     # dsets, super_3utr = get_utrs(settings, speedrun=False, svm=False)

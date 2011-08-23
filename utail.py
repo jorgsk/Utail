@@ -3376,7 +3376,6 @@ def piperunner(settings, annotation, simulate, DEBUGGING, beddir, tempdir,
     # have any exon or intron part to it.
     region = os.path.basename(annotation.utrfile_path).split('_')[0]
     # ad hoc hack for intergenic region
-    # NOTE: github gave me a failbot error upon pushing :S
 
     ##################################################################
     if simulate:
