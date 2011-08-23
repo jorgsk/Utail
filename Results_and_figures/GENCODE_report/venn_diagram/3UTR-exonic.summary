@@ -1,5 +1,0 @@
-Summary of super-clustering of poly(A) sites for the
-                      following datasets:
- K562_Cytoplasm K562_CytoplasmReplicate K562_Whole_Cell K562_Whole_CellReplicate
-one_with_annot_and_PAS	274one_with_annot	318one_with_annot_and_good_PAS	221one_with_good_PAS_sans_annot	81one_with_good_PAS	302one_with_PAS_sans_annot	164total	734one_with_PAS	438
-two_with_PAS_sans_annot	168total	893two_with_PAS	772two_with_good_PAS_sans_annot	127two_with_annot_and_good_PAS	508two_with_good_PAS	635two_with_annot_and_PAS	604two_with_annot	653
