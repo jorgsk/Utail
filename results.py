@@ -5145,7 +5145,6 @@ def clusterladder(settings, speedrun):
     wc_c_minus = [ds for ds in settings.datasets if (('Cytoplasm' in ds) or
                    ('Whole_Cell' in ds)) and 'Minus' in ds]
 
-    # TODO RUN THIS
     regions = ['3UTR-exonic', 'anti-3UTR-exonic']
 
     ##regions = ['3UTR']
@@ -6006,8 +6005,10 @@ def gencode_report(settings, speedrun):
         2) of new poly(A) sites obtained with increasing number of reads
     """
 
-    # 0) Core stats. print core stats about your datasets, separate and
+    # 0.1) Core stats whole genome.
     # cumulated
+    cumul_stats_printer_genome(settings, speedrun)
+    # 0.2) Core stats selected regions
     cumul_stats_printer(settings, speedrun)
 
     # 1) nr of polyA sites obtained with increasing readnr
