@@ -43,50 +43,53 @@ We found signals of polyadenylation events in the GENCODE cell lines by
 trimming and remapping those reads that were originally unmappable and ended in
 a stretch of As or beginning with a stretch of Ts. We subsequently merged the
 polyadenylation sites into clusters in a similar way to Tian et. al
-\cite{tian_large-scale_2005}. In total, for all cell lines, we obtained XXX
-polyadenylation sites, were XXX \% were common among all cell lines, and XYX
-were common to at least two cell lines. To compare our findings with annotated
+\cite{tian_large-scale_2005}. In total, for all cell lines and compartments(K5,
+GM, HeLa WC, N, C at time of writing), we obtained 29860 polyadenylation sites
+(17125 of these in 3UTR regions). To compare our findings with annotated
 polyadenylation sites, we first merged and clustered 43187 sites from the
 polyAdb with 35791 sites from GENCODE to obtain a total of 50696 annotated
-polyA sites. XXX of our polyA sites fall at annotated ones (xxx (\%) of these
-are in annotated 3UTRs).
+polyA sites. 16657 of our polyA sites fall at annotated ones (81\% or 13517 of
+these are in 3UTRs), leaving a total of 13203 putative novel polyadenylation
+sites in the genome. Table XX shows an overview over the number of poly(A)
+sites in different genomic regions.
 
 Since the RNA-seq protocol for the Gingeras data is not optimized for 3' ends,
 we expected to find most poly(A) sites for transcripts with high RPKM. To
 measure this, we calculated the ratio of discovered to annotated poly(A) sites
 in the 3UTRs of transcripts with non-overlapping 3UTRs. Figure X shows the
-relationship between RPKM and poly(A) discovery ratio. As can be seen, there is
-a positive relationship between RPKM and poly(A) discovery (r = 0.52, p <
-$10^{-10}$), however there is considerable variation, even for high RPKM
-transcripts. We considered an RPKM of minimum 0.5 to count as expressed. For
-individual datasets, the average number of poly(A) sites per 3UTR was 1.35, in
-agreement with what has been found with \dots , and the average ratio of
-poly(A) sites to annotated was 0.75, probably reflecting both that the method
+relationship between RPKM and poly(A) discovery ratio for annotated 3UTRs (at
+the time of writing using WC + C + N for GM, HeLA, WC, N, C) . As can be seen,
+there is a positive relationship between RPKM and poly(A) discovery (r = 0.52,
+p < $10^{-10}$), however there is considerable variation, even for high RPKM
+transcripts. We considered an RPKM of minimum 0.5 to count as expressed. The
+average number of poly(A) sites found per 3UTR was 1.7, and the average ratio
+of poly(A) sites to annotated was 0.9, probably reflecting both that the method
 is not exhaustive, and that not all annotated poly(A) sites are used by
-transcripts at a given time. When combining all poly(A) sites, the average
-number of discovered poly(A) sites per 3UTR was XXXYXY
+transcripts at a given time.
 
-Of a total XYX clusters in he 3UTRs, X land at annotated
-poly(A) sites, while XUU may be novel ones. XYX pcnt of the clusters 3UTRs have
-one of the 8 polyadenylation signals within 40 nt downstream (XY for an, and 42
-for non-an), also in line with what has been reported previously, showing that
-the method is highly specific for detecting polyA sites.
-
-We wanted to compare poly(A) sites in the nucleus and cytoplasm. Poly(A) sites
-in the nucleus are expected to originate from stable mRNA that may exist in
-multiple copies. The poly(A) sites identified in the nucleus are expected to
-stem from mRNA diffusing toward the cytoplasm, mRNA undergoing
-processing, and possibly some RNA undergoing degradation
+We wanted to compare poly(A) sites in the nucleus and cytoplasm. While poly(A)
+sites in the nucleus are expected to derive from from the 3' ends of stable,
+multi-copy mRNA, the poly(A) sites from the nucleus are expected to stem from
+mRNA diffusing toward the cytoplasm, mRNA undergoing processing, and possibly
+some RNA undergoing degradation
 \cite{shcherbik_polyadenylation_2010,slomovic_addition_2010}. We merged the
-poly(A) sites from 6 cell lines in the nucleus and cytoplasm, and compared the
+poly(A) sites from 5 cell lines in the nucleus and cytoplasm, and compared the
 distribution of the polyadenylation sites in the genome, as can be seen in
 Figure YYXYXY. As can be seen, the nuclear regions capture polyadenylation
 signals both in the poly(A)+ and poly(A)- fractions, while in the cytoplasm
 most polyadenylation are in the poly(A)+ fraction, and the whole cell extracts
-resemple the cytoplasmic ones strongly.
+resemble the cytoplasmic ones strongly. This tells us that previous studies on
+polyadenylation have 
+
+Given that we find polyadenylation sites reliably for high RPKM genes, we
+investigated differential usage of polyadenylation sites in these genes. We
+found xxx between the cell lines, indicating that the cell lines use similar
+3UTR isoforms, or that non-used isoforms are exressed to lowly to be observed
+with this method.
 
 \bibliographystyle{plain}
-\bibliography{/users/rg/jskancke/phdproject/bibtex/jorgsk}
+%\bibliography{/users/rg/jskancke/phdproject/bibtex/jorgsk}
+\bibliography{/home/jorgsk/work/bibtex/jorgsk}
 
 \end{document}
 
