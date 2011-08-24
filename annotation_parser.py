@@ -616,30 +616,6 @@ def write_beds(transcripts, bed_dir, chr_sizes, *opts):
     if not os.path.isdir(savedir):
         os.makedirs(savedir)
 
-    ## debugging
-    #known = []
-    #for name1, filepath1 in paths.items():
-        #for name2, filepath2 in paths.items():
-            #if name1 == name2:
-                #continue
-
-            #if sorted([name1, name2]) in known:
-                #continue
-            #else:
-                #known.append(sorted([name1, name2]))
-
-            #cmd = ['intersectBed', '-a', filepath1, '-b', filepath2]
-            #p = Popen(cmd, stdout=PIPE)
-
-            #go = [line for line in p.stdout]
-
-            #if go != []:
-                #print 'Intersection: {0} and {1} '.format(name1, name2)
-                #print 'Intersection length: {0}'.format(len(go))
-
-            #if go == []:
-                #print 'No intersection: {0} and {1} '.format(name1, name2)
-
     # rename the paths and save them to the stranded or non-stranded directories
     for name, filepath in paths.items():
         out_path = os.path.join(savedir, printdict[name]+'_'+strnd+chrm+'.bed')
@@ -1571,8 +1547,8 @@ def split_annotation(transcripts, chr1, bed_dir, chr_s):
     no_overlapping = True
     skipsize = 3
 
-    for stranded in [False, True]:
-    #for stranded in [False]:
+    #for stranded in [False, True]:
+    for stranded in [True]:
 
         opts = (merge, extend, no_overlapping, chr1, skipsize, stranded)
 
@@ -1732,17 +1708,17 @@ def main():
 
         t1 = time.time()
 
-        #annotation = '/users/rg/jskancke/phdproject/3UTR/'\
-                #'gencode7/gencode7_annotation.gtf'
-        annotation = '/home/jorgsk/work/pipeline_files/gencode7/'\
-                'gencode.v7.annotation.gtf'
+        annotation = '/users/rg/jskancke/phdproject/3UTR/'\
+                'gencode7/gencode7_annotation.gtf'
+        #annotation = '/home/jorgsk/work/pipeline_files/gencode7/'\
+                #'gencode.v7.annotation.gtf'
 
-        #if chr1:
-            #annotation = '/users/rg/jskancke/phdproject/3UTR/'\
-                    #'gencode7/gencode7_annotation_chr1.gtf'
         if chr1:
-            annotation = '/home/jorgsk/work/pipeline_files/gencode7/'\
-                    'gencode.v7.annotation_chr1.gtf'
+            annotation = '/users/rg/jskancke/phdproject/3UTR/'\
+                    'gencode7/gencode7_annotation_chr1.gtf'
+        #if chr1:
+            #annotation = '/home/jorgsk/work/pipeline_files/gencode7/'\
+                    #'gencode.v7.annotation_chr1.gtf'
 
         an_frmt = 'GENCODE'
         #an_frmt = 'ENSEMBL'
@@ -1751,11 +1727,13 @@ def main():
         print('finished getting transcripts')
 
         # normal annoatation splitting
-        output_dir = '/home/jorgsk/work/pipeline_files/genomic_regions'
+        #output_dir = '/home/jorgsk/work/pipeline_files/genomic_regions'
+        output_dir = '/users/rg/jskancke/phdproject/3UTR/annotation_split'
         # hg19 must be stripped of header and tail strange regions
-        hg19_file = '/home/jorgsk/work/pipeline_files/hg19.genome'
+        #hg19_file = '/home/jorgsk/work/pipeline_files/hg19.genome'
+        hg19_file = '/users/rg/jskancke/phdproject/3UTR/the_project/ext_files/hg19'
 
-        #split_annotation(transcripts, chr1, output_dir, hg19_file)
+        split_annotation(transcripts, chr1, output_dir, hg19_file)
 
         #gene_limit = 1
         # XXX problem: how to collect and merge with 50 transcripts per gene and you

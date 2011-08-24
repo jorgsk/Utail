@@ -1634,17 +1634,14 @@ class Plotter(object):
         # return the plot handle for later
         return pl
 
-    def lying_bar_regions(self, data_dict):
+    def lying_bar_regions(self, data_dict, regions):
         """ Plot the poly(A) sites from the different regions
         """
 
-        (fig, axes) = plt.subplots(3,2)
-        #compartments = ['Whole_Cell', 'Cytoplasm', 'Nucleus']
-        compartments = ['Nucleus', 'Cytoplasm', 'Whole_Cell']
+        (fig, axes) = plt.subplots(3,2, sharex=True)
+        compartments = ['Whole_Cell', 'Cytoplasm', 'Nucleus']
+        #compartments = ['Nucleus', 'Cytoplasm', 'Whole_Cell']
         fractions = ['+', '-']
-        regions = ['5UTR-exonic', '5UTR-intronic', 'CDS-exonic', 'CDS-intronic',
-                   '3UTR-exonic', '3UTR-intronic', 'Nocoding-exonic',
-                   'Noncoding-intronic', 'Intergenic']
 
         for comp_nr, comp in enumerate(compartments):
             for frac_nr, frac in enumerate(fractions):
@@ -1666,21 +1663,34 @@ class Plotter(object):
                 ax = axes[comp_nr, frac_nr] #
                 pos = range(1, len(trust)+1)
                 rects = ax.barh(pos, trust, align='center', height=0.5, color='m')
+                ax.xaxis.grid(True)
 
                 # put some titles here and there
 
                 if frac_nr == 0:
-                    ax.set_xlabel(comp)
-                    ax.set_yticks(pos, regions) # set the 3utr-exonic etc
+                    ax.set_ylabel(comp, size=20)
+                    ax.set_yticks(pos) # set the 3utr-exonic etc
+                    ax.set_yticklabels(regions) # set the 3utr-exonic etc
+                if frac_nr == 1:
+                    ax.set_yticklabels([])
 
-                if comp_nr == 1:
-                    ax.set_title('P(A){0}'.format(frac))
+                if comp_nr == 0:
+                    ax.set_title('P(A){0}'.format(frac), size=20)
 
                 # Remove parts of the axis
-                ax.axis["right"].set_visible(False)
-                ax.axis["top"].set_visible(False)
+                # NOTE there are two ways of making this work. One way is by the
+                # old subplot way using a special class:
+                    #import mpl_toolkits.axisartist as AA
+                # and make your plot of this one
+
+                # another one is to disable both xaxis and yaxis and
+                # subsequently redraw the axes. See here:
+                # http://www.shocksolution.com/2011/08/removing-an-axis-or-both-axes-from-a-matplotlib-plot/#comment-836
+                #ax.axis["right"].set_visible(False)
+                #ax.axis["top"].set_visible(False)
 
                 # TODO put the with/pas as another plot on-top
+        fig.subplots_adjust(wspace=0.1)
 
         debug()
 
@@ -5829,6 +5839,44 @@ def rpkm_polyA_correlation(settings, speedrun):
     p.rec_sensitivity(nrs, mean_clus_fracs, std_clus_fracs, intervals,
                       settings.here)
 
+def barsense_counter(super_3utr, region):
+    """
+    Count for making bar plots and strand plots!
+    """
+    bardict = {'plus1': 0, 'withPAS': 0, 'goodPAS': 0, '1':0}
+    stranddict = {'plus1': 0, 'withPAS': 0, 'goodPAS': 0, '1':0}
+
+    for utr_id, utr in super_3utr[region].iteritems():
+
+        for cls in utr.clusters:
+
+            # for your own information
+            bardict['1'] += 1
+            if cls.strand == utr.strand:
+                stranddict['1'] += 1
+
+            # trusted sites
+            if cls.nr_support_reads>1 or cls.annotated_polyA_distance!='NA':
+
+                bardict['plus1'] += 1
+                if cls.strand == utr.strand:
+                    stranddict['plus1'] += 1
+
+            # for PAS with 1 read
+                if cls.nearby_PAS[0] != 'NA':
+                    bardict['withPAS'] += 1
+                    if cls.strand == utr.strand:
+                        stranddict['withPAS'] += 1
+
+                # for one of the two canonical PAS
+                if 'AATAAA' in cls.nearby_PAS or 'ATTAAA' in cls.nearby_PAS:
+                    bardict['goodPAS'] += 1
+                    if cls.strand == utr.strand:
+                        stranddict['goodPAS'] += 1
+
+    return bardict, stranddict
+
+
 def side_plot(settings, speedrun):
     """
     Side plot of poly(A) reads in different regions
@@ -5845,7 +5893,11 @@ def side_plot(settings, speedrun):
     subset = [ds for ds in settings.datasets if (('Cytoplasm' in ds) or
                  ('Whole_Cell' in ds) or ('Nucleus' in ds)) and (not 'Minus' in ds)]
 
-    data_dict = {}
+    # Get one dict for the bar plot and one dict for the sense-plot
+    bar_dict = {}
+    sense_dict = {}
+
+    #speedrun = True
 
     for comp in compartments:
         for frac in fractions:
@@ -5865,30 +5917,25 @@ def side_plot(settings, speedrun):
                 key = ':'.join([comp, frac, region])
 
                 # count the number clusters with +1, of those with PAS/good_PAS
-                data_dict[key] = {'plus1': 0, 'withPAS': 0, 'goodPAS': 0, '1':0}
+                bar_dict[key], sense_dict[key] = barsense_counter(super_3utr)
 
-                for utr_id, utr in super_3utr.items():
+    pickfile = 'TEMP_PICKLE'
+    import cPickle as pickle
+    if not os.path.isfile(pickfile):
+        pickle.dump(bar_dict, open(pickfile, 'wb'))
+    else:
+        bar_dict = pickle.load(open(pickfile, 'rb'))
 
-                    for cls in utr.clusters:
-
-                        # for your own information
-                        data_dict[key]['1'] += 1
-
-                        # trusted sites
-                        if cls.nr_support_reads>1 or cls.annotated_polyA_distance!='NA':
-
-                            data_dict[key]['plus1'] += 1
-
-                        # for PAS with 1 read
-                            if cls.nearby_PAS[0] != 'NA':
-                                data_dict[key]['withPAS'] += 1
-
-                            if 'AATAAA' in cls.nearby_PAS or 'ATTAAA' in cls.nearby_PAS:
-                                data_dict[key]['goodPAS'] += 1
-
-    # Send data_dict to the plotter!
+    # Send bar_dict to the plotter!
     p = Plotter()
-    p.lying_bar_regions(data_dict)
+    p.lying_bar_regions(bar_dict, regions)
+
+    # send the sense dict for writing a latex table!
+
+def sense_plot(settings, speedrun):
+    """
+    Plot the sense/antisense ratios for the cell lines for the compartments
+    """
 
 
 def gencode_report(settings, speedrun):
@@ -5906,9 +5953,9 @@ def gencode_report(settings, speedrun):
 
     # 0.1) Core stats whole genome.
     # cumulated
-    cumul_stats_printer_genome(settings, speedrun)
+    #cumul_stats_printer_genome(settings, speedrun)
     # 0.2) Core stats selected regions
-    cumul_stats_printer(settings, speedrun)
+    #cumul_stats_printer(settings, speedrun)
 
     # 1) nr of polyA sites obtained with increasing readnr
     #clusterladder(settings, speedrun)
@@ -5939,10 +5986,12 @@ def gencode_report(settings, speedrun):
 
     # 5) Table of the fraction of poly(A) sites that are in the sense/antisense
     # direction for the same variables as in plot 4). You must rerun your
-    # samples for regions that are uniquely stranded. You must separate each
-    # stranded region into the + and - parts and remove those that overlap. Call
-    # them stranded_unique and rerun everything for them. That will give you
-    # strandedness data for all your stuffses.
+    # The problem with this is that you don't save the stranded_nonstranded
+    # information. I think the only way to do this is to backup your output
+    # directory into output_stranded. You are now running for 3UTR regions. It
+    # will take 30 min or so. After that, make an output_copy, and run
+    # everything for the stranded regions
+    sense_plot(settings, speedrun)
 
     # split-mapped reads:     2.94e+07 (0.010)
 
