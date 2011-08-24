@@ -5907,10 +5907,10 @@ def gencode_report(settings, speedrun):
 
     # 0.1) Core stats. print core stats about your datasets, separate and
     # cumulated
+
     #cumul_stats_printer(settings, speedrun)
     # 0.2) Core stats for whole genome (3UTR-exonic + anti-3UTR-exonic
     #cumul_stats_printer_genome(settings, speedrun)
-
 
     # 1) nr of polyA sites obtained with increasing readnr
     #clusterladder(settings, speedrun)
@@ -5927,11 +5927,9 @@ def gencode_report(settings, speedrun):
     #XXX you have 4k sites with 1 read AND close to annotated site ... would boost your
     #numbers. consider including them.
 
-
     # 2) output all the poly(A) sites from the whole genome for 3UTR and
     # non-3UTR
     #venn_polysites(settings, speedrun)
-
 
     # 3) plot of correlation between number of poly(A) sites expressed
     # transcript 3UTRs and the RPKM of the 3UTRs.
@@ -5940,6 +5938,13 @@ def gencode_report(settings, speedrun):
     # 4) Sidewise bar plots of the number of poly(A) incidents in the different
     # genomic regions, for poly(A)+ and poly(A) -
     side_plot(settings, speedrun)
+
+    # 5) Table of the fraction of poly(A) sites that are in the sense/antisense
+    # direction for the same variables as in plot 4). You must rerun your
+    # samples for regions that are uniquely stranded. You must separate each
+    # stranded region into the + and - parts and remove those that overlap. Call
+    # them stranded_unique and rerun everything for them. That will give you
+    # strandedness data for all your stuffses.
 
     # split-mapped reads:     2.94e+07 (0.010)
 

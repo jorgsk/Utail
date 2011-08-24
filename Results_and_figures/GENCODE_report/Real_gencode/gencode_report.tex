@@ -60,8 +60,8 @@ in the 3UTRs of transcripts with non-overlapping 3UTRs. Figure X shows the
 relationship between RPKM and poly(A) discovery ratio for annotated 3UTRs (at
 the time of writing using WC + C + N for GM, HeLA, WC, N, C) . As can be seen,
 there is a positive relationship between RPKM and poly(A) discovery (r = 0.52,
-p < $10^{-10}$), however there is considerable variation, even for high RPKM
-transcripts. We considered an RPKM of minimum 0.5 to count as expressed. The
+p < $10^{-10}$), however there is considerable variation even for high RPKM
+transcripts (we considered an RPKM of minimum 0.5 to count as expressed). The
 average number of poly(A) sites found per 3UTR was 1.7, and the average ratio
 of poly(A) sites to annotated was 0.9, probably reflecting both that the method
 is not exhaustive, and that not all annotated poly(A) sites are used by
@@ -72,20 +72,52 @@ sites in the nucleus are expected to derive from from the 3' ends of stable,
 multi-copy mRNA, the poly(A) sites from the nucleus are expected to stem from
 mRNA diffusing toward the cytoplasm, mRNA undergoing processing, and possibly
 some RNA undergoing degradation
-\cite{shcherbik_polyadenylation_2010,slomovic_addition_2010}. We merged the
-poly(A) sites from 5 cell lines in the nucleus and cytoplasm, and compared the
-distribution of the polyadenylation sites in the genome, as can be seen in
-Figure YYXYXY. As can be seen, the nuclear regions capture polyadenylation
-signals both in the poly(A)+ and poly(A)- fractions, while in the cytoplasm
-most polyadenylation are in the poly(A)+ fraction, and the whole cell extracts
-resemble the cytoplasmic ones strongly. This tells us that previous studies on
-polyadenylation have 
+\cite{shcherbik_polyadenylation_2010,slomovic_addition_2010}.
 
-Given that we find polyadenylation sites reliably for high RPKM genes, we
-investigated differential usage of polyadenylation sites in these genes. We
-found xxx between the cell lines, indicating that the cell lines use similar
-3UTR isoforms, or that non-used isoforms are exressed to lowly to be observed
-with this method.
+We merged the poly(A) sites from 5 cell lines in the nucleus and cytoplasm
+separately for the poly(A)+ and poly(A)- fractions and
+compared the distribution of the polyadenylation sites in the genome (Figure
+YYXYXY). The division of RNA between poly(A)+ and poly(A)- happens at an
+average of 30(A) residues.
+
+In Figure X A), it is clear that for the cytoplasm many more markers of
+polyadenylation are found in in the poly(A)+ fraction than in the poly(A)-
+fraction. The polyadenylatio marks in the cytoplasmic poly(A)- fraction can
+come from mRNA that is being degraded (as the poly(A) tail is decreased in
+length before degradation).
+
+As can be seen, the nuclear regions capture polyadenylation signals both in the
+poly(A)+ and poly(A)- fractions in the intronic regions. Intronic
+polyadenylation has been identified for many genes \cite{}TIAN, which could
+explain that markers of polyadenylation is found in the poly(A)+ fraction.
+However, it was unexpected to find polyadenylation markers in the poly(A)-
+fraction. Their presence in this fractions means that they originate from RNA
+that had a poly(A) tail of 30nt or less. This could be the evidence of a
+different type of adenylated RNA in the nucleus, such adenylation as a marker
+for degradation \cite{}.
+
+It is also clear that the polyadenylation patterns for whole cell extracts
+resemble the cytoplasmic ones strongly. This tells us that results from
+previous RNA-seq studies on polyadenylation probably emphasize polyadenylation
+in the cytoplasm.
+
+To investigate whether the markers of polyadenylation we observe are in the
+sense or anti-sense to anntated genomic features, we looked at only those
+genomic regions that have features in one sense uniquely, and that do not
+overlap with any other genomic features. Table XXX shows this.
+
+# 1 TODO make the big table you brag about in the first part
+# 2 TODO make the unique sense-antisense libraries and make sure they don't
+overlap each other. Return similar values as for polyadenylation, but now
+include K562 nucleoplasm and chromatin as well (actually you can include them
+in the above too).
+
+DISCUSSION
+
+1) It's possible to use conventional RNA-seq to study polyadenylation, you just
+need a lot of reads.
+
+2) 
 
 \bibliographystyle{plain}
 %\bibliography{/users/rg/jskancke/phdproject/bibtex/jorgsk}
