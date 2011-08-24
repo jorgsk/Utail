@@ -188,9 +188,6 @@ class UTR(object):
         self.clusters = []
         self.cluster_nr = 0
 
-        # SVM info might be added
-        self.svm_coordinates = []
-
     def __repr__(self):
         return self.ID[-8:]
 
@@ -300,8 +297,6 @@ class Settings(object):
         # the files you have loaded
         # Return the paths of the onlypolyA files
 
-        self.regions = conf.get('PLOTTING', 'regions').split(':')
-        #self.regions = self.get_onlyregions()
         self.chr1 = chr1
 
         self.settings_file = settings_file
@@ -311,58 +306,6 @@ class Settings(object):
 
         # The hg19 genome
         self.hg19_path = os.path.join(self.here, 'ext_files', 'hg19')
-
-        # only valid for 3UTRs. You have to make sure to skip this one,
-        # otherwise you get into trouble for trying to make the annotated polyA
-        # sites again, yet in the settings file you haven't provided an
-        # annotation, because you want to analysie the non-annotated regions.
-        # kthnx.
-        if self.regions[0] == '3UTRs-exons':
-            self.annot_polyA_path = self.get_annot_polyas()
-            self.polyA_DB_path = os.path.join(self.here, 'polyADB', 'polyA_db')
-
-            # the exons of the regions in use (or 3UTRs)
-            # PS this is only needed for the 3UTRs, because you get the annotated
-            # poly(A) sites.
-            self.utr_exons_path = self.get_region_exons()
-
-
-    def get_onlyregions(self):
-        """ Go through all the files in the output dir for the datasets you
-        have, and report back what regions are there.
-        """
-        regions = []
-        cmd = 'ls '+ os.path.join(self.outputdir, 'onlypolyA*')
-        p = Popen(cmd, stdout=PIPE, shell=True)
-        for line in p.stdout:
-            reg = line.split('_')[-1].rstrip()
-
-            # add the regions only of one of our datasets are in these files
-            for dset in self.datasets:
-                if dset in line:
-                    regions.append(reg)
-
-        return list(set(regions))
-
-    def get_region_exons(self):
-
-        import utail as utail
-
-        utail_settings = utail.Settings\
-                (*utail.read_settings(self.settings_file))
-
-        if self.chr1:
-            utail_settings.chr1 = True
-
-        beddir = os.path.join(self.here, 'source_bedfiles')
-
-        region_exons = {}
-
-        for region in self.regions:
-            # YOU ASSUME NOT CHR1 AND NOT STRANDED!
-            region_file = region + '_non_stranded.bed'
-            region_exons[region] = utail.get_utr_path(utail_settings, beddir,
-                                                      False, region_file)
 
     def get_annot_polyas(self):
         """
@@ -400,68 +343,6 @@ class Settings(object):
         return dict((d, os.path.join(self.here, self.outputdir,
                                      d+'_'+region+'_polyA_statistics'))
                     for d in self.datasets)
-
-    # Return the path of the svm-file. This file should be a bed-file where name
-    # is the utr and the coordinate is the svm-coordinate. If the file does not
-    # exist, create it by bedIntersecting the 3UTR file from
-    # annotation_parser.py
-    def svm_file(self, chr1=False):
-
-        # Make the svm dir if it doesn't exist
-        svmdir = os.path.join(self.here, 'svm')
-        if not os.path.exists(svmdir):
-            os.makedirs(svmdir)
-        if chr1:
-            svm_f = os.path.join(svmdir, 'svm_utr_intesection_chr1.bed')
-        else:
-            svm_f = os.path.join(svmdir, 'svm_utr_intesection.bed')
-
-        # Get the settings file of the utr_analyzer; use this file to get the
-        # correct path of the 3utr-bedfile.
-        import utail as utail
-
-        utail_settings = utail.Settings\
-                (*utail.read_settings(self.settings_file))
-
-        if chr1:
-            utail_settings.chr1 = True
-
-        # Check if 3UTRfile has been made or provided; if not, get it from annotation
-        beddir = os.path.join(self.here, 'source_bedfiles')
-        utr_bed = utail.get_utr_path(utail_settings, beddir)
-
-        # Check that it's accessible
-        verify_access(utr_bed)
-
-        # Run intersect bed on the utrfile with the svmfile
-        svm_bed = os.path.join(svmdir, 'svm_final.bed')
-        # If this file doesn't exist, you have to make it
-
-        #if not os.path.isfile(svm_bed):
-            #svm_from_source(svm_bed, svmdir, utr_bed, finder_settings, chr1)
-
-        from subprocess import Popen, PIPE
-
-        # Consider the strand; you have discarded the polyA reads with the
-        # 'wrong' strand
-        cmd = ['intersectBed', '-wb', '-s', '-a', svm_bed, '-b', utr_bed]
-        f = Popen(cmd, stdout=PIPE)
-
-        svm_dict = {}
-        for line in f.stdout:
-            (chrm, beg, end, d,d, strand, d,d,d, utr_exon_id, d,d) = line.split()
-            # The bedfile has utr_exons in the index. You need the whole utr.
-            # OBS 
-            utr_id = '_'.join(utr_exon_id.split('_')[:-1])
-            beg = int(beg)
-            end = int(end)
-
-            if utr_id in svm_dict:
-                svm_dict[utr_id].append((chrm, beg, end, '0', '0', strand))
-            else:
-                svm_dict[utr_id] = [(chrm, beg, end, '0', '0', strand)]
-
-        return svm_dict
 
 class Plotter(object):
     """
@@ -1753,6 +1634,56 @@ class Plotter(object):
         # return the plot handle for later
         return pl
 
+    def lying_bar_regions(self, data_dict):
+        """ Plot the poly(A) sites from the different regions
+        """
+
+        (fig, axes) = plt.subplots(3,2)
+        #compartments = ['Whole_Cell', 'Cytoplasm', 'Nucleus']
+        compartments = ['Nucleus', 'Cytoplasm', 'Whole_Cell']
+        fractions = ['+', '-']
+        regions = ['5UTR-exonic', '5UTR-intronic', 'CDS-exonic', 'CDS-intronic',
+                   '3UTR-exonic', '3UTR-intronic', 'Nocoding-exonic',
+                   'Noncoding-intronic', 'Intergenic']
+
+        for comp_nr, comp in enumerate(compartments):
+            for frac_nr, frac in enumerate(fractions):
+
+                #ones = []
+                trust = []
+                #with_pas = []
+                #with_good_pas = []
+
+                for region in regions:
+                    thiskey = ':'.join([comp, frac, region])
+
+                    #ones.append(data_dict[thiskey]['1'])
+                    trust.append(data_dict[thiskey]['plus1'])
+                    #with_pas.append(data_dict[thiskey]['withPAS'])
+                    #goodPAS.append(data_dict[thiskey]['goodPAS'])
+
+                # make the actual plot
+                ax = axes[comp_nr, frac_nr] #
+                pos = range(1, len(trust)+1)
+                rects = ax.barh(pos, trust, align='center', height=0.5, color='m')
+
+                # put some titles here and there
+
+                if frac_nr == 0:
+                    ax.set_xlabel(comp)
+                    ax.set_yticks(pos, regions) # set the 3utr-exonic etc
+
+                if comp_nr == 1:
+                    ax.set_title('P(A){0}'.format(frac))
+
+                # Remove parts of the axis
+                ax.axis["right"].set_visible(False)
+                ax.axis["top"].set_visible(False)
+
+                # TODO put the with/pas as another plot on-top
+
+        debug()
+
 def pairwise_intersect(in_terms_of, dset_dict, cutoff):
     """
     For 'all clusters' and 'annotated clusters', get the intersection with all
@@ -1929,7 +1860,7 @@ def get_clusters(settings):
 
     return clusters
 
-def super_falselength(settings, region, subset=[], speedrun=False, svm=False):
+def super_falselength(settings, region, subset=[], speedrun=False):
     """ Return the super clusters with information only from the poly(A) files
     without using length (coverage) information.
 
@@ -2009,7 +1940,7 @@ def super_falselength(settings, region, subset=[], speedrun=False, svm=False):
 
     return dsets, super_3utr
 
-def get_utrs(settings, region, dset_subset=[], speedrun=False, svm=False):
+def get_utrs(settings, region, dset_subset=[], speedrun=False):
     """
     Return a list of UTR instances. Each UTR instance is
     instansiated with a list of UTR objects and the name of the datset.
@@ -2036,10 +1967,6 @@ def get_utrs(settings, region, dset_subset=[], speedrun=False, svm=False):
     # account, since it's now part of the filename
     length_files = settings.length_files(region)
     cluster_files = settings.polyA_files(region)
-
-    if svm:
-        # Get a dictionary indexed by utr_id with the svm locations
-        svm_dict = settings.svm_file()
 
     # Check if all length files exist or that you have access
     # if you specify a certain subset, don't check those that are not in the
@@ -2092,25 +2019,6 @@ def get_utrs(settings, region, dset_subset=[], speedrun=False, svm=False):
 
             # Update with poly(A) cluster info
             utr_dict[utr_id].cluster_nr = len(utr_obj.clusters)
-
-            # If svm is not set, continue
-            if not svm:
-                continue
-
-            # Don't add svm info if there is no svm
-            if utr_id not in svm_dict:
-                continue
-
-            # Get SVM info
-            SVMs = svm_dict[utr_id]
-
-            for (chrm, svm_beg, svm_end, d, d, strand) in SVMs:
-                # Check that strand and chrm of SVM are the same as UTR object ...
-                assert (utr_dict[utr_id].chrm, utr_dict[utr_id].strand)\
-                        == (chrm, strand), 'Mismatch'
-
-                #Update UTR object with SVM info
-                utr_dict[utr_id].svm_coordinates.append(svm_beg)
 
         # Add the utr_dict for this cellLine-compartment 
         this_cl = dset_name.split('_')[0]
@@ -3009,7 +2917,7 @@ def correlate_polyA_coverage_counts(dsets, super_clusters):
 def compare_cluster_evidence(dsets, super_clusters, dset_2super):
     """
     Find the co-occurence for all the evidence for polyA clusters you have (in
-    annotation, svm support, etc).
+    annotation, etc).
 
     Especially, what support do the annotated, alone, have?
     """
@@ -3022,7 +2930,6 @@ def compare_cluster_evidence(dsets, super_clusters, dset_2super):
         for (compartment, utrs) in compartment_dict.items():
 
             all_read_counter = {} # cluster_size : read_count for all clusters
-            svm_support = {} # for all clusters: do they have SVM support?
             annot_read_counter = {} # cluster_size : read_count for clusters w/annot
             other_dsets= {} # cluster_size : read_count for clusters in other dsets
 
@@ -3045,22 +2952,6 @@ def compare_cluster_evidence(dsets, super_clusters, dset_2super):
                     else:
                         all_read_counter[cls.nr_support_reads] = [keyi]
 
-                    # SVM support
-                    if utr.svm_coordinates != []:
-                        # Look for svm support for this cluster
-                        found = False
-                        for crd in utr.svm_coordinates:
-                            if crd-30 < cls.polyA_coordinate < crd+30:
-                                found = True
-                                break
-
-                        # If you found it, add to the svm_support cluster
-                        if found:
-                            if cls.nr_support_reads in svm_support:
-                                svm_support[cls.nr_support_reads].append(keyi)
-                            else:
-                                svm_support[cls.nr_support_reads] = [keyi]
-
                     # Annotated clusters
                     if cls.annotated_polyA_distance != 'NA':
                         if cls.nr_support_reads in annot_read_counter:
@@ -3078,13 +2969,8 @@ def compare_cluster_evidence(dsets, super_clusters, dset_2super):
                     else:
                         other_dsets[cls.nr_support_reads] = [keyi]
 
-            cluster_dicts = (all_read_counter, svm_support, annot_read_counter)
-            titles = ('All clusters', 'SVM_support', 'Annotated_TTS')
-
-            #cluster_dicts = (all_read_counter, svm_support, annot_read_counter,
-                        #other_dsets)
-            #titles = ('All clusters', 'SVM_support', 'Annotated_TTS',
-                      #'In_other_compartments')
+            cluster_dicts = (all_read_counter, annot_read_counter)
+            titles = ('All clusters', 'Annotated_TTS')
 
             # make two figurses: one in terms of all clusters and on of annotated
             # TTS sites
@@ -3306,16 +3192,6 @@ def novel_polyAs(dsets, super_clusters, dset_2super):
                     else:
                         has_annotation = False
 
-                    # check if utr has svm and if this svm is within 40 nt
-                    # of the polyA site
-                    has_svm = False # assume not foudn; update if found
-
-                    # Update has_svm if you find them
-                    for svm_coord in utr.svm_coordinates:
-                       if svm_coord-40 < cls.polyA_coordinate < svm_coord+40:
-                           has_svm = True
-                           break
-
                     # Get the super ID that links you with the super-cluster
                     super_key = dset_name+cls.chrm+cls.strand+\
                             str(cls.polyA_coordinate)
@@ -3331,7 +3207,6 @@ def novel_polyAs(dsets, super_clusters, dset_2super):
                                 {'max_covrg': max_covrg,
                                  'compartment': 1,
                                  'has_annotation': has_annotation,
-                                 'has_svm': has_svm,
                                  'has_PAS': has_PAS,
                                  'RPKM': utr.RPKM}
                     else:
@@ -3345,7 +3220,6 @@ def novel_polyAs(dsets, super_clusters, dset_2super):
 
                         # True or False = True
                         g['has_annotation'] = g['has_annotation'] or has_annotation
-                        g['has_svm'] = g['has_svm'] or has_svm
                         g['has_PAS'] = g['has_PAS'] or has_PAS
                         g['RPKM'] = max(utr.RPKM, g['RPKM'])
 
@@ -3445,9 +3319,8 @@ def polyAdistribution(novel_PA):
 
                     # Demapd, pas, annot, or SVM, and covr > 1.
                     if ((cls['has_PAS'] or\
-                       cls['has_annotation'] or\
-                       cls['has_svm']) ) or\
-                       cls['max_covrg'] > 1:
+                       cls['has_annotation'] ) or\
+                       cls['max_covrg']) > 1:
 
                         # Extract the strand and coordinate
                         if len(chmStrandCoord.split('-')) == 2:
@@ -3568,7 +3441,6 @@ def count_polyAs(novel_PA, dsets, minRPKM):
                 for (super_coord, cls) in cls_dict.items():
                     if cls['has_PAS'] or\
                        cls['has_annotation'] or\
-                       cls['has_svm'] or\
                        cls['max_covrg'] > 1:
 
                         polyAcounter[cell_line][comp] += 1
@@ -4126,49 +3998,6 @@ def merge_clusters(dsets):
                     each_cluster_2all[e_key] = key
 
     return (all_clusters, each_cluster_2all)
-
-def svm_from_source(svm_path, svm_dir, utr_path, hgfasta_path, chr1):
-    print('SVM file not found. Generating from SVM program ...')
-    # The path to the directory the script is located in
-    here = os.path.dirname(os.path.realpath(__file__))
-
-    sys.path.append(os.path.join(here, 'modules'))
-    sys.path.append(os.path.join(here, 'modules/pyfasta'))
-
-    if chr1:
-        fasta_file = os.path.join(svm_dir, 'utr_exon_fastas_chr1.fa' )
-    else:
-        fasta_file = os.path.join(svm_dir, 'utr_exon_fastas.fa' )
-
-    fasta_handle = open(fasta_file, 'wb')
-
-    from fasta import Fasta
-
-    # 1) For all the utr-exons in utr_path, get the genomic sequence, and save
-    # in a fasta file
-
-    # The fasta object
-    f = Fasta(hgfasta_path)
-    for line in open(utr_path, 'rb'):
-
-        (chrm, beg, end, utr_exon_id, ex_nr, strand) = line.split()
-        beg = int(beg)
-        end = int(end)
-
-        if strand == '+':
-            seq = f.sequence({'chr':chrm,'start':beg+1, 'stop':end-1,
-                                          'strand':strand}).upper()
-        if strand == '-':
-            seq = f.sequence({'chr':chrm,'start':beg+2, 'stop':end,
-                                          'strand':strand}).upper()
-
-        fasta_handle.write('>{0}\n{1}\n'.format(utr_exon_id, seq))
-
-    fasta_handle.close()
-
-    # 2) Run the SVM machine on the fasta file
-
-    # 3) Parse the output into a nicely formatted bedfile in svm_patth
 
 def write_verified_TTS(clusters):
     """
@@ -4868,7 +4697,7 @@ def get_dsetclusters(subset, region, settings, speedrun):
             bigcl[cat1][cat2]['tail_lens'] = deepcopy(tail_lens)
 
     dsets, super_3utr = super_falselength(settings, region, subset,
-                                          speedrun, svm=False)
+                                          speedrun)
 
     for utr_name, utr in super_3utr[region].iteritems():
 
@@ -5006,7 +4835,7 @@ def get_dsetclusters(subset, region, settings, speedrun):
 
     return bigcl
 
-def super_cluster_statprinter(dsetclusters, region, thiskey):
+def super_cluster_statprinter(dsetclusters, region, thiskey, settings):
 
     this_combo = thiskey
     statdict = dsetclusters[thiskey]
@@ -5040,16 +4869,19 @@ def super_cluster_statprinter(dsetclusters, region, thiskey):
     # just initating this value
     local_sum = total_sum
 
-    print('########################################################')
-    print region
-    print this_combo
+    output_path = os.path.join(settings.here,
+                          'Results_and_figures/GENCODE_report/region_stats')
+    output_file = os.path.join(output_path, region+'.stats')
+    handle = open(output_file, 'ab')
 
-    print('Reads:{0} (same: {1}, opposite: {2})'.format(*reads))
+    handle.write('########################################################\n')
+    handle.write(region+'\n')
 
+    handle.write('Reads:{0} (same: {1}, opposite: {2})\n'.format(*reads))
 
     for key in keys:
 
-        print('\n'+headers[key])
+        handle.write('\n'+headers[key]+'\n')
 
         for dkey in datakeys:
 
@@ -5073,8 +4905,8 @@ def super_cluster_statprinter(dsetclusters, region, thiskey):
                     oppo_pcnt = format(opposite/float(so_sum), '.2f')
 
                     so = (so_sum, so_pcnt, same, same_pcnt, opposite, oppo_pcnt)
-                    print(subheaders[subkey]+':\t{0} ({1})\tsame {2} ({3})'\
-                          '\topposite {4} ({5})').format(*so)
+                    handle.write(subheaders[subkey]+':\t{0} ({1})\tsame {2} ({3})'\
+                          '\topposite {4} ({5})\n'.format(*so))
 
                 if dkey == 'tail_lens':
                     same = statdict[key][subkey][dkey]['same']
@@ -5084,7 +4916,7 @@ def super_cluster_statprinter(dsetclusters, region, thiskey):
                     for k in keys:
                         so_sum[k] = [same[k][i]+osite[k][i] for i in range(5)]
 
-                    print(subheaders[subkey])
+                    handle.write(subheaders[subkey]+'\n')
 
                     def divme(a,b):
                         try:
@@ -5106,20 +4938,17 @@ def super_cluster_statprinter(dsetclusters, region, thiskey):
 
                         sr = so_sum[k][0]
                         ssr = str(sr)
+
                         #smprint = ssr+' '+str([divme(v, sr) for v in so_sum[k][1:]])
                         smprint = ssr+' '+divme(so_sum[k][indx[k]], sr)
 
-                        #print(k+':')
-                        #print('\tsame:\t\t' +sprint)
-                        #print('\topposite:\t' +oprint)
                         #print('\tsum:\t\t' +smprint+'\n')
-                        print(k+'\tsame: '+sprint+'\topposite: '+oprint+'\tsum: '+smprint)
+                        handle.write(k+'\tsame: '+sprint+'\topposite: '\
+                                     +oprint+'\tsum: '+smprint+'\n')
 
 
-    print('########################################################\n')
-
-
-    # TODO PRINT HERE
+    handle.write('########################################################\n')
+    handle.close()
 
 
 def clusterladder(settings, speedrun):
@@ -5457,7 +5286,7 @@ def venn_polysites(settings, speedrun):
         subset = k562 # while debugging
 
         dsets, super_3utr = super_falselength(settings, region, subset,
-                                              speedrun, svm=False)
+                                              speedrun)
 
         superbed_path = os.path.join(outdir, region+'.bed')
         handle = open(superbed_path, 'wb')
@@ -5782,22 +5611,48 @@ def join_regions(paths, only_these, outdir, extendby=False):
 
     return joined_merged_path
 
+def cumul_stats_printer_genome(settings, speedrun):
+
+    #all_dsets = [ds for ds in settings.datasets if (('Cytoplasm' in ds) or
+                 #('Whole_Cell' in ds)) and (not 'Minus' in ds)]
+    #all_dsets = [ds for ds in settings.datasets if (('Cytoplasm' in ds)
+                  #and (not 'Minus' in ds))]
+    all_dsets = [ds for ds in settings.datasets if (('Cytoplasm' in ds) or
+                 ('Whole_Cell' in ds) or ('Nucleus' in ds)) and (not 'Minus' in ds)]
+
+    dsetclusters = {}
+
+    #speedrun = True
+    speedrun = False
+
+    dsetclusters['3UTR'] = get_dsetclusters(all_dsets, '3UTR-exonic', settings,
+                                            speedrun)
+
+    dsetclusters['anti-3UTR'] = get_dsetclusters(all_dsets, 'anti-3UTR-exonic',
+                                                 settings, speedrun)
+
+    dsetclusters['genome'] = dsetcluster_join(dsetclusters)
+
+    genomeprint = {'genome': dsetclusters['genome']}
+    super_cluster_statprinter(genomeprint, 'genome', 'genome', settings)
+
+    UTRprint = {'3UTR': dsetclusters['3UTR']}
+    super_cluster_statprinter(UTRprint, '3UTR', '3UTR', settings)
+
+    anti_3UTRprint = {'anti-3UTR': dsetclusters['anti-3UTR']}
+    super_cluster_statprinter(anti_3UTRprint, 'anti-3UTR', 'anti-3UTR', settings)
+
 def cumul_stats_printer(settings, speedrun):
 
     #region = '3UTR'
     region = '3UTR-exonic'
     region = 'CDS-intronic'
 
-    #print('Loaded datasets:')
-    #for ds in settings.datasets:
-        #print(ds)
-
     # cytoplasmic and replicates
     #all_dsets = [ds for ds in settings.datasets if 'Cytoplasm' in ds]
     #all_dsets = [ds for ds in settings.datasets if 'Nucleoplasm' in ds]
     all_dsets = [ds for ds in settings.datasets if (('Cytoplasm' in ds) or
                  ('Whole_Cell' in ds)) and (not 'Minus' in ds)]
-    #debug()
 
     #subsets = [all_dsets[:end] for end in range(1, len(all_dsets)+1)]
     subsets = all_dsets
@@ -5807,30 +5662,15 @@ def cumul_stats_printer(settings, speedrun):
     speedrun = True
     #speedrun = False
 
-    #       Normal version
-    #for subset in subsets:
+    for subset in subsets:
 
-        ## Get the number of 'good' and 'all' clusters
-        #key = ':'.join(subset)
-        #dsetclusters[key] = get_dsetclusters(subset, region, settings,
-                                             #speedrun)
+        # Get the number of 'good' and 'all' clusters
+        key = ':'.join(subset)
+        dsetclusters[key] = get_dsetclusters(subset, region, settings,
+                                             speedrun)
 
-        ## NEW! Print out some statistics like this for each clustering.
-        #super_cluster_statprinter(dsetclusters, region, key)
-
-    #       Whole-genome version
-    # USE THIS ONLY FOR JOINING 3UTR-exonic and 3UTR-anti-exonic
-    dsetclusters['3UTR'] = get_dsetclusters(subsets, '3UTR-exonic', settings,
-                                            speedrun)
-
-    dsetclusters['anti-3UTR'] = get_dsetclusters(subsets, 'anti-3UTR-exonic',
-                                                 settings, speedrun)
-
-    dsetclusters['genome'] = dsetcluster_join(dsetclusters)
-
-    myprintclusters = {'genome': dsetclusters['genome']}
-
-    super_cluster_statprinter(myprintclusters, 'genome', 'genome')
+        # NEW! Print out some statistics like this for each clustering.
+        super_cluster_statprinter(dsetclusters, region, key)
 
 
 def dsetcluster_join(dsetclusters):
@@ -5925,8 +5765,7 @@ def rpkm_polyA_correlation(settings, speedrun):
     #dset_subsets = [ds for ds in settings.datasets if ('Cytoplasm' in ds) and
                    #(not 'Minus' in ds)]
 
-    dsets, super_3utr = get_utrs(settings, region, dset_subsets, speedrun,
-                                 svm=False)
+    dsets, super_3utr = get_utrs(settings, region, dset_subsets, speedrun)
 
     # Now going through every single cytoplasm and whole cell alone
     go = [] # rpkm, total_nr_reads, nr_clusters
@@ -5934,8 +5773,7 @@ def rpkm_polyA_correlation(settings, speedrun):
 
     for dubset in dset_subsets:
 
-        dsets, super_3utr = get_utrs(settings, region, [dubset], speedrun,
-                                     svm=False)
+        dsets, super_3utr = get_utrs(settings, region, [dubset], speedrun)
 
         for utr_id, utr in super_3utr.iteritems():
             if utr.RPKM > 0.5:
@@ -5992,6 +5830,67 @@ def rpkm_polyA_correlation(settings, speedrun):
     p.rec_sensitivity(nrs, mean_clus_fracs, std_clus_fracs, intervals,
                       settings.here)
 
+def side_plot(settings, speedrun):
+    """
+    Side plot of poly(A) reads in different regions
+    """
+
+    #1 Gather the data in a dictlike this [wc/n/c|/+/-]['region'] = [#cl, #cl w/pas]
+
+    compartments = ['Whole_Cell', 'Cytoplasm', 'Nucleus']
+    fractions = ['+', '-']
+    regions = ['5UTR-exonic', '5UTR-intronic', '3UTR-exonic', '3UTR-intronic',
+               'CDS-exonic', 'CDS-intronic', 'Nocoding-exonic',
+               'Noncoding-intronic', 'Intergenic']
+
+    subset = [ds for ds in settings.datasets if (('Cytoplasm' in ds) or
+                 ('Whole_Cell' in ds) or ('Nucleus' in ds)) and (not 'Minus' in ds)]
+
+    data_dict = {}
+
+    for comp in compartments:
+        for frac in fractions:
+
+            if frac == '+':
+                subset = [ds for ds in settings.datasets if (comp in ds) and
+                          (not 'Minus' in ds)]
+            if frac == '-':
+                subset = [ds for ds in settings.datasets if (comp in ds) and
+                          ('Minus' in ds)]
+
+            for region in regions:
+
+                dsets, super_3utr = super_falselength(settings, region, subset,
+                                                      speedrun=speedrun)
+
+                key = ':'.join([comp, frac, region])
+
+                # count the number clusters with +1, of those with PAS/good_PAS
+                data_dict[key] = {'plus1': 0, 'withPAS': 0, 'goodPAS': 0, '1':0}
+
+                for utr_id, utr in super_3utr.items():
+
+                    for cls in utr.clusters:
+
+                        # for your own information
+                        data_dict[key]['1'] += 1
+
+                        # trusted sites
+                        if cls.nr_support_reads>1 or cls.annotated_polyA_distance!='NA':
+
+                            data_dict[key]['plus1'] += 1
+
+                        # for PAS with 1 read
+                            if cls.nearby_PAS[0] != 'NA':
+                                data_dict[key]['withPAS'] += 1
+
+                            if 'AATAAA' in cls.nearby_PAS or 'ATTAAA' in cls.nearby_PAS:
+                                data_dict[key]['goodPAS'] += 1
+
+    # Send data_dict to the plotter!
+    p = Plotter()
+    p.lying_bar_regions(data_dict)
+
 
 def gencode_report(settings, speedrun):
     """ Make figures for the GENCODE report. The report is an overview of
@@ -6006,9 +5905,12 @@ def gencode_report(settings, speedrun):
         2) of new poly(A) sites obtained with increasing number of reads
     """
 
-    # 0) Core stats. print core stats about your datasets, separate and
+    # 0.1) Core stats. print core stats about your datasets, separate and
     # cumulated
-    cumul_stats_printer(settings, speedrun)
+    #cumul_stats_printer(settings, speedrun)
+    # 0.2) Core stats for whole genome (3UTR-exonic + anti-3UTR-exonic
+    #cumul_stats_printer_genome(settings, speedrun)
+
 
     # 1) nr of polyA sites obtained with increasing readnr
     #clusterladder(settings, speedrun)
@@ -6025,13 +5927,19 @@ def gencode_report(settings, speedrun):
     #XXX you have 4k sites with 1 read AND close to annotated site ... would boost your
     #numbers. consider including them.
 
+
     # 2) output all the poly(A) sites from the whole genome for 3UTR and
     # non-3UTR
     #venn_polysites(settings, speedrun)
 
+
     # 3) plot of correlation between number of poly(A) sites expressed
     # transcript 3UTRs and the RPKM of the 3UTRs.
     #rpkm_polyA_correlation(settings, speedrun)
+
+    # 4) Sidewise bar plots of the number of poly(A) incidents in the different
+    # genomic regions, for poly(A)+ and poly(A) -
+    side_plot(settings, speedrun)
 
     # split-mapped reads:     2.94e+07 (0.010)
 
@@ -6128,7 +6036,7 @@ def main():
     # XXX For the length + polyA (not only) output files:
     # NOTE the difference is that with this one you have more information about
     # the UTR object (RPKM etc) and consequently it will take longer time to run
-    # dsets, super_3utr = get_utrs(settings, speedrun=False, svm=False)
+    # dsets, super_3utr = get_utrs(settings, speedrun=False)
 
     # for the onlypolyA files
     # you now have an additional level: the "region" (often the 3UTR)
@@ -6142,7 +6050,7 @@ def main():
     #region = '3UTR'
     #subset = []
     #dsets, super_3utr = super_falselength(settings, region, subset,
-                                          #speedrun=True, svm=False)
+                                          #speedrun=True)
 
     # TODO to make this faster and consume less memory, don't save whole
     # clusters. save only the information you need. add as necessary. when
