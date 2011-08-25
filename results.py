@@ -1634,7 +1634,7 @@ class Plotter(object):
         # return the plot handle for later
         return pl
 
-    def lying_bar_regions(self, data_dict, regions):
+    def lying_bar_regions(self, data_dict, regions, title, ID):
         """ Plot the poly(A) sites from the different regions
         """
 
@@ -1663,6 +1663,10 @@ class Plotter(object):
                 ax = axes[comp_nr, frac_nr] #
                 pos = range(1, len(trust)+1)
                 rects = ax.barh(pos, trust, align='center', height=0.5, color='m')
+
+                if ID == 'sense':
+                    ax.set_xticks(np.arange(0,1.1,0.1))
+                    ax.set_xlim((0,1.0))
                 ax.xaxis.grid(True)
 
                 # put some titles here and there
@@ -1691,8 +1695,8 @@ class Plotter(object):
 
                 # TODO put the with/pas as another plot on-top
         fig.subplots_adjust(wspace=0.1)
+        fig.suptitle(title, size=20)
 
-        debug()
 
 def pairwise_intersect(in_terms_of, dset_dict, cutoff):
     """
@@ -5874,21 +5878,36 @@ def barsense_counter(super_3utr, region):
                     if cls.strand == utr.strand:
                         stranddict['goodPAS'] += 1
 
-    return bardict, stranddict
+    # normalize the numbers in stranddict with those in bardict
+    normstranddict = {}
+    for key, val in bardict.items():
+        normstranddict[key] = stranddict[key]/val
 
+    return bardict, normstranddict
 
-def side_plot(settings, speedrun):
+def side_sense_plot(settings, speedrun, plottype):
     """
-    Side plot of poly(A) reads in different regions
+    Side plot of poly(A) reads in different regions, as well as the
+    sense/antisense debacle. You should probable run the region-stuff with
+    non_stranded and the sense/antisense with stranded.
+
+    Initial results show some contradicting results for the stranded regions.
+    Maybe it's the overlap that's killing you? Maybe you need an overlap free
+    region.
+
+    IDEA: to simplify, should you show just the Exonic areas for 3UTR and 5UTR?
+    Maybe show CDS intronic as well.
     """
 
     #1 Gather the data in a dictlike this [wc/n/c|/+/-]['region'] = [#cl, #cl w/pas]
 
     compartments = ['Whole_Cell', 'Cytoplasm', 'Nucleus']
     fractions = ['+', '-']
-    regions = ['5UTR-exonic', '5UTR-intronic', '3UTR-exonic', '3UTR-intronic',
-               'CDS-exonic', 'CDS-intronic', 'Nocoding-exonic',
-               'Noncoding-intronic', 'Intergenic']
+    #regions = ['5UTR-exonic', '5UTR-intronic', '3UTR-exonic', '3UTR-intronic',
+               #'CDS-exonic', 'CDS-intronic', 'Nocoding-exonic',
+               #'Noncoding-intronic', 'Intergenic']
+    regions = ['3UTR-exonic', 'CDS-exonic', 'CDS-intronic',
+               'Nocoding-exonic', 'Noncoding-intronic', 'Intergenic']
 
     subset = [ds for ds in settings.datasets if (('Cytoplasm' in ds) or
                  ('Whole_Cell' in ds) or ('Nucleus' in ds)) and (not 'Minus' in ds)]
@@ -5898,6 +5917,7 @@ def side_plot(settings, speedrun):
     sense_dict = {}
 
     #speedrun = True
+    speedrun = False
 
     for comp in compartments:
         for frac in fractions:
@@ -5917,20 +5937,34 @@ def side_plot(settings, speedrun):
                 key = ':'.join([comp, frac, region])
 
                 # count the number clusters with +1, of those with PAS/good_PAS
-                bar_dict[key], sense_dict[key] = barsense_counter(super_3utr)
+                bar_dict[key], sense_dict[key] = barsense_counter(super_3utr,
+                                                                  region)
 
     pickfile = 'TEMP_PICKLE'
     import cPickle as pickle
     if not os.path.isfile(pickfile):
-        pickle.dump(bar_dict, open(pickfile, 'wb'))
+        pickle.dump(sense_dict, open(pickfile, 'wb'))
     else:
-        bar_dict = pickle.load(open(pickfile, 'rb'))
+        sense_dict = pickle.load(open(pickfile, 'rb'))
 
-    # Send bar_dict to the plotter!
     p = Plotter()
-    p.lying_bar_regions(bar_dict, regions)
 
-    # send the sense dict for writing a latex table!
+    title = 'Number of polyadenlyation sites in different regions in different'\
+            ' cellular compartments'
+    ID = 'side'
+    p.lying_bar_regions(bar_dict, regions, title, ID)
+    plt.show()
+
+    ID = 'sense'
+    title = 'Percentage of polyadenylation sites on sense stand'
+    p.lying_bar_regions(sense_dict, regions, title, ID)
+    plt.show()
+
+    debug()
+
+    # send the sense dict for writing a latex table! For now, make another bar
+    # dict. For the future, make a latex table. You'll need the table for the
+    # summary information anyhooo.
 
 def sense_plot(settings, speedrun):
     """
@@ -5981,17 +6015,10 @@ def gencode_report(settings, speedrun):
     #rpkm_polyA_correlation(settings, speedrun)
 
     # 4) Sidewise bar plots of the number of poly(A) incidents in the different
-    # genomic regions, for poly(A)+ and poly(A) -
-    side_plot(settings, speedrun)
-
-    # 5) Table of the fraction of poly(A) sites that are in the sense/antisense
-    # direction for the same variables as in plot 4). You must rerun your
-    # The problem with this is that you don't save the stranded_nonstranded
-    # information. I think the only way to do this is to backup your output
-    # directory into output_stranded. You are now running for 3UTR regions. It
-    # will take 30 min or so. After that, make an output_copy, and run
-    # everything for the stranded regions
-    sense_plot(settings, speedrun)
+    # genomic regions, for poly(A)+ and poly(A)-. Can also make the plot of the
+    # 'sensedness' of the strands
+    plottype = 'sense' # options: side, sense, both
+    side_sense_plot(settings, speedrun, plottype)
 
     # split-mapped reads:     2.94e+07 (0.010)
 
