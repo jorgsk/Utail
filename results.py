@@ -6055,7 +6055,7 @@ def gencode_report(settings, speedrun):
 
     # 0.1) Core stats whole genome.
     # cumulated
-    cumul_stats_printer_genome(settings, speedrun)
+    #cumul_stats_printer_genome(settings, speedrun)
     # 0.2) Core stats selected regions
     #cumul_stats_printer(settings, speedrun)
 
@@ -6088,11 +6088,19 @@ def gencode_report(settings, speedrun):
     # TODO
     # 5) H00j latex/CSV table of C/ WC/ N/ region 1,2,3,4... 1+orannot, only1
     # WIthin: PAS, Good PAS, Annotated, T/A ratio for these?
+    # It's not going to be easiy. Maybe just 3UTR exonic/non-3UTR exonic?
+    # is it worth it to make this big table? Maybe you can represent the T %
+    # from 0 to 100, just like with the strandedness. Then you could make a plot
+    # of that! Would be nice if you could represent your key plots with PAS, and
+    # T%! Better than the ratio.
 
     # TODO
     # 6) Comparison of A/T PAS annotated etc for poly(A)- C/N show that there is
     # enriched expression of short polyA(A) reads. Can potentially be
     # spontaneous premature annotation, or degradation related polyadenylation.
+
+    # From working at home: it's most convincing if you give a bar plot that
+    # contains 5X2 bars, each one a comparison of the A/T ratio in each region.
 
     # split-mapped reads:     2.94e+07 (0.010)
 
