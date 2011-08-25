@@ -7,7 +7,7 @@ CLEAN_FILES+= *.log *.aux *.glo *.ilg *.dvi *.toc *.lof *.bbl *.blg *.gls \
 # FIGS= ${FIGDIR}/*.mp
 RM= rm -f
 
-default: ${NAME}.dvi
+default: ${NAME}.pdf
 
 ${NAME}.pdf : ${TEXSRCS}
 	pdflatex ${NAME}

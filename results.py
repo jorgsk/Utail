@@ -286,7 +286,6 @@ class Settings(object):
         conf.read(settings_file)
 
         self.datasets = conf.get('PLOTTING', 'datasets').split(':')
-        self.length = conf.getboolean('PLOTTING', 'length')
 
         self.savedir = savedir
         self.outputdir = outputdir
@@ -4849,9 +4848,8 @@ def get_dsetclusters(subset, region, settings, speedrun):
 
     return bigcl
 
-def super_cluster_statprinter(dsetclusters, region, thiskey, settings):
+def super_cluster_statprinter(dsetclusters, region, thiskey, settings, filename):
 
-    this_combo = thiskey
     statdict = dsetclusters[thiskey]
 
     keys = ['Total clusters', 'morethan1OA', 'morethan1', 'only1']
@@ -4885,8 +4883,9 @@ def super_cluster_statprinter(dsetclusters, region, thiskey, settings):
 
     output_path = os.path.join(settings.here,
                           'Results_and_figures/GENCODE_report/region_stats')
-    output_file = os.path.join(output_path, region+'.stats')
-    handle = open(output_file, 'ab')
+
+    output_file = os.path.join(output_path, region+'_'+filename+'.stats')
+    handle = open(output_file, 'wb')
 
     handle.write('########################################################\n')
     handle.write(region+'\n')
@@ -5053,7 +5052,6 @@ def clusterladder(settings, speedrun):
                 dsetclusters[key] = get_dsetclusters(subset, region, settings,
                                                      speedrun)
 
-            debug()
             # TODO you need to fix this the below with the new dsetcluster layout
             col = colors[indx2]
 
@@ -5624,66 +5622,142 @@ def join_regions(paths, only_these, outdir, extendby=False):
 
     return joined_merged_path
 
+def get_dsetnames(settings, compartments, ignorers, demanders):
+    all_dsets = []
+
+    for comp in compartments:
+        for ds in settings.datasets:
+            # if not discarding any
+            if ignorers == [] and demanders == []:
+                if comp in ds:
+                    all_dsets.append(ds)
+
+            # you must dicard some
+            elif ignorers != [] and demanders == []:
+                not_throw = True
+
+                for ign in ignorers:
+                    if ign in ds:
+                        not_throw = False
+
+                if comp in ds and not_throw:
+                    all_dsets.append(ds)
+
+            # some must be there
+            elif ignorers == [] and demanders != []:
+                not_throw = True
+
+                for dem in demanders:
+                    if dem not in ds:
+                        not_throw = False
+
+                if comp in ds and not_throw:
+                    all_dsets.append(ds)
+
+            elif ignorers != [] and demanders != []:
+                not_throw = True
+
+                for ign in ignorers:
+                    if ign in ds:
+                        not_throw = False
+
+                for dem in demanders:
+                    if dem not in ds:
+                        not_throw = False
+
+                if comp in ds and comp in demanders and not_throw:
+                    all_dsets.append(ds)
+
+    return all_dsets
+
 def cumul_stats_printer_genome(settings, speedrun):
 
-    #all_dsets = [ds for ds in settings.datasets if (('Cytoplasm' in ds) or
-                 #('Whole_Cell' in ds)) and (not 'Minus' in ds)]
-    #all_dsets = [ds for ds in settings.datasets if (('Cytoplasm' in ds)
-                  #and (not 'Minus' in ds))]
-    all_dsets = [ds for ds in settings.datasets if (('Cytoplasm' in ds) or
-                 ('Whole_Cell' in ds) or ('Nucleus' in ds)) and (not 'Minus' in ds)]
+    # RARE LOOP JUST FOR GETTING THE CYTOPLASM/NUCLEUS INTEL
+    for compartments in [['Cytoplasm'], ['Nucleus']]:
+        for ignorers in [[], ['Minus']]:
+            if ignorers == []:
+                demanders = ['Minus']
+            else:
+                demanders = []
+    ##compartments = ['Whole_Cell', 'Cytoplasm', 'Nucleus']
+    #compartments = ['Cytoplasm']
+    ##ignorers = ['Minus'] # must not be present
+    #ignorers = []
+    #demanders = ['Minus'] # must be present
+    #demanders = []
+
+            if ignorers == []:
+                filename = '+'.join(compartments+demanders)
+            else:
+                filename = '+'.join(compartments+demanders)+'-'+'-'.join(ignorers)
+
+            all_dsets = get_dsetnames(settings, compartments, ignorers, demanders)
+
+            dsetclusters = {}
+
+            #speedrun = True
+            speedrun = False
+
+            dsetclusters['3UTR'] = get_dsetclusters(all_dsets, '3UTR-exonic', settings,
+                                                    speedrun)
+
+            dsetclusters['anti-3UTR'] = get_dsetclusters(all_dsets, 'anti-3UTR-exonic',
+                                                         settings, speedrun)
+
+            dsetclusters['genome'] = dsetcluster_join(dsetclusters)
+
+            genomeprint = {'genome': dsetclusters['genome']}
+            super_cluster_statprinter(genomeprint, 'genome', 'genome', settings, filename)
+
+            UTRprint = {'3UTR': dsetclusters['3UTR']}
+            super_cluster_statprinter(UTRprint, '3UTR', '3UTR', settings, filename)
+
+            anti_3UTRprint = {'anti-3UTR': dsetclusters['anti-3UTR']}
+            super_cluster_statprinter(anti_3UTRprint, 'anti-3UTR', 'anti-3UTR',
+                                      settings, filename)
+
+def cumul_stats_printer(settings, speedrun):
+
+    #regions = ['3UTR']
+
+    regions = ['3UTR-exonic', 'CDS-exonic', 'CDS-intronic',
+               'Nocoding-exonic', 'Noncoding-intronic', 'Intergenic']
+
+    compartments = ['Whole_Cell', 'Cytoplasm', 'Nucleus']
+    #ignorers = ['Minus']
+    ignorers = []
+    demanders = ['Minus']
+    #demanders = []
+
+    if ignorers == []:
+        filename = '+'.join(compartments+demanders)
+    else:
+        filename = '+'.join(compartments+demanders)+'-'+'-'.join(ignorers)
+
+    all_dsets = get_dsetnames(settings, compartments, ignorers, demanders)
+    #subsets = [all_dsets[:end] for end in range(1, len(all_dsets)+1)]
+    subsets = all_dsets
 
     dsetclusters = {}
 
     #speedrun = True
     speedrun = False
 
-    dsetclusters['3UTR'] = get_dsetclusters(all_dsets, '3UTR-exonic', settings,
-                                            speedrun)
+    if ignorers == []:
+        filename = '+'.join(compartments + demanders)
+    else:
+        filename = '+'.join(compartments)+'-'+'-'.join(ignorers)
 
-    dsetclusters['anti-3UTR'] = get_dsetclusters(all_dsets, 'anti-3UTR-exonic',
-                                                 settings, speedrun)
+    for region in regions:
+        for subset in subsets:
 
-    dsetclusters['genome'] = dsetcluster_join(dsetclusters)
+            # Get the number of 'good' and 'all' clusters
+            key = ':'.join(subset)
+            dsetclusters[key] = get_dsetclusters(subset, region, settings,
+                                                 speedrun)
 
-    genomeprint = {'genome': dsetclusters['genome']}
-    super_cluster_statprinter(genomeprint, 'genome', 'genome', settings)
-
-    UTRprint = {'3UTR': dsetclusters['3UTR']}
-    super_cluster_statprinter(UTRprint, '3UTR', '3UTR', settings)
-
-    anti_3UTRprint = {'anti-3UTR': dsetclusters['anti-3UTR']}
-    super_cluster_statprinter(anti_3UTRprint, 'anti-3UTR', 'anti-3UTR', settings)
-
-def cumul_stats_printer(settings, speedrun):
-
-    #region = '3UTR'
-    region = '3UTR-exonic'
-    region = 'CDS-intronic'
-
-    # cytoplasmic and replicates
-    #all_dsets = [ds for ds in settings.datasets if 'Cytoplasm' in ds]
-    #all_dsets = [ds for ds in settings.datasets if 'Nucleoplasm' in ds]
-    all_dsets = [ds for ds in settings.datasets if (('Cytoplasm' in ds) or
-                 ('Whole_Cell' in ds)) and (not 'Minus' in ds)]
-
-    #subsets = [all_dsets[:end] for end in range(1, len(all_dsets)+1)]
-    subsets = all_dsets
-
-    dsetclusters = {}
-
-    speedrun = True
-    #speedrun = False
-
-    for subset in subsets:
-
-        # Get the number of 'good' and 'all' clusters
-        key = ':'.join(subset)
-        dsetclusters[key] = get_dsetclusters(subset, region, settings,
-                                             speedrun)
-
-        # NEW! Print out some statistics like this for each clustering.
-        super_cluster_statprinter(dsetclusters, region, key)
+            # NEW! Print out some statistics like this for each clustering.
+            super_cluster_statprinter(dsetclusters, region, key, settings, filename)
 
 
 def dsetcluster_join(dsetclusters):
@@ -5885,7 +5959,7 @@ def barsense_counter(super_3utr, region):
 
     return bardict, normstranddict
 
-def side_sense_plot(settings, speedrun, plottype):
+def side_sense_plot(settings, speedrun):
     """
     Side plot of poly(A) reads in different regions, as well as the
     sense/antisense debacle. You should probable run the region-stuff with
@@ -5966,12 +6040,6 @@ def side_sense_plot(settings, speedrun, plottype):
     # dict. For the future, make a latex table. You'll need the table for the
     # summary information anyhooo.
 
-def sense_plot(settings, speedrun):
-    """
-    Plot the sense/antisense ratios for the cell lines for the compartments
-    """
-
-
 def gencode_report(settings, speedrun):
     """ Make figures for the GENCODE report. The report is an overview of
     evidence for polyadenylation from the Gingeras RNA-seq experiments.
@@ -5987,7 +6055,7 @@ def gencode_report(settings, speedrun):
 
     # 0.1) Core stats whole genome.
     # cumulated
-    #cumul_stats_printer_genome(settings, speedrun)
+    cumul_stats_printer_genome(settings, speedrun)
     # 0.2) Core stats selected regions
     #cumul_stats_printer(settings, speedrun)
 
@@ -6003,10 +6071,7 @@ def gencode_report(settings, speedrun):
     # there are mostly noise from the poly(A)- dataset. It is a way a measure of
     # the robustness of the poly(A)- dataset.
 
-    #XXX you have 4k sites with 1 read AND close to annotated site ... would boost your
-    #numbers. consider including them.
-
-    # 2) output all the poly(A) sites from the whole genome for 3UTR and
+    # 2) venn diagram of all the poly(A) sites from the whole genome for 3UTR and
     # non-3UTR
     #venn_polysites(settings, speedrun)
 
@@ -6016,9 +6081,18 @@ def gencode_report(settings, speedrun):
 
     # 4) Sidewise bar plots of the number of poly(A) incidents in the different
     # genomic regions, for poly(A)+ and poly(A)-. Can also make the plot of the
-    # 'sensedness' of the strands
-    plottype = 'sense' # options: side, sense, both
-    side_sense_plot(settings, speedrun, plottype)
+    # 'sensedness' of the strands, but for this you must change the files in the
+    # output directory to come from stranded_sequences.
+    #side_sense_plot(settings, speedrun)
+
+    # TODO
+    # 5) H00j latex/CSV table of C/ WC/ N/ region 1,2,3,4... 1+orannot, only1
+    # WIthin: PAS, Good PAS, Annotated, T/A ratio for these?
+
+    # TODO
+    # 6) Comparison of A/T PAS annotated etc for poly(A)- C/N show that there is
+    # enriched expression of short polyA(A) reads. Can potentially be
+    # spontaneous premature annotation, or degradation related polyadenylation.
 
     # split-mapped reads:     2.94e+07 (0.010)
 
@@ -6041,14 +6115,6 @@ def gencode_report(settings, speedrun):
     # XXX 16/0.01 = 1600. 13/0.99 = 13.13. 1600/13.13 = 121 fold enrichment of
      #poly(A) sites in annotated 3UTRs.
 
-    # XXX Overlap between the regions? you merged the polyA sites for the 3 celllines
-    # for both regions (3UTR and anti-3UTR). you extended by 10nt and merged the
-    # sites. you obtain 30192 before merge and 27799 after merge.
-    # What you should have probably done is to have 3UTR-exons as a slightly
-    # extended region.
-
-    # XXX forget it all and focus on the TRAMP-like polyadenylation in the
-    # nucleus :)
 
 def noncanonical_pA(settings, speedrun):
     """ Non mRNA-transcript-termination-related polyadenylation has been found
