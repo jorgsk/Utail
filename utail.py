@@ -2483,6 +2483,8 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, settings, annotation,
     # reads were found, return a placeholder, since this variable is assumed to
     # exist in downstream code. Further, save the tail information in the
     # clustering somehow
+    if polyA:
+        print('Clustering poly(A) reads ...')
     polyA_clusters = cluster_polyAs(settings, utr_polyAs, feature_coords, polyA)
 
     if polyA:

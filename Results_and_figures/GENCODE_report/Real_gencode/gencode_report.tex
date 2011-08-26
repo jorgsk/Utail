@@ -29,38 +29,51 @@
 
 \maketitle
 
-In eukaryotes polyadenylation normally happens at the 3' end of pre-mRNA as one
-of the last stages of pre-mRNA processing. In general, adenylation of RNA is
-found in nearly all kingdoms of life, and can either signal an RNA for
-degradation (bacteria) or transport and stability (eukaryotes).
+\subsection{Introduction}
+In eukaryotes polyadenylation occurs after 3' cleavage as one
+of the last stages of pre-mRNA processing. The cleavage/polyadenylation process
+is triggered by the polyadenylation signal (PAS) which is typically found 10-30
+nucleotides downsteam the cleavage site. More generally, adenylation of RNA is
+found in nearly all kingdoms of life, but plays opposite roles in bacteria and
+eukaryotes, where in bacteria adenylation promotes degradation of RNA, while in
+eukaryotes an RNA's poly(A) tail protects from degradation.
 
-We report signals of polyadenylation events in the GENCODE cell lines by
-trimming and remapping those reads that were originally unmappable and ended in
-a stretch of As or beginning with a stretch of Ts. We subsequently merged the
-polyadenylation sites into clusters in a similar way to Tian et. al
-\cite{tian_large-scale_2005}. In total, for all cell lines and compartments, we
-obtained 29860 polyadenylation sites. A polyadenylation site is here defined at
-a genomic region at which 2 or more reads cluster together or which is
-previously annotated as a polyadenylation site. Annotated polyadenylation sites
-were found by merging and clustered 43187 sites from the polyAdb with 35791
-sites from GENCODE to obtain a total of 50696 annotated polyA sites. 16657 of
-our polyA sites fall at annotated ones (81\% or 13517 of these are in 3UTRs),
-leaving a total of 13203 putative novel polyadenylation sites in the genome.
-Table XX shows an overview over the number of poly(A) sites in different
-genomic regions.
+We investigated the RNA-seq data for 5 GENC ODE cell lines for signs of
+polyadenylation by trimming and remapping those reads that were originally
+unmappable and ended in a stretch of As or beginning with a stretch of Ts. We
+subsequently merged the polyadenylation sites into clusters in a similar way to
+Tian et. al \cite{tian_large-scale_2005}. In total, for all cell lines and
+compartments, we obtained 29860 putative polyadenylation sites. A putative
+polyadenylation site is here defined as a site at which two or more trimmed
+reads cluster together, or a site at which a read lands at a previously
+annotated polyadenylation site. Annotated polyadenylation sites were found by
+merging and clustered 43187 sites from the polyAdb \cite{park_design_2007} with
+35791 sites from GENCODE to obtain a total of 50696 annotated polyA sites.
+16657 of our polyA sites fall at annotated ones (81\% or 13517 of these are in
+3UTRs), leaving a total of 13203 putative novel polyadenylation sites in the
+genome (Fig \ref{fig:Venn}
 
-Since the RNA-seq protocol for the Gingeras data is not optimized for 3' ends,
-we expected to find most poly(A) sites for transcripts with high RPKM. To
-measure this, we calculated the ratio of discovered to annotated poly(A) sites
-in the 3UTRs of transcripts with non-overlapping 3UTRs. Figure \ref{fig:RPKM}
+\begin{figure}[h]
+	\centering
+		\includegraphics[scale=0.5]{../Figures/genome_venn_diagram.eps}
+	\caption{Overlap between identified poly(A) sites and two annotations}
+	\label{fig:Venn}
+\end{figure}
+\subsection{Polyadenylation in the nucleus and in the cytoplasm}
+
+The RNA-seq protocol for the Gingeras data is not optimized for 3' ends,
+therefore we expected to find most poly(A) sites for transcripts with high RPKM. To
+investigate this, we calculated the ratio of discovered to annotated poly(A) sites
+in 3UTRs that do not overlap any other genomic feature. Figure \ref{fig:RPKM}
 shows the relationship between RPKM and poly(A) discovery ratio for annotated
 3UTRs. As can be seen, there is a positive association between RPKM and
 poly(A) discovery (r = 0.52, p < $10^{-10}$), however there is considerable
-variation even for high RPKM transcripts (we considered an RPKM of minimum 0.5
-to count as expressed). The average number of poly(A) sites found per 3UTR was
-1.7, and the average ratio of poly(A) sites to annotated was 0.9 (probably
-reflecting both that the method is not exhaustive, and that not all annotated
-poly(A) sites are used by transcripts at a given time)
+variation even for high RPKM transcripts. The average number of poly(A) sites
+found per 3UTR was 1.7, and the average ratio of poly(A) sites to annotated was
+0.9. That fewer than 1 per annotated site are found probably reflects both that
+the method is not exhaustive, and that not all annotated poly(A) sites are in
+use at a given time.
+
 \begin{figure}[h]
 	\centering
 		\includegraphics[scale=0.5]{../Figures/More_polyA_clusters_for_high_RPKM_3UTRS.eps}
@@ -69,31 +82,43 @@ poly(A) sites are used by transcripts at a given time)
 \end{figure}
 \subsection{Polyadenylation in the nucleus and in the cytoplasm}
 
-We wanted to compare poly(A) sites in the nucleus and cytoplasm for different
-genomic regions. While poly(A) sites in the cytoplasm are expected to derive
-from from the 3' ends of stable, multi-copy mRNA, the poly(A) sites from the
-nucleus are expected to stem from mRNA diffusing toward the cytoplasm, mRNA
-undergoing processing, and possibly some RNA undergoing degradation
-\cite{shcherbik_polyadenylation_2010,slomovic_addition_2010}.
-
 We merged the poly(A) sites from 5 cell lines in the nucleus and cytoplasm
 separately for the poly(A)+ and poly(A)- fractions and compared the
 distribution of the polyadenylation sites in the genome (Figure
-\ref{fig:region_counts}). (The division of RNA between poly(A)+ and poly(A)-
-happens at an average of 30(A) residues.)
+\ref{fig:region_counts}). The difference between poly(A)+ and poly(A)-
+fractions is that a poly(A) filtering step in the sample preparation protocol
+assigns RNA with a poly(A) tail on average longer than 30nt to the poly(A)+
+fraction, and the remainder goes to the poly(A)- fraction.
+
 \begin{figure}[h]
 	\centering
-		\includegraphics[scale=0.34]{../Figures/nr_of_polyA_different_compartments_non_stranded_ABRIDGED}
+		\includegraphics[scale=0.50]{../Figures/nr_of_polyA_different_compartments_non_stranded_ABRIDGED_2+}
 	\caption{Polyadenylation marks in different cellular compartments, in
 	different genomic regions, for both poly(A)+ and poly(A)- fractions}
 	\label{fig:region_counts}
 \end{figure}
 \subsubsection{Poly(A)- vs poly(A)+ in the nucleus and cytoplasm}
-In Figure \ref{fig:region_counts}, it can be seen that there are found
+By comparing the whole cell data with the  nucleic and cytoplasmic compartments
+in Figure \ref{fig:region_counts}, it is clear that the distribution of poly(A)
+reads in the genome is similar for the poly(A)+ fraction.
+
+%# NOTE you are rewriting from here.
+%# IDEA: is it possible that noise is A-tail favored? That would explain the
+%results in 1-size clusters. It's odd but in the 1-clusters, the pa(A)-
+%fraction has more annotated than the pa(A)+ one.
+
+fractions From Figure , it can be seen that there are found
 proportionally a larger fraction of poly(A)- reads in the nucleus than in the
 cytoplasm. The polyadenylation marks in the cytoplasmic poly(A)- fraction can
 come from mRNA that is being degraded (as the poly(A) tail is gradually
 decreased in length before degradation), which will be discussed below.
+
+%We wanted to compare poly(A) sites in the nucleus and cytoplasm for different
+%genomic regions. While poly(A) sites in the cytoplasm are expected to derive
+%from from the 3' ends of stable, multi-copy mRNA, the poly(A) sites from the
+%nucleus are expected to stem from mRNA diffusing toward the cytoplasm, mRNA
+%undergoing processing, and possibly some RNA undergoing degradation
+%\cite{shcherbik_polyadenylation_2010,slomovic_addition_2010}.
 
 As can be seen, the nuclear regions capture polyadenylation signals both in the
 poly(A)+ and poly(A)- fractions in the intronic regions. Intronic
@@ -154,6 +179,11 @@ cytoplasm due to non-PAS adenylation for all regions? Would be great. Yes! You
 see it. It's not a very string signal, but both the T/A ratio and the non-PAS
 ratio increases between poly(A)- nucleus and cytoplasm.
 
+Given the possibility of non-PAS adenylation in the human genome, we decided to
+search for it. Assuming that all reads from 'T' For all the poly(A) clusters we found, we calculated the non-PAS
+clusters to PAS-clusters (from T-based clusters). Figure X compares cytoplasmic
+and nucleuc poly(A) minus. As can be seen $\ldots$
+
 Nucleus: out of clusters with 2 or more:
 
 Total 3777. With Ts: 2417- 700 (annotated + PAS)
@@ -171,7 +201,9 @@ Also, the sense/antisense strand would be nice too. Then you have to fix all
 that.
 The
 
-\input{table1}
+% too much work with the table in latex. make it easier. maybe you can make the
+% final table this way.
+%\input{table1}
 
 %1 TODO make the big table you mention about in the first part
 %2 TODO make the unique sense-antisense libraries and make sure they don't

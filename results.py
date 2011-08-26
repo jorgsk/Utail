@@ -15,8 +15,8 @@ import matplotlib.pyplot as plt
 #import matplotlib.cm as cm
 from matplotlib import lines
 
-plt.ion() # turn on the interactive mode so you can play with plots
-#plt.ioff() # turn off interactive mode for working undisturbed
+#plt.ion() # turn on the interactive mode so you can play with plots
+plt.ioff() # turn off interactive mode for working undisturbed
 
 from operator import attrgetter
 from operator import itemgetter
@@ -213,6 +213,10 @@ class Only(object):
         self.ID = utr_ID
         self.strand = polyA_coordinate_strand
         self.tail_info = tail_info
+
+        # Get if it is an 'A' or a 'T' tail
+        ga = [g.split('=') for g in self.tail_info.split(':')]
+        self.tail_type = sorted([(float(g[1]), g[0]) for g in ga])[-1][-1]
 
         self.polyA_coordinate = str_to_intfloat(polyA_coordinate)
         self.annotated_polyA_distance = annotated_polyA_distance
@@ -1633,69 +1637,168 @@ class Plotter(object):
         # return the plot handle for later
         return pl
 
-    def lying_bar_regions(self, data_dict, regions, title, ID):
+    def lying_bar_regions(self, data_dict, regions, title, ID, here):
         """ Plot the poly(A) sites from the different regions
         """
 
-        (fig, axes) = plt.subplots(3,2, sharex=True)
         compartments = ['Whole_Cell', 'Cytoplasm', 'Nucleus']
-        #compartments = ['Nucleus', 'Cytoplasm', 'Whole_Cell']
         fractions = ['+', '-']
 
-        for comp_nr, comp in enumerate(compartments):
-            for frac_nr, frac in enumerate(fractions):
+        # The nr and names of bars in the plot
+        #plot_keys = ['all', 'T', 'PAS']
+        plot_keys = ['PAS', 'T', 'all']
+        colors = {'all': 'm', 'T': 'g', 'PAS': 'b'}
 
-                #ones = []
-                trust = []
-                #with_pas = []
-                #with_good_pas = []
+        labels = {'all': 'All', 'T': 'Mapped with poly(T)',
+                  'PAS': 'With downstream PAS'}
 
-                for region in regions:
-                    thiskey = ':'.join([comp, frac, region])
+        titles = {'2+': 'two or more reads or annotated',
+                  '1': 'maximum one read'}
 
-                    #ones.append(data_dict[thiskey]['1'])
-                    trust.append(data_dict[thiskey]['plus1'])
-                    #with_pas.append(data_dict[thiskey]['withPAS'])
-                    #goodPAS.append(data_dict[thiskey]['goodPAS'])
+        sidelabels = {'Whole_Cell': 'Whole cell', 'Cytoplasm': 'Cytoplasm',
+                      'Nucleus': 'Nucleus'}
 
-                # make the actual plot
-                ax = axes[comp_nr, frac_nr] #
-                pos = range(1, len(trust)+1)
-                rects = ax.barh(pos, trust, align='center', height=0.5, color='m')
+        # Make plots both for 2+/annot reads or for 1/reads
+        # more honest: 2/1 and show % of annot ...
+        for key1 in ['2+', '1']:
 
-                if ID == 'sense':
-                    ax.set_xticks(np.arange(0,1.1,0.1))
-                    ax.set_xlim((0,1.0))
-                ax.xaxis.grid(True)
+            (fig, axes) = plt.subplots(3,2, sharex=True)
+            #plt.ion()
+            #plt.ioff()
 
-                # put some titles here and there
+            for comp_nr, comp in enumerate(compartments):
+                for frac_nr, frac in enumerate(fractions):
 
-                if frac_nr == 0:
-                    ax.set_ylabel(comp, size=20)
-                    ax.set_yticks(pos) # set the 3utr-exonic etc
-                    ax.set_yticklabels(regions) # set the 3utr-exonic etc
-                if frac_nr == 1:
-                    ax.set_yticklabels([])
+                    plotme = {'all': [], 'PAS': [], 'T': []}
 
-                if comp_nr == 0:
-                    ax.set_title('P(A){0}'.format(frac), size=20)
+                    # get the height of the bars from the input
+                    for region in regions:
+                        thiskey = ':'.join([comp, frac, region])
+                        for k in plot_keys:
+                            plotme[k].append(data_dict[thiskey][key1][k])
 
-                # Remove parts of the axis
-                # NOTE there are two ways of making this work. One way is by the
-                # old subplot way using a special class:
-                    #import mpl_toolkits.axisartist as AA
-                # and make your plot of this one
+                    ## you want to print either all or pcnt on top
+                    #plotpcnt = {}
+                    #for keyw, vals in plotme.items():
+                        #if keyw != 'all':
+                            #plotpcnt[keyw] =np.array(vals)/np.array(plotme['all'])
 
-                # another one is to disable both xaxis and yaxis and
-                # subsequently redraw the axes. See here:
-                # http://www.shocksolution.com/2011/08/removing-an-axis-or-both-axes-from-a-matplotlib-plot/#comment-836
-                #ax.axis["right"].set_visible(False)
-                #ax.axis["top"].set_visible(False)
+                    # you want to place the left foot of all at 1,2,3, etc
+                    # you want to place the left foot of T at 1.25
+                    # you want to place the left foot of PAS at 1.375
+                    heights = {'all': 0.25, 'T': 0.125, 'PAS': 0.125}
 
-                # TODO put the with/pas as another plot on-top
-        fig.subplots_adjust(wspace=0.1)
-        fig.suptitle(title, size=20)
+                    # number of data-points
+                    dpoints = len(plotme.values()[0])
 
+                    # where you want the plotting to start
+                    start = 1
+
+                    # automated calculation of bar positions given the
+                    # height/width. this one's a keeper!
+                    pos = dict()
+                    for knr, k in enumerate(plot_keys):
+                        if knr == 0:
+                            pos[k] = np.arange(start, dpoints+start)
+                        else:
+                            adjust = sum([heights[plot_keys[x]] for x in
+                                       range(knr)])
+                            pos[k] = np.arange(start+adjust, dpoints+start)
+
+                    ax = axes[comp_nr, frac_nr]
+                    rects = dict() # save the rect information
+
+                    # make the actual plots
+                    for pkey in plot_keys:
+                        rects[pkey] = ax.barh(bottom=pos[pkey],
+                                              width=plotme[pkey],
+                                              height=heights[pkey],
+                                              color=colors[pkey],
+                                              label=labels[pkey])
+
+                    # print either the number or percentage
+                    for pkey, rs in rects.items():
+                        for r_nr, rect in enumerate(rs):
+                            width = int(rect.get_width())
+                            if key1 =='2+':
+                                xloc = width + 100
+                            else:
+                                xloc = width + 500
+                            yloc = rect.get_y()+rect.get_height()/2.0
+                            clr = 'black'
+                            align = 'left'
+                            if pkey == 'all':
+                                txt = width
+                                fsize=10
+                            else:
+                                divby = plotme['all'][r_nr]
+                                txt = format(width/divby, '.2f')
+                                fsize=8.5
+                                yloc = yloc - 0.03
+
+                            # ylocation, centered at bar
+
+                            ax.text(xloc, yloc, txt,
+                                     horizontalalignment=align,
+                                     verticalalignment='center', color=clr,
+                                     weight='bold', fontsize=fsize)
+
+                    # print the total number for 'all', and the percentage of
+                    # 'all' for the other two
+                    # specify xticks if needeed
+
+                    # put some titles here and there
+                    # get the y-ticks. they should centered
+                    center = sum(heights.values())/2.0
+                    yticks = np.arange(start+center, dpoints+start)
+
+                    if frac_nr == 0:
+                        ax.set_ylabel(sidelabels[comp], size=20)
+                        ax.set_yticks(yticks) # set the 3utr-exonic etc
+                        ax.set_yticklabels(regions) # set the 3utr-exonic etc
+
+                    ax.set_ylim(start-0.5, dpoints+1) # extend the view
+
+                    if frac_nr == 1:
+                        ax.set_yticklabels([])
+
+                    if comp_nr == 0:
+                        ax.set_title('P(A){0}'.format(frac), size=21)
+
+                    # put the legend only in the top-left corner plot
+                    if frac_nr == 1 and comp_nr == 0:
+                        ax.legend(loc='upper right')
+
+            # Set xlim (it's shared)
+            if ID == 'sense':
+                ax.set_xticks(np.arange(0,1.1,0.1))
+                ax.set_xlim((0,1.0))
+            else:
+                xlm = ax.get_xlim()
+                if key1 == '2+':
+                    stepsize = 2000
+                else:
+                    stepsize = 5000
+                ax.set_xlim((0, xlm[1]+stepsize))
+                xticks = range(0, xlm[1]+stepsize, stepsize)
+                ax.set_xticks(xticks)
+                f = lambda x: '' if x%(stepsize*2) else x
+                ticklabels = [f(tick) for tick in xticks]
+                ax.set_xticklabels(ticklabels)
+
+            fig.subplots_adjust(wspace=0.1)
+            #fig.suptitle(title+ 'for {0}'.format(titles[key1]), size=20)
+            fig.set_size_inches(12,19)
+
+            output_dir = os.path.join(here, 'Results_and_figures', 'GENCODE_report',
+                                      'Figures')
+
+            filename = 'nr_of_polyA_different_compartments_non_stranded_ABRIDGED'
+            filename += '_{0}'.format(key1)
+            filepath = os.path.join(output_dir, filename+'.pdf')
+            fig.savefig(filepath, format='pdf')
+            filepath = os.path.join(output_dir, filename+'.eps')
+            fig.savefig(filepath, format='eps', papertype='A4')
 
 def pairwise_intersect(in_terms_of, dset_dict, cutoff):
     """
@@ -4680,9 +4783,6 @@ def get_dsetclusters(subset, region, settings, speedrun):
     # count if the below variables are in same or in opposite strand: in the end
     # sum them. This is only valid for those genomic regions where you know the
     # strand.
-    from copy import deepcopy
-
-    # idea: use attrgetter to get the stuff you need from classes.
 
     # just the total reads. this is something separate.
     total_reads = {'same': 0, 'opposite': 0}
@@ -5337,14 +5437,6 @@ def venn_polysites(settings, speedrun):
         # Maybe the manual has something to offer. Or maybe that's just how it
         # is.
 
-        # Regardless, you now have the plots you were planning to have. Now you
-        # need to write the text. Pedro suggested not to let it get technical.
-        # What can we offer? How does this poly(A) discovery compare against
-        # others? What is the benefit of GENCODE for poly(A) discovery? It's
-        # good that we can look exactly in the cytosol, where we know long term
-        # mRNA hang out, instead of the noise of the nucleus.
-
-
 def make_venn(paths, wcdict, outdir, region):
     """ Call upon R to summon forth the elusive Venn diagrams
     """
@@ -5483,14 +5575,14 @@ def intersect_polyAs(paths, outdir, region):
 
     return paths, venncount
 
-
 def intersect_wrap(paths, intersecters, outdir, extendby=20):
     """
     1) extend each of the joiner files with some value
     2) intersect them
     3) return paths dict with link to the intersected path
     """
-    hg19 = '/home/jorgsk/work/3UTR/ext_files/hg19'
+    #hg19 = '/home/jorgsk/work/3UTR/ext_files/hg19'
+    hg19 = '/users/rg/jskancke/3UTR/the_project/ext_files/hg19'
 
     # function used only here
     def extender(extendby, path, hg19, ext_path):
@@ -5920,42 +6012,76 @@ def rpkm_polyA_correlation(settings, speedrun):
 def barsense_counter(super_3utr, region):
     """
     Count for making bar plots and strand plots!
+
+    UPDATE the count needs to be like this:
+        [plus1][all, PAS, with T]
+        [only1][all, PAS, with T]
     """
-    bardict = {'plus1': 0, 'withPAS': 0, 'goodPAS': 0, '1':0}
-    stranddict = {'plus1': 0, 'withPAS': 0, 'goodPAS': 0, '1':0}
+    subdict = {'all': 0, 'PAS': 0, 'T': 0, 'goodPAS': 0}
+    bardict = {'2+': deepcopy(subdict), '1': deepcopy(subdict)}
+    stranddict = {'2+': deepcopy(subdict), '1': deepcopy(subdict)}
 
     for utr_id, utr in super_3utr[region].iteritems():
 
         for cls in utr.clusters:
 
-            # for your own information
-            bardict['1'] += 1
-            if cls.strand == utr.strand:
-                stranddict['1'] += 1
+            # 1- sites
+            if cls.nr_support_reads == 1:
+                key = '1'
 
-            # trusted sites
-            if cls.nr_support_reads>1 or cls.annotated_polyA_distance!='NA':
-
-                bardict['plus1'] += 1
+                bardict[key]['all'] += 1
                 if cls.strand == utr.strand:
-                    stranddict['plus1'] += 1
+                    stranddict[key]['all'] += 1
 
-            # for PAS with 1 read
+                # any PAS
                 if cls.nearby_PAS[0] != 'NA':
-                    bardict['withPAS'] += 1
+                    bardict[key]['PAS'] += 1
                     if cls.strand == utr.strand:
-                        stranddict['withPAS'] += 1
+                        stranddict[key]['PAS'] += 1
 
                 # for one of the two canonical PAS
                 if 'AATAAA' in cls.nearby_PAS or 'ATTAAA' in cls.nearby_PAS:
-                    bardict['goodPAS'] += 1
+                    bardict[key]['goodPAS'] += 1
                     if cls.strand == utr.strand:
-                        stranddict['goodPAS'] += 1
+                        stranddict[key]['goodPAS'] += 1
 
-    # normalize the numbers in stranddict with those in bardict
+                # Get if this was an A or a T cluster
+                if cls.tail_type == 'T':
+                    bardict[key]['T'] += 1
+                    if cls.strand == utr.strand:
+                        stranddict[key]['T'] += 1
+
+            # trusted sites
+            if cls.nr_support_reads>1 or cls.annotated_polyA_distance!='NA':
+                key = '2+'
+
+                bardict[key]['all'] += 1
+                if cls.strand == utr.strand:
+                    stranddict[key]['all'] += 1
+
+                # any PAS
+                if cls.nearby_PAS[0] != 'NA':
+                    bardict[key]['PAS'] += 1
+                    if cls.strand == utr.strand:
+                        stranddict[key]['PAS'] += 1
+
+                # for one of the two canonical PAS
+                if 'AATAAA' in cls.nearby_PAS or 'ATTAAA' in cls.nearby_PAS:
+                    bardict[key]['goodPAS'] += 1
+                    if cls.strand == utr.strand:
+                        stranddict[key]['goodPAS'] += 1
+
+                # Get if this was an A or a T cluster
+                if cls.tail_type == 'T':
+                    bardict[key]['T'] += 1
+                    if cls.strand == utr.strand:
+                        stranddict[key]['T'] += 1
+
     normstranddict = {}
-    for key, val in bardict.items():
-        normstranddict[key] = stranddict[key]/val
+    # normalize the numbers in stranddict with those in bardict
+    # XXX SKIPPING FOR NOW, not sure you want to use this again
+    #for key, val in bardict.items():
+        #normstranddict[key] = stranddict[key]/val
 
     return bardict, normstranddict
 
@@ -5980,12 +6106,14 @@ def side_sense_plot(settings, speedrun):
     #regions = ['5UTR-exonic', '5UTR-intronic', '3UTR-exonic', '3UTR-intronic',
                #'CDS-exonic', 'CDS-intronic', 'Nocoding-exonic',
                #'Noncoding-intronic', 'Intergenic']
-    regions = ['3UTR-exonic', 'CDS-exonic', 'CDS-intronic',
-               'Nocoding-exonic', 'Noncoding-intronic', 'Intergenic']
+    #regions = ['3UTR-exonic', 'CDS-exonic', 'CDS-intronic',
+               #'Nocoding-exonic', 'Noncoding-intronic', 'Intergenic']
+    regions = ['3UTR-exonic', 'CDS-exonic', 'CDS-intronic', 'Intergenic']
 
     subset = [ds for ds in settings.datasets if (('Cytoplasm' in ds) or
                  ('Whole_Cell' in ds) or ('Nucleus' in ds)) and (not 'Minus' in ds)]
 
+    # NOTE! get all the cufflinks out of there :)
     # Get one dict for the bar plot and one dict for the sense-plot
     bar_dict = {}
     sense_dict = {}
@@ -5993,46 +6121,45 @@ def side_sense_plot(settings, speedrun):
     #speedrun = True
     speedrun = False
 
-    for comp in compartments:
-        for frac in fractions:
+    #for comp in compartments:
+        #for frac in fractions:
 
-            if frac == '+':
-                subset = [ds for ds in settings.datasets if (comp in ds) and
-                          (not 'Minus' in ds)]
-            if frac == '-':
-                subset = [ds for ds in settings.datasets if (comp in ds) and
-                          ('Minus' in ds)]
+            #if frac == '+':
+                #subset = [ds for ds in settings.datasets if (comp in ds) and
+                          #(not 'Minus' in ds)]
+            #if frac == '-':
+                #subset = [ds for ds in settings.datasets if (comp in ds) and
+                          #('Minus' in ds)]
 
-            for region in regions:
+            #for region in regions:
 
-                dsets, super_3utr = super_falselength(settings, region, subset,
-                                                      speedrun=speedrun)
+                #dsets, super_3utr = super_falselength(settings, region, subset,
+                                                      #speedrun=speedrun)
 
-                key = ':'.join([comp, frac, region])
+                #key = ':'.join([comp, frac, region])
 
-                # count the number clusters with +1, of those with PAS/good_PAS
-                bar_dict[key], sense_dict[key] = barsense_counter(super_3utr,
-                                                                  region)
+                ## count the number clusters with +1, of those with PAS/good_PAS
+                #bar_dict[key], sense_dict[key] = barsense_counter(super_3utr,
+                                                                  #region)
 
     pickfile = 'TEMP_PICKLE'
     import cPickle as pickle
     if not os.path.isfile(pickfile):
-        pickle.dump(sense_dict, open(pickfile, 'wb'))
+        pickle.dump(bar_dict, open(pickfile, 'wb'))
     else:
-        sense_dict = pickle.load(open(pickfile, 'rb'))
+        bar_dict = pickle.load(open(pickfile, 'rb'))
 
     p = Plotter()
 
-    title = 'Number of polyadenlyation sites in different regions in different'\
+    title = 'Polyadenlyation in different regions for different'\
             ' cellular compartments'
     ID = 'side'
-    p.lying_bar_regions(bar_dict, regions, title, ID)
-    plt.show()
+    p.lying_bar_regions(bar_dict, regions, title, ID, settings.here)
 
-    ID = 'sense'
-    title = 'Percentage of polyadenylation sites on sense stand'
-    p.lying_bar_regions(sense_dict, regions, title, ID)
-    plt.show()
+    #ID = 'sense'
+    #title = 'Percentage of polyadenylation sites on sense stand'
+    #p.lying_bar_regions(sense_dict, regions, title, ID)
+    #plt.show()
 
     debug()
 
@@ -6072,7 +6199,7 @@ def gencode_report(settings, speedrun):
     # the robustness of the poly(A)- dataset.
 
     # 2) venn diagram of all the poly(A) sites from the whole genome for 3UTR and
-    # non-3UTR
+    # non-3UTR TODO get it to work at w0rk and include in report
     #venn_polysites(settings, speedrun)
 
     # 3) plot of correlation between number of poly(A) sites expressed
@@ -6083,7 +6210,7 @@ def gencode_report(settings, speedrun):
     # genomic regions, for poly(A)+ and poly(A)-. Can also make the plot of the
     # 'sensedness' of the strands, but for this you must change the files in the
     # output directory to come from stranded_sequences.
-    #side_sense_plot(settings, speedrun)
+    side_sense_plot(settings, speedrun) # DONE!
 
     # TODO
     # 5) H00j latex/CSV table of C/ WC/ N/ region 1,2,3,4... 1+orannot, only1
@@ -6101,6 +6228,8 @@ def gencode_report(settings, speedrun):
 
     # From working at home: it's most convincing if you give a bar plot that
     # contains 5X2 bars, each one a comparison of the A/T ratio in each region.
+    # This information will already be in the big figure, but re-make it in a
+    # standing-up way for emphasis
 
     # split-mapped reads:     2.94e+07 (0.010)
 
