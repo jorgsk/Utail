@@ -15,8 +15,8 @@ import matplotlib.pyplot as plt
 #import matplotlib.cm as cm
 from matplotlib import lines
 
-#plt.ion() # turn on the interactive mode so you can play with plots
-plt.ioff() # turn off interactive mode for working undisturbed
+plt.ion() # turn on the interactive mode so you can play with plots
+#plt.ioff() # turn off interactive mode for working undisturbed
 
 from operator import attrgetter
 from operator import itemgetter
@@ -1637,6 +1637,11 @@ class Plotter(object):
         # return the plot handle for later
         return pl
 
+    def non_PAS_ratios(self, data_dict, regions, title, here):
+        """
+        Plot out the non-PAS ratios for the different regions
+        """
+
     def lying_bar_regions(self, data_dict, regions, title, ID, here):
         """ Plot the poly(A) sites from the different regions
         """
@@ -1799,6 +1804,63 @@ class Plotter(object):
             fig.savefig(filepath, format='pdf')
             filepath = os.path.join(output_dir, filename+'.eps')
             fig.savefig(filepath, format='eps', papertype='A4')
+
+    def non_PAS_difference(self, ratio_dict, regions, title, here):
+        """
+        Plot the difference in non-PAS usage
+        """
+
+        # figure out how many subplots you will need
+        plot_order = ['Nucleus', 'Cytoplasm', 'Whole_Cell']
+        x_order = ['non_gPAS_Ts']
+
+        figs = {}
+        axes = {}
+
+        for region in regions:
+            fig, axs = plt.subplots(2)
+
+            # save for future reference
+            figs[region] = fig
+            axes[region] = axs
+
+            for str_nr, strand in enumerate(['-', '+']):
+                # get out only the dsets for this strand for this region
+                these_dsets = {}
+                for key, val in ratio_dict.items():
+                    if region in key.split(':') and strand in key.split(':'):
+                        these_dsets[key.split(':')[0]] = val
+
+                ax = axs[str_nr]
+
+                #heights = [these_dsets[k]['non_gPAS_Ts'] for k in plot_order]
+                heights = [these_dsets[k]['non_gPAS_Ts'] for k in plot_order]
+                x_pos = range(1, len(heights)+1)
+
+                ax.bar(x_pos, heights, align='center', width=0.6)
+
+                ax.set_xticks(x_pos)
+                ax.set_xticklabels(plot_order)
+
+                ax.set_title('Poly(A){0}'.format(strand), size=20)
+                ax.set_ylabel('Non-PAS-mediated-polyadenylation-index (NMP-index)',
+                              size=10)
+
+                ax.set_ylim(0,1)
+
+            fig.suptitle(region)
+
+            # save figure
+            output_dir = os.path.join(here, 'Results_and_figures', 'GENCODE_report',
+                                      'Figures')
+
+            filename = 'non-PAS-index'
+            filename += '_{0}'.format(region)
+            filepath = os.path.join(output_dir, filename+'.pdf')
+            fig.savefig(filepath, format='pdf')
+            filepath = os.path.join(output_dir, filename+'.eps')
+            fig.savefig(filepath, format='eps', papertype='A4')
+
 
 def pairwise_intersect(in_terms_of, dset_dict, cutoff):
     """
@@ -1994,6 +2056,7 @@ def super_falselength(settings, region, subset=[], speedrun=False):
 
     for region in regions:
 
+        # get only files from this region
         regionfiles = settings.only_files(region)
 
         # Check if all length files exist or that you have access
@@ -2019,6 +2082,7 @@ def super_falselength(settings, region, subset=[], speedrun=False):
             if subset != [] and dset_name not in subset:
                 continue
 
+            # work with files from this region only
             onlyfile = open(regionfiles[dset_name], 'rb')
 
             # Skip headers
@@ -5754,10 +5818,10 @@ def cumul_stats_printer(settings, speedrun):
     #comp_list = [['Whole_Cell', 'Cytoplasm', 'Nucleus']]
     comp_list = [['Whole_Cell'], ['Cytoplasm'], ['Nucleus']]
 
-    #ignorers = ['Minus']
-    ignorers = []
-    demanders = ['Minus']
-    #demanders = []
+    ignorers = ['Minus']
+    #ignorers = []
+    #demanders = ['Minus']
+    demanders = []
 
     for compartments in comp_list:
 
@@ -6042,10 +6106,6 @@ def side_sense_plot(settings, speedrun):
                #'Nocoding-exonic', 'Noncoding-intronic', 'Intergenic']
     regions = ['3UTR-exonic', 'CDS-exonic', 'CDS-intronic', 'Intergenic']
 
-    subset = [ds for ds in settings.datasets if (('Cytoplasm' in ds) or
-                 ('Whole_Cell' in ds) or ('Nucleus' in ds)) and (not 'Minus' in ds)]
-
-    # NOTE! get all the cufflinks out of there :)
     # Get one dict for the bar plot and one dict for the sense-plot
     bar_dict = {}
     sense_dict = {}
@@ -6099,6 +6159,76 @@ def side_sense_plot(settings, speedrun):
     # dict. For the future, make a latex table. You'll need the table for the
     # summary information anyhooo.
 
+def ratio_counter(dsetclusters):
+    """ Count the numbers important for plotting difference between non-PAS
+    ratios in datasets
+    """
+    thisdict = {}
+
+    total_As = 0
+    total_Ts = 0
+    PAS_Ts = 0
+    gPAS_Ts = 0
+
+    for kw in ['opposite', 'same']:
+        total_Ts += dsetclusters['morethan1OA']['All']['tail_lens'][kw]['T'][0]
+        total_As += dsetclusters['morethan1OA']['All']['tail_lens'][kw]['A'][0]
+        PAS_Ts += dsetclusters['morethan1OA']['wPAS']['tail_lens'][kw]['T'][0]
+        gPAS_Ts += dsetclusters['morethan1OA']['goodPAS']['tail_lens'][kw]['T'][0]
+
+    thisdict['non_PAS_Ts'] = (total_Ts - PAS_Ts)/total_Ts
+    thisdict['non_gPAS_Ts'] = (total_Ts - gPAS_Ts)/total_Ts
+    thisdict['T percentage'] =  total_Ts/(total_Ts+total_As)
+    thisdict['TA ratio'] =  total_Ts/total_As
+
+    return thisdict
+
+def non_PAS_polyA(settings, speedrun):
+    """ Make a measure from the relative amounts of non-PAS T-reads to T-reads.
+    """
+    compartments = ['Whole_Cell', 'Cytoplasm', 'Nucleus']
+    fractions = ['+', '-']
+    #regions = ['5UTR-exonic', '5UTR-intronic', '3UTR-exonic', '3UTR-intronic',
+               #'CDS-exonic', 'CDS-intronic', 'Nocoding-exonic',
+               #'Noncoding-intronic', 'Intergenic']
+    #regions = ['3UTR-exonic', 'CDS-exonic', 'CDS-intronic',
+               #'Nocoding-exonic', 'Noncoding-intronic', 'Intergenic']
+    regions = ['3UTR-exonic', 'CDS-exonic', 'CDS-intronic', 'Intergenic',
+               'anti-3UTR-exonic']
+
+    regions = ['anti-3UTR-exonic']
+
+    #speedrun = True
+    speedrun = False
+
+    # Get one dict for the bar plot and one dict for the sense-plot
+    ratio_dict = {}
+    for comp in compartments:
+        for frac in fractions:
+
+            if frac == '+':
+                subset = [ds for ds in settings.datasets if (comp in ds) and
+                          (not 'Minus' in ds)]
+            if frac == '-':
+                subset = [ds for ds in settings.datasets if (comp in ds) and
+                          ('Minus' in ds)]
+
+            for region in regions:
+
+                dsetclusters = get_dsetclusters(subset, region, settings,
+                                                speedrun)
+
+                key = ':'.join([comp, frac, region])
+
+                # count the number clusters with +1, of those with PAS/good_PAS
+                ratio_dict[key] = ratio_counter(dsetclusters)
+
+    p = Plotter()
+    title = 'Non-PAS polyadenylation'
+    p.non_PAS_difference(ratio_dict, regions, title, settings.here)
+
+
+
 def gencode_report(settings, speedrun):
     """ Make figures for the GENCODE report. The report is an overview of
     evidence for polyadenylation from the Gingeras RNA-seq experiments.
@@ -6116,7 +6246,7 @@ def gencode_report(settings, speedrun):
     # cumulated
     #cumul_stats_printer_genome(settings, speedrun)
     # 0.2) Core stats selected regions
-    cumul_stats_printer(settings, speedrun)
+    #cumul_stats_printer(settings, speedrun)
 
     # 1) nr of polyA sites obtained with increasing readnr
     #clusterladder(settings, speedrun)
@@ -6157,6 +6287,7 @@ def gencode_report(settings, speedrun):
     # 6) Comparison of A/T PAS annotated etc for poly(A)- C/N show that there is
     # enriched expression of short polyA(A) reads. Can potentially be
     # spontaneous premature annotation, or degradation related polyadenylation.
+    #non_PAS_polyA(settings, speedrun)
 
     # From working at home: it's most convincing if you give a bar plot that
     # contains 5X2 bars, each one a comparison of the A/T ratio in each region.
@@ -6185,42 +6316,276 @@ def gencode_report(settings, speedrun):
      #poly(A) sites in annotated 3UTRs.
 
 
-def noncanonical_pA(settings, speedrun):
-    """ Non mRNA-transcript-termination-related polyadenylation has been found
-    for rRNA in human cells, both in the cytoplasm and the nucleus. Can you
-    positively identify polyadenylation.
+class Cufflink_exon(object):
 
-    The two curious things you have are:
-        1) Elevated poly(A) reads in CDS-intronic regions that are NOT from
-        exon-exon junctions
-        2) Elevated poly(A) reads in the poly(A)MINUS-fraction in the nucleus
-        fractions.
+    def __init__(self, chrm, beg, end, strand, transcript_id, gene_id, exon_nr,
+                Utail_ID):
+        #self.chrm = chrm
+        #self.beg = beg
+        #self.end = end
+        self.strand = strand
+        self.gene_id = gene_id
+        self.transcript_id = transcript_id
+        self.exon_nr = exon_nr
 
-    # Point 1) is obvious in a sense: you expect to have reads from introns in
-    # the nucleus, because introns are cleaved off and degraded here. However,
-    # you do not expect to see poly(A) reads themselves here! The question is,
-    # what do these poly(A) reads represent? You have screened away the
-    # accidental reads that map to the genome. The 'noise', if you like.
-    # Further, at least for one nucleoplasmic dataset (K562, 025NP), you have
-    # found that only 1/3 of your reads correspond to split-mapped reads (which
-    # begs the question: how many split-mapped reads are poly(A) reads?). This
-    # leaves 2/3rds which have no other explanation than that they are
-    # polyadenylation events. In the light of the recent discovery of
-    # polyadenylation in humans, I interpret these reads as stemming from
-    # degradation-related polyadenylation.
+        self.Utail_ID = Utail_ID
 
-    # Point 2) is part of this evidence. We have polyadenylation events that
-    # don't stem from long poly(A) tails! :) Once we cut away the noise and the
-    # split-mapped reads, this is what we're left with.
+        # will be added later
+        #self.cluster_coords = []
+        #self.annot_list = []
 
-    # To really be able to work with non-splitmapped reads, you should make a
-    # script that utilizes the UTR_SETTINGS paths to carrie/genome/... , but
-    # instead fetches the files under splitmapping. The script simply converts
-    # to bed, merges, then intersects with the mapped poly(A) reads. Or should
-    # you do this later? At least save the original poly(A) reads somewhere.
+def cufflink_super(settings, speedrun, region):
+    """ Return a super-3UTR for the cufflink model (poly(A)+ all cell lines
+    cytoplasm, nucleus, and whole cell)
     """
-    pass
-    debug()
+    subset = [ds for ds in settings.datasets if (('Cytoplasm' in ds) or
+                   ('Whole_Cell' in ds)) and (not 'Minus' in ds)]
+
+    if speedrun:
+        subset = [ds for ds in settings.datasets if ('Cytoplasm' in ds) and
+                                                           (not 'Minus' in ds)]
+
+    dsets, super_3utr = super_falselength(settings, region, subset,
+                                          speedrun)
+
+    return super_3utr
+
+def cufflinks_report(settings, speedrun=False):
+    """ Basic statistics on the cufflinks data.
+    1) How many p(A)? How many overlap annotated?
+    2) How many novel?
+    3) How many fall very close to 3' ends?
+    4) We verify that XXX of these genes are polyadenylated (min 1 transcript)
+    5)
+    """
+
+    #1 read the original cufflings model and create a dictionary for cufflinks
+    #repotsr
+    cuff_dict = '/users/rg/jskancke/phdproject/3UTR/CUFF_LINKS'
+    model = cuff_dict+ '/CuffCode_CSHL_exons_sans_GENCODE7.gtf'
+
+    novel_ext = cuff_dict + '/novel_or_extended.txt'
+    # with novel or extended data
+    transcripts = dict()
+
+    #speedrun = True
+    speedrun = False
+
+    import time
+    t1 = time.time()
+    # this doesn't seem to cover all transcripts
+    # (also it doesn't take up a lot of memory or time)
+    for line_nr, line in enumerate(open(novel_ext, 'rb')):
+        if speedrun and line_nr > 5000000:
+            break
+        ts_id, novex = line.split()
+        transcripts[ts_id] = [novex, 0, 0]
+
+    print 'Made transcript dict: {0} seconds'.format(time.time()-t1)
+    print 'Nr of transcripts: {0}'.format(len(transcripts))
+    # gene_id -> transcritpt ID
+    genes = dict()
+    exons = dict()
+
+    t2 = time.time()
+    # store the exons in an exon dict
+    for line_nr, line in enumerate(open(model, 'rb')):
+        if speedrun and line_nr > 5000000:
+            break
+        (chrm, d,d, beg, end, d, strand, d,d,d,d, transcript_id, d, exon_nr)\
+                = line.split()[:14]
+        transcript_id = transcript_id.rstrip(';').strip('"')
+        gene_id = '.'.join(transcript_id.split('.')[:-1])
+        exon_nr = exon_nr.rstrip(';').strip('"')
+
+        # beg_transcript_ID_exonNr
+        Utail_ID = '_'.join([beg, transcript_id, exon_nr])
+        #exons[Utail_ID] = Cufflink_exon(chrm, beg, end, strand, transcript_id,
+                                        #gene_id, exon_nr, Utail_ID)
+        exons[Utail_ID] = exon_nr
+
+        if gene_id in genes:
+            if not transcript_id in genes[gene_id]:
+                genes[gene_id].add(transcript_id)
+        else:
+            genes[gene_id] = set([transcript_id])
+
+        if transcript_id in transcripts:
+            transcripts[transcript_id][1] +=1 # nr of exons for this transcript
+            transcripts[transcript_id][2] = strand
+        else:
+            #print 'transcript {0} not in transcript dict'.format(transcript_id)
+            pass
+
+    print 'Made exon and gene dict: {0} seconds'.format(time.time()-t2)
+    print 'Nr of exons: {0}'.format(len(exons))
+    print 'Nr of genes: {0}'.format(len(genes))
+
+    novel_ts_with_pA = 0
+    novel_ts_with_pA_in_last = 0
+    novel_ts_with_pA_in_secondLast = 0
+
+    extended_ts_with_pA = 0
+    extended_ts_with_pA_in_last = 0
+    extended_ts_with_pA_in_secondLast = 0
+
+    total_pA = 0
+    last_exon = 0
+    secondLast_exon = 0
+    genes_with_pA = set([])
+    ts_with_pA = set([])
+    exon_with_pA = set([]) # it's too much to store all the exons (not al. just those
+    #with pA this can be a lot, since they overlap. still, 1/10? will be 200
+    #000.
+
+    sys.exit()
+    # IDEA: it's the clustering that doesnt work anymore because the regions are
+    # not unique. ffs.
+    t3 = time.time()
+    region = 'cufflinks'
+    super_3utr = cufflink_super(settings, speedrun, region)
+
+    print 'Made cufflinks super-region dict: {0} seconds'.format(time.time()-t3)
+    # merge all poly(A)+ reads for nuc, wc, and cyt, and add cluster objects to
+    # the cufflinks objects
+
+    sys.exit()
+
+    t4 = time.time()
+    for utr_id, utr in super_3utr[region].iteritems():
+
+        # skip those without clusters
+        if utr.clusters == []:
+            continue
+
+        for cls in utr.clusters:
+
+            if cls.nr_support_reads > 1 or cls.annotated_polyA_distance != 'NA':
+
+                #if cls.ID in exons:
+
+                #exons[cls.ID].annot_list.append(cls.annotated_polyA_distance)
+                #exons[cls.ID].cluster_coords.append(cls.polyA_coordinate)
+
+                total_pA += 1
+                exon_with_pA.add(cls.ID)
+                genes_with_pA.add(gene_id)
+
+                ts_with_pA.add(transcript_id)
+
+                ## XXX DEBUG XXX REMOVE THIS LATER KTHNX
+                if cls.ID not in exons:
+                    print 'key {0} not in exon dict'.format(cls.ID)
+                    continue
+                else:
+                # find out if this exon is second last or last 
+                    exon_nr = exons[cls.ID]
+
+                # transcript_max
+                ts_totex = transcripts[transcript_id][1]
+
+                # say if transcript is novel or not and if it has pA in second
+                # or second last exon
+                if transcript_id not in transcripts:
+                    print '{0} not in transcript dict'.format(transcript_id)
+                    continue
+
+                if transcripts[transcript_id] == 1:
+                    novel_ts_with_pA += 1
+
+                    if strand == '+':
+                        if exon_nr == ts_totex:
+                            last_exon += 1
+                            novel_ts_with_pA_in_last +=1
+
+                        if ts_totex > 2 and exon_with_pA == ts_totex-1:
+                            secondLast_exon += 1
+                            novel_ts_with_pA_in_secondLast += 1
+
+                    if strand == '-':
+                        if exon_nr == 0:
+                            last_exon += 1
+                            novel_ts_with_pA_in_last +=1
+
+                        if exon_nr == 1 and ts_totex > 2:
+                            secondLast_exon += 1
+                            novel_ts_with_pA_in_secondLast += 1
+
+                elif transcripts[transcript_id] == 2:
+                    extended_ts_with_pA += 1
+
+                    if strand == '+':
+                        if exon_nr == ts_totex:
+                            last_exon += 1
+                            extended_ts_with_pA_in_last +=1
+
+                        if ts_totex > 2 and exon_with_pA == ts_totex-1:
+                            secondLast_exon += 1
+                            extended_ts_with_pA_in_secondLast +=1
+
+                    if strand == '-':
+                        if exon_nr == 0:
+                            last_exon += 1
+                            extended_ts_with_pA_in_last +=1
+
+                        if exon_nr == 1 and ts_totex > 2:
+                            secondLast_exon += 1
+                            extended_ts_with_pA_in_secondLast +=1
+
+    print 'Waded through super-regions: {0} seconds'.format(time.time()-t4)
+
+    t5 = time.time()
+
+    # get the total number and make statistics
+    total_transcripts = sum((len(ts_list) for ts_list in genes.values()))
+    total_genes = len(genes)
+    total_exons = len(exons)
+
+    nr_genes_with_pA = len(genes_with_pA)
+    nr_ts_with_pA = len(ts_with_pA)
+    nr_exon_with_pA = len(exon_with_pA)
+    print 'Got some lenghts and sums: {0} seconds'.format(time.time()-t5)
+
+    print('Total polyadenylation events\t{0}'.format(total_pA))
+    print('Total genes and genes with pA\t{0} {1} ({2:.2f})'.\
+         format(total_genes, nr_genes_with_pA, nr_genes_with_pA/total_genes))
+
+    print('Total transcripts and transcripts with pA\t{0} {1} ({2:.2f})'.\
+         format(total_transcripts, nr_ts_with_pA, nr_ts_with_pA/total_transcripts))
+
+    print('Percentage novel and extended transcripts with pA\t{0} {1}'.\
+         format(novel_ts_with_pA/nr_ts_with_pA, extended_ts_with_pA/nr_ts_with_pA))
+
+    print('Total p(A) events in last exon\t{0} ({1:.2f})'\
+          .format(last_exon, last_exon/total_pA))
+
+    print('\tNovel transcripts with pA in last exon\t{0} ({1:.2f}, {2:.2f})'\
+         .format(novel_ts_with_pA_in_last,
+                 novel_ts_with_pA_in_last/nr_ts_with_pA,
+                 novel_ts_with_pA_in_last/total_transcripts))
+
+    print('\tNovel transcripts with pA in second last exon\t{0} ({1:.2f}, {2:.2f})'\
+         .format(novel_ts_with_pA_in_secondLast,
+                 novel_ts_with_pA_in_secondLast/nr_ts_with_pA,
+                 novel_ts_with_pA_in_secondLast/total_transcripts))
+
+    print('Total p(A) events in second last exon\t{0} ({1:.2f})'\
+          .format(secondLast_exon, secondLast_exon/total_pA))
+
+    print('\tExtended transcripts with pA in last exon\t{0} ({1:.2f}, {2:.2f})'\
+         .format(extended_ts_with_pA_in_last,
+                 extended_ts_with_pA_in_last/nr_ts_with_pA,
+                 extended_ts_with_pA_in_last/total_transcripts))
+
+    print('\tExtended transcripts with pA in second last exon\t{0} ({1:.2f},'\
+          ' {2:.2f})'\
+         .format(extended_ts_with_pA_in_secondLast,
+                 extended_ts_with_pA_in_secondLast/nr_ts_with_pA,
+                 extended_ts_with_pA_in_secondLast/total_transcripts))
+
+    print('Total exons and exons with pA\t{0} {1} ({2:.2f})'.\
+         format(total_exons, nr_exon_with_pA, nr_exon_with_pA/total_exons))
+
 
 def main():
     # The path to the directory the script is located in
@@ -6238,10 +6603,11 @@ def main():
                         here, chr1)
 
     # XXX venn-plot ++ here! don't forget !:)
-    gencode_report(settings, speedrun=False)
+    #gencode_report(settings, speedrun=False)
 
-    # noncanonical polyadenylation!
-    #noncanonical_pA(settings, speedrun=False)
+    # XXX cufflinks report
+    cufflinks_report(settings, speedrun=False)
+
 
     # Get the dsetswith utrs and their clusters from the length and polyA files
     # Optionally get SVM information as well

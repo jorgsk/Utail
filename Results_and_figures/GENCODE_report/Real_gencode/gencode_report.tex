@@ -103,15 +103,19 @@ the genome in the whole cell, cytoplasm, and nucleus (Figure
 \ref{fig:region_counts}). Whole cell and cytoplasm have nearly the same number
 of polyadenylation clusters, and the relative distribution of clusters in the
 different genomic regions is almost the same, with 3UTR-exonic having clearly
-the most. The blue bar in Figure \ref{fig:region_counts} shows the percentage
-of clusters that have one of the 8 indentified PAS \cite{} within 40nt downstream the
-polyadenylation site. In the 3UTR, 87\% of clusters are associated with a PAS
-site, and of these similar to 85\% that was found in a study using EST data \cite{}.
-% NOTE that 85% is not true. The figure is 75% for AATAAA + ATTAAA
-% In your summary output with the tail and everythig you need to specify the
-% good pas. Tian found 70% of the two, and bauding 75 %.
-% TODO this T PAS ratio things for all, to estimate the 'degree' (not number)
-% of genuine non-PAS related polyadenylation
+the most. The 3UTR in whole cell, cytoplasm have, respectively, XXX, XXX, XXX
+sites, which make up roughly 60\% of the total polyadenylation
+sites. The blue bar in Figure \ref{fig:region_counts} shows the percentage of
+clusters that have one of the 8 indentified PAS \cite{} within 40nt downstream
+the polyadenylation site. In the 3UTR, 87\% of clusters are associated with a
+PAS site, and of these similar to 85\% that was found in a study using EST data
+\cite{}.
+
+% NOTE that 85% is not true. The figure is 75% for AATAAA + ATTAAA In your
+% summary output with the tail and everythig you need to specify the good pas.
+% Tian found 70% of the two, and bauding 75 %.  TODO this T PAS ratio things
+% for all, to estimate the 'degree' (not number) of genuine non-PAS related
+% polyadenylation
 
 By comparing the whole cell data with the  nucleic
 and cytoplasmic compartments in Figure \ref{fig:region_counts}, it is clear
@@ -163,17 +167,21 @@ the cytoplasm. For some of the adenylation sites in the 3UTR this difference
 could be explained by polyadenylation caught-in-action, however it does not
 explain the increase in the other genomic reagions.
 
-To investigate whether the markers of polyadenylation we observe are in the
-sense or anti-sense direction to anntated genomic features, we looked at only
-those genomic regions that have features in one sense uniquely, and that do not
-overlap with any other genomic features. Figure \ref{fig:sense} shows this.
-\begin{figure}[h]
-	\centering
-		\includegraphics[scale=0.34]{../Figures/sense_strand_percentages}
-	\caption{Sense strand mapping percentages in different cellular compartments, in
-	different genomic regions, for both poly(A)+ and poly(A)- fractions}
-	\label{fig:sense}
-\end{figure}
+To verify that the T-mapped reads give use the orientation of the transcript,
+we checked for poly(A) sites in a strand-specific non-overlapping set of GENCO
+DE 3UTRs. As can be seen in figure X, by using the T/A tail and +/- mapping we
+get strand specific bla bla % TODO
+%To investigate whether the markers of polyadenylation we observe are in the
+%sense or anti-sense direction to anntated genomic features, we looked at only
+%those genomic regions that have features in one sense uniquely, and that do not
+%overlap with any other genomic features. Figure \ref{fig:sense} shows this.
+%%\begin{figure}[h]
+	%%\centering
+		%%\includegraphics[scale=0.34]{../Figures/sense_strand_percentages}
+	%%\caption{Sense strand mapping percentages in different cellular compartments, in
+	%%different genomic regions, for both poly(A)+ and poly(A)- fractions}
+	%%\label{fig:sense}
+%\end{figure}
 %For 3UTR-exonic regions, more than $90\%$ of the poly(A) sites are mapped to the
 %annotated strand. TODO doublecheck the non_stranded regions and re-run this
 %simulation for better results!
