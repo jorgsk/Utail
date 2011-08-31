@@ -15,8 +15,8 @@ import matplotlib.pyplot as plt
 #import matplotlib.cm as cm
 from matplotlib import lines
 
-plt.ion() # turn on the interactive mode so you can play with plots
-#plt.ioff() # turn off interactive mode for working undisturbed
+#plt.ion() # turn on the interactive mode so you can play with plots
+plt.ioff() # turn off interactive mode for working undisturbed
 
 from operator import attrgetter
 from operator import itemgetter
@@ -1806,6 +1806,140 @@ class Plotter(object):
             fig.savefig(filepath, format='eps', papertype='A4')
 
     def non_PAS_difference(self, ratio_dict, regions, title, here):
+        compartments = ['Whole_Cell', 'Cytoplasm', 'Nucleus']
+        fractions = ['+', '-']
+
+        # The nr and names of bars in the plot
+        plot_keys = ['T percentage', 'non_gPAS_Ts']
+        plot_keys = ['T percentage', 'non_gPAS_Ts', 'non_PAS_Ts']
+        colors = {'non_gPAS_Ts': 'm', 'non_PAS_Ts': 'g', 'T percentage': 'b'}
+
+        labels = {'non_gPAS_Ts': 'Non-canonical-PAS clusters',
+                  'non_PAS_Ts': 'Non-PAS clusters',
+                  'T percentage': 'T percentage'}
+
+        sidelabels = {'Whole_Cell': 'Whole cell', 'Cytoplasm': 'Cytoplasm',
+                      'Nucleus': 'Nucleus'}
+
+        # Make plots both for 2+/annot reads or for 1/reads
+        # more honest: 2/1 and show % of annot ...
+        for key1 in ['morethan1OA', 'only1']:
+
+            (fig, axes) = plt.subplots(3,2, sharex=True)
+            #plt.ion()
+            #plt.ioff()
+
+            for comp_nr, comp in enumerate(compartments):
+                for frac_nr, frac in enumerate(fractions):
+
+                    plotme = {'non_gPAS_Ts': [],
+                              'non_PAS_Ts': [],
+                              'T percentage': []}
+
+                    # get the height of the bars from the input
+                    for region in regions:
+                        thiskey = ':'.join([comp, frac, region])
+                        for k in plot_keys:
+                            plotme[k].append(ratio_dict[thiskey][key1][k])
+
+                    # you want to place the left foot of all at 1,2,3, etc
+                    # you want to place the left foot of T at 1.25
+                    # you want to place the left foot of PAS at 1.375
+                    heights = {'T percentage': 0.25,
+                               'non_gPAS_Ts': 0.125,
+                               'non_PAS_Ts': 0.125}
+
+                    # number of data-points
+                    dpoints = len(plotme.values()[0])
+
+                    # where you want the plotting to start
+                    start = 1
+
+                    # automated calculation of bar positions given the
+                    # height/width. this one's a keeper!
+                    pos = dict()
+                    for knr, k in enumerate(plot_keys):
+                        if knr == 0:
+                            pos[k] = np.arange(start, dpoints+start)
+                        else:
+                            adjust = sum([heights[plot_keys[x]] for x in
+                                       range(knr)])
+                            pos[k] = np.arange(start+adjust, dpoints+start)
+
+                    ax = axes[comp_nr, frac_nr]
+                    rects = dict() # save the rect information
+
+                    # make the actual plots
+                    #for pkey in plot_keys:
+                    for pkey in plot_keys[:-1]:
+                        rects[pkey] = ax.barh(bottom=pos[pkey],
+                                              width=plotme[pkey],
+                                              height=heights[pkey],
+                                              color=colors[pkey],
+                                              label=labels[pkey])
+
+                    # print either the number or percentage
+                    for pkey, rs in rects.items():
+                        for r_nr, rect in enumerate(rs):
+                            width = rect.get_width()
+                            xloc = width + 0.01
+                            # ylocation, centered at bar
+                            yloc = rect.get_y()+rect.get_height()/2.0
+                            clr = 'black'
+                            align = 'left'
+                            #if pkey == 'all':
+                            txt = format(width, '.2f')
+                            fsize = 9
+
+                            ax.text(xloc, yloc, txt,
+                                     horizontalalignment=align,
+                                     verticalalignment='center', color=clr,
+                                     weight='bold', fontsize=fsize)
+
+                    # print the total number for 'all', and the percentage of
+                    # 'all' for the other two
+                    # specify xticks if needeed
+
+                    # put some titles here and there
+                    # get the y-ticks. they should centered
+                    center = sum(heights.values())/2.0
+                    yticks = np.arange(start+center, dpoints+start)
+
+                    if frac_nr == 0:
+                        ax.set_ylabel(sidelabels[comp], size=20)
+                        ax.set_yticks(yticks) # set the 3utr-exonic etc
+                        ax.set_yticklabels(regions) # set the 3utr-exonic etc
+
+                    ax.set_ylim(start-0.5, dpoints+1) # extend the view
+
+                    if frac_nr == 1:
+                        ax.set_yticklabels([])
+
+                    if comp_nr == 0:
+                        ax.set_title('P(A){0}'.format(frac), size=21)
+
+                    # put the legend only in the top-left corner plot
+                    if frac_nr == 1 and comp_nr == 0:
+                        ax.legend(loc='upper right')
+
+            # Set xlim (it's shared)
+            ax.set_xticks(np.arange(0,1.1,0.1))
+            ax.set_xlim((0,1.1))
+
+            fig.subplots_adjust(wspace=0.1)
+            fig.set_size_inches(14.4,19)
+
+            output_dir = os.path.join(here, 'Results_and_figures', 'GENCODE_report',
+                                      'Figures')
+
+            filename = 'non-PAS ratios'
+            filename += '_{0}'.format(key1)
+            filepath = os.path.join(output_dir, filename+'.pdf')
+            fig.savefig(filepath, format='pdf')
+            filepath = os.path.join(output_dir, filename+'.eps')
+            fig.savefig(filepath, format='eps', papertype='A4')
+
+    def non_PAS_difference_separate(self, ratio_dict, regions, title, here):
         """
         Plot the difference in non-PAS usage
         """
@@ -2071,7 +2205,7 @@ def super_falselength(settings, region, subset=[], speedrun=False):
 
         # limit the nr of reads from each dset if you want to be fast
         if speedrun:
-            maxlines = 500
+            maxlines = 300
 
         linenr = 0
 
@@ -2160,7 +2294,7 @@ def get_utrs(settings, region, dset_subset=[], speedrun=False):
 
     # limit the nr of reads from each dset if you want to be fast
     if speedrun:
-        maxlines = 1000
+        maxlines = 300
 
     linenr = 0
 
@@ -6163,23 +6297,25 @@ def ratio_counter(dsetclusters):
     """ Count the numbers important for plotting difference between non-PAS
     ratios in datasets
     """
-    thisdict = {}
+    thisdict = {'only1': {}, 'morethan1OA': {}}
 
-    total_As = 0
-    total_Ts = 0
-    PAS_Ts = 0
-    gPAS_Ts = 0
+    for dkey in ['morethan1OA', 'only1']:
 
-    for kw in ['opposite', 'same']:
-        total_Ts += dsetclusters['morethan1OA']['All']['tail_lens'][kw]['T'][0]
-        total_As += dsetclusters['morethan1OA']['All']['tail_lens'][kw]['A'][0]
-        PAS_Ts += dsetclusters['morethan1OA']['wPAS']['tail_lens'][kw]['T'][0]
-        gPAS_Ts += dsetclusters['morethan1OA']['goodPAS']['tail_lens'][kw]['T'][0]
+        total_As = 0
+        total_Ts = 0
+        PAS_Ts = 0
+        gPAS_Ts = 0
 
-    thisdict['non_PAS_Ts'] = (total_Ts - PAS_Ts)/total_Ts
-    thisdict['non_gPAS_Ts'] = (total_Ts - gPAS_Ts)/total_Ts
-    thisdict['T percentage'] =  total_Ts/(total_Ts+total_As)
-    thisdict['TA ratio'] =  total_Ts/total_As
+        for kw in ['opposite', 'same']:
+            total_Ts += dsetclusters[dkey]['All']['tail_lens'][kw]['T'][0]
+            total_As += dsetclusters[dkey]['All']['tail_lens'][kw]['A'][0]
+            PAS_Ts += dsetclusters[dkey]['wPAS']['tail_lens'][kw]['T'][0]
+            gPAS_Ts += dsetclusters[dkey]['goodPAS']['tail_lens'][kw]['T'][0]
+
+        thisdict[dkey]['non_PAS_Ts'] = (total_Ts - PAS_Ts)/total_Ts
+        thisdict[dkey]['non_gPAS_Ts'] = (total_Ts - gPAS_Ts)/total_Ts
+        thisdict[dkey]['T percentage'] =  total_Ts/(total_Ts+total_As)
+        thisdict[dkey]['TA ratio'] =  total_Ts/total_As
 
     return thisdict
 
@@ -6196,7 +6332,7 @@ def non_PAS_polyA(settings, speedrun):
     regions = ['3UTR-exonic', 'CDS-exonic', 'CDS-intronic', 'Intergenic',
                'anti-3UTR-exonic']
 
-    regions = ['anti-3UTR-exonic']
+    #regions = ['anti-3UTR-exonic']
 
     #speedrun = True
     speedrun = False
@@ -6226,7 +6362,8 @@ def non_PAS_polyA(settings, speedrun):
     p = Plotter()
     title = 'Non-PAS polyadenylation'
     p.non_PAS_difference(ratio_dict, regions, title, settings.here)
-
+    # below prints each region separate, not updated. to new level in ratio_dict
+    #p.non_PAS_difference_separate(ratio_dict, regions, title, settings.here)
 
 
 def gencode_report(settings, speedrun):
@@ -6350,6 +6487,160 @@ def cufflink_super(settings, speedrun, region):
 
     return super_3utr
 
+def join_antiexonic(exonic, anti, genome_dir):
+    """ concatenate exonic with anti-exonic to get the whole genome
+    """
+    genome = {}
+    for dset in exonic:
+        outpath = os.path.join(genome_dir, dset+'genome_nonmerged')
+
+        ## don't re-concatenate if you've done it already
+        #if os.path.isfile(outpath):
+            #genome[dset] = outpath
+            #continue
+
+        outhandle = open(outpath, 'wb')
+
+        # write so that together it's for the whole genome
+        for path in [exonic[dset], anti[dset]]:
+            # save the things with val = nr of reads
+            file_handle = open(path, 'rb')
+            header = file_handle.next()
+            for line in file_handle:
+                (chrm, beg, end, utr_ID, strand, polyA_coordinate,
+                 polyA_coordinate_strand, polyA_average_composition,
+                 annotated_polyA_distance, nearby_PAS, PAS_distance,
+                 number_supporting_reads, number_unique_supporting_reads,
+                 unique_reads_spread) = line.split('\t')
+
+                # write a bed format to disc
+                outhandle.write('\t'.join([chrm,
+                                          polyA_coordinate,
+                                          str(int(polyA_coordinate)+1),
+                                          '0',
+                                          number_supporting_reads,
+                                          polyA_coordinate_strand +'\n']))
+        outhandle.close()
+
+        genome[dset] = outpath
+
+
+def cufflinks_report_v2(settings, speedrun=False):
+    """ Basic statistics on the cufflinks data.
+    1) How many p(A)? How many overlap annotated?
+    2) How many novel?
+    3) How many fall very close to 3' ends?
+    4) We verify that XXX of these genes are polyadenylated (min 1 transcript)
+    5)
+
+    ... it's impossible to cluster for overlapping elements
+
+    what you must do is the following pipeline
+    1) Get poly(A)s for the whole genome for all the cell lines (or cat those
+    for anti-3UTR and 3UTR-exonic?)
+    2) For all those files, merge using bed tools. Should be faster than your
+    own. With a for-loop it will be quick. (Actually you could have implemented
+    this in your own loops no? the thing was that clustering was never a cpu and
+    memory hog until I got overlapping exons so damn many of them)
+    3) Intersect the cufflinks model with the merged 3utrs
+    4) Loop through the output, making the same stats as you have below
+    """
+
+    compartments = ['Whole_Cell', 'Cytoplasm', 'Nucleus']
+    fractions = ['+', '-']
+
+    regions = ['anti-3UTR-exonic', '3UTR-exonic']
+
+    # 1) go through all datasets, and concatenate the onlypolya files for the two
+    # regions (they will be more or less independent, a few k overlap, fix later
+    # if necessary)
+
+    exonic = settings.only_files('3UTR-exonic')
+    anti = settings.only_files('anti-3UTR-exonic')
+    # skip the minus ones
+    exonic = dict((k,v) for k,v in exonic.items() if 'Minus' not in k)
+    anti = dict((k,v) for k,v in anti.items() if 'Minus' not in k)
+
+    genome_dir = os.path.join(settings.here, 'genome_wide_dir')
+    genome = join_antiexonic(exonic, anti, genome_dir)
+
+    # merge and center each of the dsets and keep the path of the merged copy
+    genomem = merge_center(genome, settings)
+
+    # 2) Extend and merge all poly(A) files in genomem, summing the number of
+    # annotated poly(A) files
+    first, firstpath = genomem.items()[0]
+
+    # extend the first one you pick out
+    extendpath = os.path.dirname(firstpath) + 'extendify'
+
+    for dset, dpath in genomem.items():
+        # skip theo ne you started with
+        if dset == first:
+            continue
+
+        # TODO you are here. figure out how to juggle firstpath and extendedpath
+        # extend the first file
+        cmd = ['slopBed', '-i', firstpath, '-g', settings.hg19_path, '-b', '15']
+        p = Popen(cmd, stdout=open(extendpath, 'wb'))
+        p.wait()
+
+        # extend the second file
+        cmd = ['slopBed', '-i', firstpath, '-g', settings.hg19_path, '-b', '15']
+        p = Popen(cmd, stdout=open(extendpath, 'wb'))
+        p.wait()
+
+        # this one
+
+
+
+    debug()
+
+def merge_center(genome, settings):
+    """
+    Merge and center a set of bed-paths. Since these polya_counts come from the
+    same sample, don't add the polyAs -- rather keep the max value
+    """
+
+    hg19 = settings.hg19_path
+    genomem = {}
+
+    for dset, dsetpath in genome.items():
+        # 1) extend with 20 nt
+        extended_path = dsetpath +'_extended'
+        merged_path = extended_path + '_merged'
+
+        # skip if you've done this before
+        if os.path.isfile(merged_path):
+            genomem[dset] = merged_path
+            continue
+
+        cmd = ['slopBed', '-i', dsetpath, '-g', hg19, '-b', '10']
+        p = Popen(cmd, stdout=open(extended_path, 'wb'))
+        p.wait()
+
+        # 2) merge 
+        cmd = ['mergeBed','-s', '-scores', 'max', '-i', extended_path]
+        p = Popen(cmd, stdout=PIPE)
+
+        out_handle = open(merged_path, 'wb')
+        for line in p.stdout:
+            (chrm, beg, end, maxcovrg, strand) = line.split()
+            meanbeg = int((int(beg)+int(end))/2)
+
+            out_handle.write('\t'.join([chrm,
+                                       str(meanbeg),
+                                       str(meanbeg+1),
+                                       '0',
+                                       maxcovrg,
+                                       strand+'\n']))
+
+        out_handle.close()
+
+        genomem[dset] = merged_path
+
+    return genomem
+
 def cufflinks_report(settings, speedrun=False):
     """ Basic statistics on the cufflinks data.
     1) How many p(A)? How many overlap annotated?
@@ -6357,6 +6648,18 @@ def cufflinks_report(settings, speedrun=False):
     3) How many fall very close to 3' ends?
     4) We verify that XXX of these genes are polyadenylated (min 1 transcript)
     5)
+
+    ... it's impossible to cluster for overlapping elements
+
+    what you must do is the following pipeline
+    1) Get poly(A)s for the whole genome for all the cell lines (or cat those
+    for anti-3UTR and 3UTR-exonic?)
+    2) For all those files, merge using bed tools. Should be faster than your
+    own. With a for-loop it will be quick. (Actually you could have implemented
+    this in your own loops no? the thing was that clustering was never a cpu and
+    memory hog until I got overlapping exons so damn many of them)
+    3) Intersect the cufflinks model with the merged 3utrs
+    4) Loop through the output, making the same stats as you have below
     """
 
     #1 read the original cufflings model and create a dictionary for cufflinks
@@ -6606,8 +6909,9 @@ def main():
     #gencode_report(settings, speedrun=False)
 
     # XXX cufflinks report
-    cufflinks_report(settings, speedrun=False)
+    #cufflinks_report(settings, speedrun=False)
 
+    cufflinks_report_v2(settings, speedrun=False)
 
     # Get the dsetswith utrs and their clusters from the length and polyA files
     # Optionally get SVM information as well
@@ -6681,8 +6985,6 @@ def main():
 
     #UTR_processing(settings)
 
-
-    debug()
 
 if __name__ == '__main__':
     main()
