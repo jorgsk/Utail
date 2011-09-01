@@ -25,6 +25,8 @@ import math
 import numpy as np
 from scipy import stats
 
+import cPickle as pickle
+
 # For making nice tables
 #from TableFactory import *
 
@@ -2252,7 +2254,77 @@ def super_falselength(settings, region, subset=[], speedrun=False):
         super_3utr[region] = get_super_3utr(dsets[region],
                                             *merge_clusters(dsets[region]))
 
+        # TODO implement the same thing with bed-tools and obeserve the same
+        # results but much faster and with mich simpler code. more memory
+        # efficient too.
+        #super_3utr[region] = get_super_regions(dsets[region])
+
     return dsets, super_3utr
+
+def get_super_regions(dsets):
+    """
+    Use bed-tools to cluster the 3utrs
+
+    Let each 3UTR know about all the cell lines and compartments where its
+    poly(A) clusters are found.
+
+    Update all the 3UTR clusters in dsetswith their super-cluster key
+    At the same time create a 3UTR dict. Each 3UTR has information about the
+    compartments and cell lines where it resides.
+
+    dsets has a dsets[cell_line][compartment][feature_dict] structure
+
+    super_3utr[region]
+
+    1) for all cell_lines and compartments in dsets, go through all utrs and
+    save all clusters to a bed file. in the val field put number of covering
+    reads, and in the name field put the feature_id so we can go back to it
+    later.
+    """
+    super_3utr = {}
+
+    # 1) super cluster key: 'chr1-10518929', for example
+    # 2) the other datasets where this cluster appears (hela nucl etc)
+
+    for cell_line, comp_dict in dsets.items():
+        for comp, utr_dict in comp_dict.items():
+            for utr_id, utr in utr_dict.iteritems():
+
+                # a [super_coord][cell_line][comp] = covr dict
+                utr.super_cover = {}
+
+                # Create the super_key and store the super_cluster information
+                for cl in utr.clusters:
+
+                    # superkey for dset_2super
+                    superkey = cell_line+' '+comp + utr.chrm + cl.strand +\
+                            str(cl.polyA_coordinate)
+
+                    supr_covr = AutoVivification()
+
+                    # Add a in[cell_line][compartment] = covr
+                    for dset_name, cov in zip(*super_cluster[dset_2super[superkey]]):
+                        (cl_line, compart) = dset_name.split(' ')
+                        supr_covr[cl_line][compart] = cov
+
+                    utr.super_cover[dset_2super[superkey]] = supr_covr
+
+                # Add this 3UTR to the super-3utr dict
+                if utr_id not in super_3utr:
+                    super_3utr[utr_id] = utr
+
+                # if it's there, add any super-cluster: [cl][comp][covr] that aren't
+                # there already
+                else:
+                    for (s_key, covr_dict) in utr.super_cover.items():
+                        if s_key not in super_3utr[utr_id].super_cover:
+                            super_3utr[utr_id].super_cover[s_key] = covr_dict
+
+                    ## Also add the RPKM and average
+                    #super_3utr[utr_id].RPKM =\
+                    #(super_3utr[utr_id].RPKM+utr.RPKM)/2
+
+    return super_3utr
 
 def get_utrs(settings, region, dset_subset=[], speedrun=False):
     """
@@ -2345,6 +2417,7 @@ def get_utrs(settings, region, dset_subset=[], speedrun=False):
     ## key of each individual cluster to its corresponding key in super_cluster
     # send them to get_super_2utr to make super_3utrs
 
+
     super_3utr = get_super_3utr(dsets, *merge_clusters(dsets))
 
     return dsets, super_3utr
@@ -2404,6 +2477,35 @@ def get_super_3utr(dsets, super_cluster, dset_2super):
                     ## Also add the RPKM and average
                     #super_3utr[utr_id].RPKM =\
                     #(super_3utr[utr_id].RPKM+utr.RPKM)/2
+
+    # go through all the super_clusters and add them to super_clusters
+    # THIS WAS NEWS TO YOU ONCE :)
+    for (utrid, utr) in super_3utr.items():
+        utr.super_clusters = []
+        for superkey, cl_dict in utr.super_cover.items():
+            this_cls = 0
+            for cl, comp_dict in cl_dict.items():
+                for comp, clstr in comp_dict.items():
+                    # add the first with no adding
+                    if this_cls == 0:
+                        this_cls = clstr
+                        this_cls.from_dsets = ['_'.join([cl, comp])]
+                        this_cls.tail_types = [clstr.tail_type]
+                        this_cls.tail_infos = [clstr.tail_info]
+                        this_cls.strands = [clstr.strand]
+                    else:
+                        this_cls.from_dsets.append('_'.join([cl, comp]))
+                        this_cls.nr_support_reads += clstr.nr_support_reads
+                        this_cls.tail_types.append(clstr.tail_type)
+                        this_cls.tail_infos.append(clstr.tail_info)
+                        this_cls.strands.append(clstr.strand)
+
+            if '+' in superkey:
+                this_cls.polyA_coordinate = superkey.split('+')[-1]
+            else:
+                this_cls.polyA_coordinate = superkey.split('-')[-1]
+
+            utr.super_clusters.append(this_cls)
 
     return super_3utr
 
@@ -5058,7 +5160,9 @@ def get_dsetclusters(subset, region, settings, speedrun):
 
     for utr_name, utr in super_3utr[region].iteritems():
 
-        for cls in utr.clusters:
+        debug()
+
+        for cls in utr.super_clusters:
 
             if cls.strand == utr.strand:
                 keyw = 'same'
@@ -5084,6 +5188,8 @@ def get_dsetclusters(subset, region, settings, speedrun):
             if cls.nr_support_reads == 1:
 
                 bigcl['only1'] = data_scooper(cls, keyw, bigcl['only1'])
+
+            debug()
 
     return bigcl
 
@@ -5398,7 +5504,7 @@ def super_bed(handle, super_3utr, region):
 
     for utr_name, utr in super_3utr[region].iteritems():
 
-        for cls in utr.clusters:
+        for cls in utr.super_clusters:
             total +=1
 
             # Write to file
@@ -5929,8 +6035,8 @@ def cumul_stats_printer_genome(settings, speedrun):
 
             dsetclusters = {}
 
-            #speedrun = True
-            speedrun = False
+            speedrun = True
+            #speedrun = False
 
             dsetclusters['3UTR'] = get_dsetclusters(all_dsets, '3UTR-exonic', settings,
                                                     speedrun)
@@ -6086,10 +6192,10 @@ def rpkm_polyA_correlation(settings, speedrun):
 
         for utr_id, utr in super_3utr.iteritems():
             if utr.RPKM > 0.5:
-                clu_nr = len(utr.clusters)
+                clu_nr = len(utr.super_clusters)
 
                 if clu_nr > 0:
-                    covnr = sum([clu.nr_support_reads for clu in utr.clusters])
+                    covnr = sum([clu.nr_support_reads for clu in utr.super_clusters])
                 else:
                     covnr = 0
                 go.append((utr.RPKM, clu_nr, covnr))
@@ -6153,7 +6259,7 @@ def barsense_counter(super_3utr, region):
 
     for utr_id, utr in super_3utr[region].iteritems():
 
-        for cls in utr.clusters:
+        for cls in utr.super_clusters:
 
             # 1- sites
             if cls.nr_support_reads == 1:
@@ -6233,12 +6339,12 @@ def side_sense_plot(settings, speedrun):
 
     compartments = ['Whole_Cell', 'Cytoplasm', 'Nucleus']
     fractions = ['+', '-']
-    #regions = ['5UTR-exonic', '5UTR-intronic', '3UTR-exonic', '3UTR-intronic',
-               #'CDS-exonic', 'CDS-intronic', 'Nocoding-exonic',
-               #'Noncoding-intronic', 'Intergenic']
+    regions = ['5UTR-exonic', '5UTR-intronic', '3UTR-exonic', '3UTR-intronic',
+               'CDS-exonic', 'CDS-intronic', 'Nocoding-exonic',
+               'Noncoding-intronic', 'Intergenic']
     #regions = ['3UTR-exonic', 'CDS-exonic', 'CDS-intronic',
                #'Nocoding-exonic', 'Noncoding-intronic', 'Intergenic']
-    regions = ['3UTR-exonic', 'CDS-exonic', 'CDS-intronic', 'Intergenic']
+    #regions = ['3UTR-exonic', 'CDS-exonic', 'CDS-intronic', 'Intergenic']
 
     # Get one dict for the bar plot and one dict for the sense-plot
     bar_dict = {}
@@ -6247,29 +6353,29 @@ def side_sense_plot(settings, speedrun):
     #speedrun = True
     speedrun = False
 
-    #for comp in compartments:
-        #for frac in fractions:
+    for comp in compartments:
+        for frac in fractions:
 
-            #if frac == '+':
-                #subset = [ds for ds in settings.datasets if (comp in ds) and
-                          #(not 'Minus' in ds)]
-            #if frac == '-':
-                #subset = [ds for ds in settings.datasets if (comp in ds) and
-                          #('Minus' in ds)]
+            if frac == '+':
+                subset = [ds for ds in settings.datasets if (comp in ds) and
+                          (not 'Minus' in ds)]
+            if frac == '-':
+                subset = [ds for ds in settings.datasets if (comp in ds) and
+                          ('Minus' in ds)]
 
-            #for region in regions:
+            for region in regions:
 
-                #dsets, super_3utr = super_falselength(settings, region, subset,
-                                                      #speedrun=speedrun)
+                dsets, super_3utr = super_falselength(settings, region, subset,
+                                                      speedrun=speedrun)
 
-                #key = ':'.join([comp, frac, region])
+                key = ':'.join([comp, frac, region])
 
-                ## count the number clusters with +1, of those with PAS/good_PAS
-                #bar_dict[key], sense_dict[key] = barsense_counter(super_3utr,
-                                                                  #region)
+                # count the number clusters with +1, of those with PAS/good_PAS
+                bar_dict[key], sense_dict[key] = barsense_counter(super_3utr,
+                                                                  region)
 
     pickfile = 'TEMP_PICKLE'
-    import cPickle as pickle
+
     if not os.path.isfile(pickfile):
         pickle.dump(bar_dict, open(pickfile, 'wb'))
     else:
@@ -6286,8 +6392,6 @@ def side_sense_plot(settings, speedrun):
     #title = 'Percentage of polyadenylation sites on sense stand'
     #p.lying_bar_regions(sense_dict, regions, title, ID)
     #plt.show()
-
-    debug()
 
     # send the sense dict for writing a latex table! For now, make another bar
     # dict. For the future, make a latex table. You'll need the table for the
@@ -6378,10 +6482,12 @@ def gencode_report(settings, speedrun):
         annotated) both with and without normalization to region size
         2) of new poly(A) sites obtained with increasing number of reads
     """
+    # TODO make a small study of the A/T frequency of the poly(A) clusters from
+    # the different datsets
 
     # 0.1) Core stats whole genome.
     # cumulated
-    #cumul_stats_printer_genome(settings, speedrun)
+    cumul_stats_printer_genome(settings, speedrun)
     # 0.2) Core stats selected regions
     #cumul_stats_printer(settings, speedrun)
 
@@ -6495,9 +6601,10 @@ def join_antiexonic(exonic, anti, genome_dir):
         outpath = os.path.join(genome_dir, dset+'genome_nonmerged')
 
         ## don't re-concatenate if you've done it already
-        #if os.path.isfile(outpath):
-            #genome[dset] = outpath
-            #continue
+        # XXX remove for debugging
+        if os.path.isfile(outpath):
+            genome[dset] = outpath
+            continue
 
         outhandle = open(outpath, 'wb')
 
@@ -6524,32 +6631,9 @@ def join_antiexonic(exonic, anti, genome_dir):
 
         genome[dset] = outpath
 
+    return genome
 
-def cufflinks_report_v2(settings, speedrun=False):
-    """ Basic statistics on the cufflinks data.
-    1) How many p(A)? How many overlap annotated?
-    2) How many novel?
-    3) How many fall very close to 3' ends?
-    4) We verify that XXX of these genes are polyadenylated (min 1 transcript)
-    5)
-
-    ... it's impossible to cluster for overlapping elements
-
-    what you must do is the following pipeline
-    1) Get poly(A)s for the whole genome for all the cell lines (or cat those
-    for anti-3UTR and 3UTR-exonic?)
-    2) For all those files, merge using bed tools. Should be faster than your
-    own. With a for-loop it will be quick. (Actually you could have implemented
-    this in your own loops no? the thing was that clustering was never a cpu and
-    memory hog until I got overlapping exons so damn many of them)
-    3) Intersect the cufflinks model with the merged 3utrs
-    4) Loop through the output, making the same stats as you have below
-    """
-
-    compartments = ['Whole_Cell', 'Cytoplasm', 'Nucleus']
-    fractions = ['+', '-']
-
-    regions = ['anti-3UTR-exonic', '3UTR-exonic']
+def merge_polyAs(settings):
 
     # 1) go through all datasets, and concatenate the onlypolya files for the two
     # regions (they will be more or less independent, a few k overlap, fix later
@@ -6569,63 +6653,41 @@ def cufflinks_report_v2(settings, speedrun=False):
 
     # 2) Extend and merge all poly(A) files in genomem, summing the number of
     # annotated poly(A) files
-    first, firstpath = genomem.items()[0]
+    ext, firstpath = genomem.items()[0]
 
-    # extend the first one you pick out
-    extendpath = os.path.dirname(firstpath) + 'extendify'
+    # the file you will keep expanding and subtracting
+    extendpath = os.path.join(os.path.dirname(firstpath), 'extendify')
+    tempextendpath = os.path.join(os.path.dirname(firstpath), 'tempextendify')
 
-    for dset, dpath in genomem.items():
-        # skip theo ne you started with
-        if dset == first:
-            continue
+    import shutil
+    shutil.copy(firstpath, extendpath)
 
-        # TODO you are here. figure out how to juggle firstpath and extendedpath
-        # extend the first file
-        cmd = ['slopBed', '-i', firstpath, '-g', settings.hg19_path, '-b', '15']
-        p = Popen(cmd, stdout=open(extendpath, 'wb'))
+    # copy firstpath to become extendpath
+
+    for dset, dpath in genomem.items()[1:]:
+
+        # append to the extend-path
+        ext_handle = open(extendpath, 'ab')
+
+        # i) concatenate the files
+        ext_handle.write(open(dpath, 'rb').read())
+        ext_handle.close()
+
+        # ii) expand the entries
+        cmd = ['slopBed', '-i', extendpath, '-g', settings.hg19_path, '-b', '10']
+        p = Popen(cmd, stdout=open(tempextendpath, 'wb'))
         p.wait()
 
-        # extend the second file
-        cmd = ['slopBed', '-i', firstpath, '-g', settings.hg19_path, '-b', '15']
-        p = Popen(cmd, stdout=open(extendpath, 'wb'))
-        p.wait()
-
-        # this one
-
-
-
-    debug()
-
-def merge_center(genome, settings):
-    """
-    Merge and center a set of bed-paths. Since these polya_counts come from the
-    same sample, don't add the polyAs -- rather keep the max value
-    """
-
-    hg19 = settings.hg19_path
-    genomem = {}
-
-    for dset, dsetpath in genome.items():
-        # 1) extend with 20 nt
-        extended_path = dsetpath +'_extended'
-        merged_path = extended_path + '_merged'
-
-        # skip if you've done this before
-        if os.path.isfile(merged_path):
-            genomem[dset] = merged_path
-            continue
-
-        cmd = ['slopBed', '-i', dsetpath, '-g', hg19, '-b', '10']
-        p = Popen(cmd, stdout=open(extended_path, 'wb'))
-        p.wait()
-
-        # 2) merge 
-        cmd = ['mergeBed','-s', '-scores', 'max', '-i', extended_path]
+        # iii) merge and sum scores
+        cmd = ['mergeBed','-s', '-scores', 'sum', '-i', tempextendpath]
+        #cmd = ['mergeBed', '-scores', 'sum', '-i', tempextendpath]
         p = Popen(cmd, stdout=PIPE)
 
-        out_handle = open(merged_path, 'wb')
+        # iv) center the new transcript
+        out_handle = open(extendpath, 'wb')
         for line in p.stdout:
             (chrm, beg, end, maxcovrg, strand) = line.split()
+            #(chrm, beg, end, maxcovrg) = line.split()
             meanbeg = int((int(beg)+int(end))/2)
 
             out_handle.write('\t'.join([chrm,
@@ -6634,53 +6696,30 @@ def merge_center(genome, settings):
                                        '0',
                                        maxcovrg,
                                        strand+'\n']))
-
+                                       #'+'+'\n']))
         out_handle.close()
 
-        genomem[dset] = merged_path
+    return extendpath
 
-    return genomem
+def get_gentrex(novel_ext, model):
+    """
+    transcripts[transcript_id] = (1/2, nr_exons, strand)
+    1/2 is for novel or exteded transcript
 
-def cufflinks_report(settings, speedrun=False):
-    """ Basic statistics on the cufflinks data.
-    1) How many p(A)? How many overlap annotated?
-    2) How many novel?
-    3) How many fall very close to 3' ends?
-    4) We verify that XXX of these genes are polyadenylated (min 1 transcript)
-    5)
+    genes[gene_id] = set([transcript_id])
 
-    ... it's impossible to cluster for overlapping elements
+    exons[Utail_ID] = [exon_nr, transcript_id, gene_id, []]
+    the empty list is for the polyA sites with coverage
 
-    what you must do is the following pipeline
-    1) Get poly(A)s for the whole genome for all the cell lines (or cat those
-    for anti-3UTR and 3UTR-exonic?)
-    2) For all those files, merge using bed tools. Should be faster than your
-    own. With a for-loop it will be quick. (Actually you could have implemented
-    this in your own loops no? the thing was that clustering was never a cpu and
-    memory hog until I got overlapping exons so damn many of them)
-    3) Intersect the cufflinks model with the merged 3utrs
-    4) Loop through the output, making the same stats as you have below
     """
 
-    #1 read the original cufflings model and create a dictionary for cufflinks
-    #repotsr
-    cuff_dict = '/users/rg/jskancke/phdproject/3UTR/CUFF_LINKS'
-    model = cuff_dict+ '/CuffCode_CSHL_exons_sans_GENCODE7.gtf'
-
-    novel_ext = cuff_dict + '/novel_or_extended.txt'
-    # with novel or extended data
     transcripts = dict()
-
-    #speedrun = True
-    speedrun = False
 
     import time
     t1 = time.time()
     # this doesn't seem to cover all transcripts
     # (also it doesn't take up a lot of memory or time)
     for line_nr, line in enumerate(open(novel_ext, 'rb')):
-        if speedrun and line_nr > 5000000:
-            break
         ts_id, novex = line.split()
         transcripts[ts_id] = [novex, 0, 0]
 
@@ -6693,8 +6732,6 @@ def cufflinks_report(settings, speedrun=False):
     t2 = time.time()
     # store the exons in an exon dict
     for line_nr, line in enumerate(open(model, 'rb')):
-        if speedrun and line_nr > 5000000:
-            break
         (chrm, d,d, beg, end, d, strand, d,d,d,d, transcript_id, d, exon_nr)\
                 = line.split()[:14]
         transcript_id = transcript_id.rstrip(';').strip('"')
@@ -6705,7 +6742,7 @@ def cufflinks_report(settings, speedrun=False):
         Utail_ID = '_'.join([beg, transcript_id, exon_nr])
         #exons[Utail_ID] = Cufflink_exon(chrm, beg, end, strand, transcript_id,
                                         #gene_id, exon_nr, Utail_ID)
-        exons[Utail_ID] = exon_nr
+        exons[Utail_ID] = [exon_nr, transcript_id, gene_id, []]
 
         if gene_id in genes:
             if not transcript_id in genes[gene_id]:
@@ -6717,81 +6754,85 @@ def cufflinks_report(settings, speedrun=False):
             transcripts[transcript_id][1] +=1 # nr of exons for this transcript
             transcripts[transcript_id][2] = strand
         else:
-            #print 'transcript {0} not in transcript dict'.format(transcript_id)
+            transcripts[transcript_id] = [0, 1, strand] # 0 for not in the txt
             pass
 
     print 'Made exon and gene dict: {0} seconds'.format(time.time()-t2)
     print 'Nr of exons: {0}'.format(len(exons))
     print 'Nr of genes: {0}'.format(len(genes))
 
-    novel_ts_with_pA = 0
-    novel_ts_with_pA_in_last = 0
-    novel_ts_with_pA_in_secondLast = 0
+    return genes, transcripts, exons
 
-    extended_ts_with_pA = 0
-    extended_ts_with_pA_in_last = 0
-    extended_ts_with_pA_in_secondLast = 0
+def cufflinks_report(settings, speedrun=False):
+    """ Basic statistics on the cufflinks data.
+    1) How many p(A)? How many overlap annotated?
+    2) How many novel?
+    3) How many fall very close to 3' ends?
+    4) We verify that XXX of these genes are polyadenylated (min 1 transcript)
+    5)
+
+    1) Get poly(A)s for the whole genome for all the cell lines (or cat those
+    for anti-3UTR and 3UTR-exonic?)
+    2) For all those files, merge using bed tools. Should be faster than your
+    own. With a for-loop it will be quick. (Actually you could have implemented
+    this in your own loops no? the thing was that clustering was never a cpu and
+    memory hog until I got overlapping exons so damn many of them)
+    3) Intersect the cufflinks model with the merged 3utrs
+    4) Loop through the output, making the same stats as you have below
+    """
+
+    # 1) and 2) merge all polyA files (not poly(A) minus)
+    merged_polyA_path = merge_polyAs(settings)
+
+    cuff_dict = '/users/rg/jskancke/phdproject/3UTR/CUFF_LINKS'
+    model = cuff_dict + '/CuffCode_CSHL_exons_sans_GENCODE7.gtf'
+    bed_model = os.path.join(settings.here, 'source_bedfiles', 'cufflinks_exons.bed')
+
+    novel_ext = cuff_dict + '/novel_or_extended.txt'
+    # get dicts for the cufflinks model
+    genes, transcripts, exons = get_gentrex(novel_ext, model)
+
+    # 3) intersect the bed_model with the merged polyA sites
+    cmd = ['intersectBed', '-wo', '-a', bed_model, '-b', merged_polyA_path]
+    p = Popen(cmd, stdout=PIPE)
+
+    # get the pa clusters represented by their coverage
+    for line in p.stdout:
+        (d,d,d,cuff_id,d,cuffstrand,d,d,d,d,pA_covrg,pa_strand,d) = line.split()
+        exons[cuff_id][3].append(pA_covrg)
+
+    novel_ts_with_pA = set([])
+    novel_ts_with_pA_in_last = set([])
+    novel_ts_with_pA_in_secondLast = set([])
+
+    extended_ts_with_pA = set([])
+    extended_ts_with_pA_in_last = set([])
+    extended_ts_with_pA_in_secondLast = set([])
+
+    nothing_ts_with_pA = set([])
+    nothing_ts_with_pA_in_last = set([])
+    nothing_ts_with_pA_in_secondLast = set([])
 
     total_pA = 0
     last_exon = 0
     secondLast_exon = 0
+
     genes_with_pA = set([])
     ts_with_pA = set([])
-    exon_with_pA = set([]) # it's too much to store all the exons (not al. just those
-    #with pA this can be a lot, since they overlap. still, 1/10? will be 200
-    #000.
+    exon_with_pA = set([])
 
-    sys.exit()
-    # IDEA: it's the clustering that doesnt work anymore because the regions are
-    # not unique. ffs.
-    t3 = time.time()
-    region = 'cufflinks'
-    super_3utr = cufflink_super(settings, speedrun, region)
-
-    print 'Made cufflinks super-region dict: {0} seconds'.format(time.time()-t3)
-    # merge all poly(A)+ reads for nuc, wc, and cyt, and add cluster objects to
-    # the cufflinks objects
-
-    sys.exit()
-
-    t4 = time.time()
-    for utr_id, utr in super_3utr[region].iteritems():
-
-        # skip those without clusters
-        if utr.clusters == []:
-            continue
-
-        for cls in utr.clusters:
-
-            if cls.nr_support_reads > 1 or cls.annotated_polyA_distance != 'NA':
-
-                #if cls.ID in exons:
-
-                #exons[cls.ID].annot_list.append(cls.annotated_polyA_distance)
-                #exons[cls.ID].cluster_coords.append(cls.polyA_coordinate)
+    for ex_id, (exon_nr, transcript_id, gene_id, covr_list) in exons.iteritems():
+        for covr in covr_list:
+            if int(covr) > 1:
 
                 total_pA += 1
-                exon_with_pA.add(cls.ID)
+
+                exon_with_pA.add(ex_id)
+                ts_with_pA.add(transcript_id)
                 genes_with_pA.add(gene_id)
 
-                ts_with_pA.add(transcript_id)
-
-                ## XXX DEBUG XXX REMOVE THIS LATER KTHNX
-                if cls.ID not in exons:
-                    print 'key {0} not in exon dict'.format(cls.ID)
-                    continue
-                else:
-                # find out if this exon is second last or last 
-                    exon_nr = exons[cls.ID]
-
-                # transcript_max
                 ts_totex = transcripts[transcript_id][1]
-
-                # say if transcript is novel or not and if it has pA in second
-                # or second last exon
-                if transcript_id not in transcripts:
-                    print '{0} not in transcript dict'.format(transcript_id)
-                    continue
+                strand = transcripts[transcript_id][2]
 
                 if transcripts[transcript_id] == 1:
                     novel_ts_with_pA += 1
@@ -6799,20 +6840,20 @@ def cufflinks_report(settings, speedrun=False):
                     if strand == '+':
                         if exon_nr == ts_totex:
                             last_exon += 1
-                            novel_ts_with_pA_in_last +=1
+                            novel_ts_with_pA_in_last.add(transcript_id)
 
                         if ts_totex > 2 and exon_with_pA == ts_totex-1:
                             secondLast_exon += 1
-                            novel_ts_with_pA_in_secondLast += 1
+                            novel_ts_with_pA_in_secondLast.add(transcript_id)
 
                     if strand == '-':
                         if exon_nr == 0:
                             last_exon += 1
-                            novel_ts_with_pA_in_last +=1
+                            novel_ts_with_pA_in_last.add(transcript_id)
 
                         if exon_nr == 1 and ts_totex > 2:
                             secondLast_exon += 1
-                            novel_ts_with_pA_in_secondLast += 1
+                            novel_ts_with_pA_in_secondLast.add(transcript_id)
 
                 elif transcripts[transcript_id] == 2:
                     extended_ts_with_pA += 1
@@ -6820,34 +6861,62 @@ def cufflinks_report(settings, speedrun=False):
                     if strand == '+':
                         if exon_nr == ts_totex:
                             last_exon += 1
-                            extended_ts_with_pA_in_last +=1
+                            extended_ts_with_pA_in_last.add(transcript_id)
 
                         if ts_totex > 2 and exon_with_pA == ts_totex-1:
                             secondLast_exon += 1
-                            extended_ts_with_pA_in_secondLast +=1
+                            extended_ts_with_pA_in_secondLast.add(transcript_id)
 
                     if strand == '-':
                         if exon_nr == 0:
                             last_exon += 1
-                            extended_ts_with_pA_in_last +=1
+                            extended_ts_with_pA_in_last.add(transcript_id)
 
                         if exon_nr == 1 and ts_totex > 2:
                             secondLast_exon += 1
-                            extended_ts_with_pA_in_secondLast +=1
+                            extended_ts_with_pA_in_secondLast.add(transcript_id)
 
-    print 'Waded through super-regions: {0} seconds'.format(time.time()-t4)
+                elif transcripts[transcript_id] == 0:
+                    nothing_ts_with_pA += 1
 
-    t5 = time.time()
+                    if strand == '+':
+                        if exon_nr == ts_totex:
+                            last_exon += 1
+                            nothing_ts_with_pA_in_last.add(transcript_id)
+
+                        if ts_totex > 2 and exon_with_pA == ts_totex-1:
+                            secondLast_exon += 1
+                            nothing_ts_with_pA_in_secondLast.add(transcript_id)
+
+                    if strand == '-':
+                        if exon_nr == 0:
+                            last_exon += 1
+                            nothing_ts_with_pA_in_last.add(transcript_id)
+
+                        if exon_nr == 1 and ts_totex > 2:
+                            secondLast_exon += 1
+                            nothing_ts_with_pA_in_secondLast.add(transcript_id)
 
     # get the total number and make statistics
     total_transcripts = sum((len(ts_list) for ts_list in genes.values()))
     total_genes = len(genes)
     total_exons = len(exons)
 
+    novel_ts_with_pA = len(novel_ts_with_pA)
+    novel_ts_with_pA_in_last = len(novel_ts_with_pA_in_last)
+    novel_ts_with_pA_in_secondLast = len(novel_ts_with_pA_in_secondLast)
+
+    extended_ts_with_pA = len(extended_ts_with_pA)
+    extended_ts_with_pA_in_last = len(extended_ts_with_pA_in_last)
+    extended_ts_with_pA_in_secondLast = len(extended_ts_with_pA_in_secondLast)
+
+    nothing_ts_with_pA = len(nothing_ts_with_pA)
+    nothing_ts_with_pA_in_last = len(nothing_ts_with_pA_in_last)
+    nothing_ts_with_pA_in_secondLast = len(nothing_ts_with_pA_in_secondLast)
+
     nr_genes_with_pA = len(genes_with_pA)
     nr_ts_with_pA = len(ts_with_pA)
     nr_exon_with_pA = len(exon_with_pA)
-    print 'Got some lenghts and sums: {0} seconds'.format(time.time()-t5)
 
     print('Total polyadenylation events\t{0}'.format(total_pA))
     print('Total genes and genes with pA\t{0} {1} ({2:.2f})'.\
@@ -6890,6 +6959,52 @@ def cufflinks_report(settings, speedrun=False):
          format(total_exons, nr_exon_with_pA, nr_exon_with_pA/total_exons))
 
 
+def merge_center(genome, settings):
+    """
+    Merge and center a set of bed-paths. Since these polya_counts come from the
+    same sample, don't add the polyAs -- rather keep the max value
+    """
+
+    hg19 = settings.hg19_path
+    genomem = {}
+
+    for dset, dsetpath in genome.items():
+        # 1) extend with 20 nt
+        extended_path = dsetpath +'_extended'
+        merged_path = extended_path + '_merged'
+
+        # skip if you've done this before
+        # XXX remove for debugging
+        if os.path.isfile(merged_path):
+            genomem[dset] = merged_path
+            continue
+
+        # expand with 10
+        cmd = ['slopBed', '-i', dsetpath, '-g', hg19, '-b', '10']
+        p = Popen(cmd, stdout=open(extended_path, 'wb'))
+        p.wait()
+
+        # 2) merge 
+        cmd = ['mergeBed','-s', '-scores', 'max', '-i', extended_path]
+        p = Popen(cmd, stdout=PIPE)
+
+        out_handle = open(merged_path, 'wb')
+        for line in p.stdout:
+            (chrm, beg, end, maxcovrg, strand) = line.split()
+            meanbeg = int((int(beg)+int(end))/2)
+
+            out_handle.write('\t'.join([chrm,
+                                       str(meanbeg),
+                                       str(meanbeg+1),
+                                       '0',
+                                       maxcovrg,
+                                       strand+'\n']))
+        out_handle.close()
+
+        genomem[dset] = merged_path
+
+    return genomem
+
 def main():
     # The path to the directory the script is located in
     here = os.path.dirname(os.path.realpath(__file__))
@@ -6898,20 +7013,18 @@ def main():
     (savedir, outputdir) = [os.path.join(here, d) for d in ('figures', 'output')]
 
     # Speedruns with chr1
-    #chr1 = False
-    chr1 = True
+    chr1 = False
+    #chr1 = True
 
     # Read UTR_SETTINGS (there are two -- for two different annotations!)
     settings = Settings(os.path.join(here, 'UTR_SETTINGS'), savedir, outputdir,
                         here, chr1)
 
     # XXX venn-plot ++ here! don't forget !:)
-    #gencode_report(settings, speedrun=False)
+    gencode_report(settings, speedrun=False)
 
     # XXX cufflinks report
     #cufflinks_report(settings, speedrun=False)
-
-    cufflinks_report_v2(settings, speedrun=False)
 
     # Get the dsetswith utrs and their clusters from the length and polyA files
     # Optionally get SVM information as well
