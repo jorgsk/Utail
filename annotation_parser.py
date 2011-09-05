@@ -1617,7 +1617,7 @@ def only_introns_exons(transcripts, chr1, gene_limit, output_dir):
 
 def exon_intron_junctions(transcripts, chr1, output_dir):
     """
-    Write 60nt on both sides of exon-intron junctions. Merge them. Strip from
+    Write 10nt on both sides of exon-intron junctions. Merge them. Strip from
     them 3utr-exonic regions. Merge again.
     """
     pass
@@ -1644,12 +1644,12 @@ def exon_intron_junctions(transcripts, chr1, output_dir):
         for entry in introns:
             (chrm, beg, end, strand) = entry
 
-            # write 60nt on both sides
-            ex_side1 = (chrm, int(beg)-60, beg, strand)
-            int_side1 = (chrm, beg, int(beg)+60, strand)
+            # write 10nt on both sides
+            ex_side1 = (chrm, int(beg)-20, beg, strand)
+            int_side1 = (chrm, beg, int(beg)+20, strand)
 
-            ex_side2 = (chrm, end, int(end)+60, strand)
-            int_side2= (chrm, int(end)-60, end, strand)
+            ex_side2 = (chrm, end, int(end)+20, strand)
+            int_side2= (chrm, int(end)-20, end, strand)
 
             for g in [ex_side1, int_side1, ex_side2, int_side2]:
                 (chrm, beg, end, strand) = g
@@ -1668,9 +1668,11 @@ def exon_intron_junctions(transcripts, chr1, output_dir):
     stranded = False
     paths = merge_output(paths, stranded)
 
-    # intersect it with 3utr exonic
-    utrex = '/home/jorgsk/work/pipeline_files/genomic_regions/non_stranded/'\
+    #utrex = '/home/jorgsk/work/pipeline_files/genomic_regions/non_stranded/'\
+            #'3UTR-exonic_non_stranded.bed'
+    utrex = '/users/rg/jskancke/phdproject/3UTR/annotation_split/non_stranded/'\
             '3UTR-exonic_non_stranded.bed'
+
     paths['three_utr_exonic'] = utrex
 
     # 2) From intron-exon junctions, remove 3utr exonic 
@@ -1695,10 +1697,10 @@ def exon_intron_junctions(transcripts, chr1, output_dir):
 
     outhandle.close()
 
-    # Delete the temporary files
-    for name, path in paths.items():
-        if name is not 'three_utr_exonic':
-            os.remove(path)
+    ## Delete the temporary files
+    #for name, path in paths.items():
+        #if name is not 'three_utr_exonic':
+            #os.remove(path)
 
 def main():
 
@@ -1733,7 +1735,7 @@ def main():
         #hg19_file = '/home/jorgsk/work/pipeline_files/hg19.genome'
         hg19_file = '/users/rg/jskancke/phdproject/3UTR/the_project/ext_files/hg19'
 
-        split_annotation(transcripts, chr1, output_dir, hg19_file)
+        #split_annotation(transcripts, chr1, output_dir, hg19_file)
 
         #gene_limit = 1
         # XXX problem: how to collect and merge with 50 transcripts per gene and you
@@ -1742,7 +1744,7 @@ def main():
         #only_introns_exons(transcripts, chr1, gene_limit, output_dir)
 
         # Write exon-intron junctions and merge them
-        #exon_intron_junctions(transcripts, chr1, output_dir)
+        exon_intron_junctions(transcripts, chr1, output_dir)
 
         print time.time() - t1
 
