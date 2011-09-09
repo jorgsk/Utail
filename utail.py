@@ -617,8 +617,8 @@ class FullLength(object):
             else:
                 (has_PAS, PAS_dist) = zip(*has_PAS)
 
-            self.has_PAS = ' '.join([str(pas) for pas in has_PAS])
-            self.PAS_dist = ' '.join([str(dist) for dist in PAS_dist])
+            self.has_PAS = '#'.join([str(pas) for pas in has_PAS])
+            self.PAS_dist = '#'.join([str(dist) for dist in PAS_dist])
 
     def write_output(self, outobject, this_utr):
         """
@@ -733,8 +733,8 @@ class PolyAReads(object):
 
             # If found, Turn the PAS sites and their dists into strings
             if (nearbyPAS, PAS_dist) != ('NA', 'NA'):
-                nearbyPAS = ' '.join([str(pas) for pas in nearbyPAS])
-                PAS_dist = ' '.join([str(dist) for dist in PAS_dist])
+                nearbyPAS = '#'.join([str(pas) for pas in nearbyPAS])
+                PAS_dist = '#'.join([str(dist) for dist in PAS_dist])
 
             # Get the output dictionary with updated values
             output_dict = self.header_dict(this_utr, polAnr, site, nr_supp_pA,
@@ -2822,8 +2822,8 @@ def only_polyA_writer(dset_id, annotation, pA_seqs, polyA_reads, settings,
                                                                  pm_strand)
 
                 if nearby_PAS != 'NA':
-                    nearby_PAS = ' '.join(nearby_PAS)
-                    PAS_distance = ' '.join([str(di) for di in PAS_distance])
+                    nearby_PAS = '#'.join(nearby_PAS)
+                    PAS_distance = '#'.join([str(di) for di in PAS_distance])
 
                 number_supporting_reads = len(cls_reads)
                 number_unique_supporting_reads = len(set(cls_reads))
@@ -3238,8 +3238,8 @@ def pas_dist_bed_clusters(in_PAS, out_PAS, header):
     for line in infile:
         (chrm, beg, end, d, d, strand, cl_coord) = line.split('\t')[:7]
         (cl_PAS, cl_PAS_dist, rpkm) = line.split('\t')[-3:]
-        cl_PAS = cl_PAS.split(' ')
-        cl_PAS_dist = cl_PAS_dist.split(' ')
+        cl_PAS = cl_PAS.split('#')
+        cl_PAS_dist = cl_PAS_dist.split('#')
 
         for (pas, dist) in zip(cl_PAS, cl_PAS_dist):
             if pas != 'NA':
@@ -3272,8 +3272,8 @@ def pas_dist_bed_length(in_PAS, out_PAS, header):
     for line in infile:
         (chrm, beg, end, d, strand, d, eps_coord) = line.split('\t')[:7]
         (eps_PAS, eps_PAS_dist, rpkm, avrg_covrg) = line.split('\t')[-4:]
-        eps_PAS = eps_PAS.split(' ')
-        eps_PAS_dist = eps_PAS_dist.split(' ')
+        eps_PAS = eps_PAS.split('#')
+        eps_PAS_dist = eps_PAS_dist.split('#')
 
         for (pas, dist) in zip(eps_PAS, eps_PAS_dist):
             if pas != 'NA':
