@@ -3379,7 +3379,6 @@ def piperunner(settings, annotation, simulate, DEBUGGING, beddir, tempdir,
     region = os.path.basename(annotation.utrfile_path).split('_')[0]
     # ad hoc hack for intergenic region
 
-    debug()
     ##################################################################
     if simulate:
         # Create a pool of processes; one dataset will take up one process.

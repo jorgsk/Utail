@@ -9,7 +9,7 @@ import sys
 from itertools import combinations as combins
 from copy import deepcopy
 
-from subprocess import Popen, PIPE
+from subprocess import Popen, PIPE, STDOUT
 
 import matplotlib.pyplot as plt
 #import matplotlib.cm as cm
@@ -929,7 +929,6 @@ class Plotter(object):
         fig.savefig(filepath, format='pdf')
         filepath = os.path.join(output_dir, filename+'.eps')
         fig.savefig(filepath, format='eps', papertype='A4')
-        debug()
 
     def rpkm_dependent_epsilon(self, distances, rpkm_intervals, titles, order):
         """
@@ -1696,36 +1695,155 @@ class Plotter(object):
 
         return (fig, axes)
 
-    def cluster_ladder(self, dsetclusters, dsetreads, fig, ax, col, lstyle):
-        """ The more million reads, the more poly(A) clusters!
+    def intersect_lying_bar(self, data_dict, regions, title, here):
+        """ Plot the poly(A) sites from the different regions
         """
 
-        mill_reads = []
-        all_cls = []
-        good_cls = []
+        compartments = ['Whole_Cell', 'Cytoplasm', 'Nucleus']
+        fractions = ['plus_sliced', 'intersection', 'minus_sliced']
 
-        def something(tup):
-            return len(tup[0])
+        titls = {'plus_sliced': 'P(A)+ unique',
+                 'intersection': 'P(A)+/P(A)- intersection',
+                 'minus_sliced':'P(A)- unique'}
 
-        # Go through the output in order of number of datasets included
-        for names, numbers in sorted(dsetclusters.items(), key=something):
-            nr_reads = sum([dsetreads[dset] for dset in names.split(':')])
+        # The nr and names of bars in the plot
+        #plot_keys = ['all', 'T', 'PAS']
+        plot_keys = ['PAS', 'all']
+        colors = {'all': 'm', 'T': 'g', 'PAS': 'b'}
 
-            # add number of reads and numbers of clusters
-            mill_reads.append(nr_reads)
-            all_cls.append(sum(numbers['morethan1']['All']['info_dict'].values()))
-            good_cls.append(sum(numbers['morethan1']['wPAS']['info_dict'].values()))
+        labels = {'all': 'All', 'T': 'Mapped with poly(T)',
+                  'PAS': 'With downstream PAS'}
 
-        pl = ax.plot(mill_reads, all_cls, ls=lstyle, color=col, linewidth=2)[0]
-        pl = ax.plot(mill_reads, good_cls, ls=lstyle, color=col, linewidth=2)[0]
+        sidelabels = {'Whole_Cell': 'Whole cell', 'Cytoplasm': 'Cytoplasm',
+                      'Nucleus': 'Nucleus'}
 
-        # return the plot handle for later
-        return pl
+        (fig, axes) = plt.subplots(3,3, sharex=True)
+        #plt.ion()
+        #plt.ioff()
 
-    def non_PAS_ratios(self, data_dict, regions, title, here):
-        """
-        Plot out the non-PAS ratios for the different regions
-        """
+        for comp_nr, comp in enumerate(compartments):
+            for frac_nr, frac in enumerate(fractions):
+
+                plotme = {'all': [], 'PAS': []}
+
+                # get the height of the bars from the input
+                for region in regions:
+
+                    for k in plot_keys:
+                        plotme[k].append(data_dict[comp][region][frac][k])
+
+                # you want to place the left foot of all at 1,2,3, etc
+                # you want to place the left foot of T at 1.25
+                # you want to place the left foot of PAS at 1.375
+                heights = {'all': 0.25, 'T': 0.125, 'PAS': 0.125}
+
+                # number of data-points
+                dpoints = len(plotme.values()[0])
+
+                # where you want the plotting to start
+                start = 1
+
+                # automated calculation of bar positions given the
+                # height/width. this one's a keeper!
+                pos = dict()
+                for knr, k in enumerate(plot_keys):
+                    if knr == 0:
+                        pos[k] = np.arange(start, dpoints+start)
+                    else:
+                        adjust = sum([heights[plot_keys[x]] for x in
+                                   range(knr)])
+                        pos[k] = np.arange(start+adjust, dpoints+start)
+
+                ax = axes[comp_nr, frac_nr]
+                rects = dict() # save the rect information
+
+                # make the actual plots
+                for pkey in plot_keys:
+                    rects[pkey] = ax.barh(bottom=pos[pkey],
+                                          width=plotme[pkey],
+                                          height=heights[pkey],
+                                          color=colors[pkey],
+                                          label=labels[pkey])
+
+                # print either the number or percentage
+                for pkey, rs in rects.items():
+                    for r_nr, rect in enumerate(rs):
+                        width = int(rect.get_width())
+                        xloc = width + 100
+                        yloc = rect.get_y()+rect.get_height()/2.0
+                        clr = 'black'
+                        align = 'left'
+
+                        if pkey == 'all':
+                            txt = width
+                            fsize=10
+                        else:
+                            divby = plotme['all'][r_nr]
+                            try:
+                                txt = format(width/divby, '.2f')
+                            except ZeroDivisionError:
+                                txt = '0'
+
+                            fsize=8.5
+                            yloc = yloc - 0.03
+
+                        # ylocation, centered at bar
+
+                        ax.text(xloc, yloc, txt,
+                                 horizontalalignment=align,
+                                 verticalalignment='center', color=clr,
+                                 weight='bold', fontsize=fsize)
+
+                # print the total number for 'all', and the percentage of
+                # 'all' for the other two
+                # specify xticks if needeed
+
+                # put some titles here and there
+                # get the y-ticks. they should centered
+                center = sum(heights.values())/2.0
+                yticks = np.arange(start+center, dpoints+start)
+
+                if frac_nr == 0:
+                    ax.set_ylabel(sidelabels[comp], size=20)
+                    ax.set_yticks(yticks) # set the 3utr-exonic etc
+                    ax.set_yticklabels(regions) # set the 3utr-exonic etc
+                else:
+                    ax.set_yticklabels([])
+
+                ax.set_ylim(start-0.5, dpoints+1) # extend the view
+
+                if comp_nr == 0:
+                    ax.set_title(titls[frac], size=21)
+
+                # put the legend only in the top-left corner plot
+                if frac_nr == 1 and comp_nr == 0:
+                    ax.legend(loc='upper right')
+
+        # Set xlim (it's shared)
+        xlm = ax.get_xlim()
+        stepsize = 5000
+
+        ax.set_xlim((0, xlm[1]+stepsize))
+        #xticks = range(0, xlm[1]+stepsize, stepsize)
+        #ax.set_xticks(xticks)
+        #f = lambda x: '' if x%(stepsize*2) else x
+        #ticklabels = [f(tick) for tick in xticks]
+        #ax.set_xticklabels(ticklabels)
+        ax.set_xticklabels([]) # remove xticks
+
+        fig.subplots_adjust(wspace=0.1)
+        fig.subplots_adjust(hspace=0.2)
+        #fig.suptitle(title+ 'for {0}'.format(titles[key1]), size=20)
+        fig.set_size_inches(14,19)
+
+        output_dir = os.path.join(here, 'Results_and_figures', 'GENCODE_report',
+                                  'Figures')
+
+        filename = 'Intersected_nr_of_polyA_different_compartments_non_stranded'
+        filepath = os.path.join(output_dir, filename+'.pdf')
+        fig.savefig(filepath, format='pdf')
+        filepath = os.path.join(output_dir, filename+'.eps')
+        fig.savefig(filepath, format='eps', papertype='A4')
 
     def lying_bar_regions(self, data_dict, regions, title, ID, here):
         """ Plot the poly(A) sites from the different regions
@@ -2253,7 +2371,7 @@ def get_clusters(settings):
 
     return clusters
 
-def super_falselength(settings, region, subset=[], speedrun=False):
+def super_falselength(settings, region, batch_key, subset=[], speedrun=False):
     """ Return the super clusters with information only from the poly(A) files
     without using length (coverage) information.
 
@@ -2286,7 +2404,7 @@ def super_falselength(settings, region, subset=[], speedrun=False):
 
         # limit the nr of reads from each dset if you want to be fast
         if speedrun:
-            maxlines = 300
+            maxlines = 100
 
         linenr = 0
 
@@ -2336,11 +2454,12 @@ def super_falselength(settings, region, subset=[], speedrun=False):
         # TODO implement the same thing with bed-tools and obeserve the same
         # results but much faster and with mich simpler code. more memory
         # efficient too. RESULT you save more memory than speed.
-        super_3utr[region] = get_super_regions(dsets[region], settings)
+        super_3utr[region] = get_super_regions(dsets[region], settings,
+                                               batch_key)
 
     return dsets, super_3utr
 
-def get_super_regions(dsets, settings):
+def get_super_regions(dsets, settings, batch_key):
     """
     Use bed-tools to cluster the 3utrs
 
@@ -2367,7 +2486,7 @@ def get_super_regions(dsets, settings):
     # 1) super cluster key: 'chr1-10518929', for example
     # 2) the other datasets where this cluster appears (hela nucl etc)
 
-    cluster_file = os.path.join(settings.here, 'merge_dir', 'merged_pA')
+    cluster_file = os.path.join(settings.here, 'merge_dir', 'merged_pA_' + batch_key)
     temp_cluster_file = cluster_file + '_temp'
 
     out_handle = open(cluster_file, 'wb')
@@ -2406,23 +2525,30 @@ def get_super_regions(dsets, settings):
     out_handle.close()
 
     junctions = os.path.join(settings.here, 'junctions',
-                             'splice_junctions_merged.bed')
+                             'splice_junctions_merged_' + batch_key)
+
     # i.5) cut away the exon-exon noise
     cmd = ['subtractBed', '-a', cluster_file, '-b', junctions]
-    p = Popen(cmd, stdout=open(temp_cluster_file, 'wb'))
-    p.wait()
+    p1 = Popen(cmd, stdout=open(temp_cluster_file, 'wb'), stderr=PIPE)
+    p1.wait()
+    if p1.stderr.read():
+        debug()
 
     # ii) expand the entries
     cmd = ['slopBed', '-i', temp_cluster_file, '-g', settings.hg19_path, '-b', '15']
-    p = Popen(cmd, stdout=open(cluster_file, 'wb'))
-    p.wait()
+    p2 = Popen(cmd, stdout=open(cluster_file, 'wb'), stderr=PIPE)
+    p2.wait()
+    if p1.stderr.read():
+        debug()
 
     # iii) merge and sum scores
     cmd = ['mergeBed', '-nms', '-s', '-scores', 'sum', '-i', cluster_file]
-    p = Popen(cmd, stdout=PIPE)
+    p3 = Popen(cmd, stdout=PIPE, stderr=PIPE)
+    if p1.stderr.read():
+        debug()
 
     # iv) read therough the centered output and update the super_cluster
-    for line in p.stdout:
+    for line in p3.stdout:
         (chrm, beg, end, names, maxcovrg, strand) = line.split()
 
         center = int((int(beg)+int(end))/2)
@@ -2600,6 +2726,7 @@ def get_super_3utr(dsets, super_cluster, dset_2super):
                 # Add this 3UTR to the super-3utr dict
                 if utr_id not in super_3utr:
                     super_3utr[utr_id] = utr
+                    super_3utr[utr_id].rpkms = []
 
                 # if it's there, add any super-cluster: [cl][comp][covr] that aren't
                 # there already
@@ -2609,8 +2736,8 @@ def get_super_3utr(dsets, super_cluster, dset_2super):
                             super_3utr[utr_id].super_cover[s_key] = covr_dict
 
                     ## Also add the RPKM and average
-                    #super_3utr[utr_id].RPKM =\
-                    #(super_3utr[utr_id].RPKM+utr.RPKM)/2
+                    # toto, this will just average the last two.
+                    super_3utr[utr_id].rpkms.append(utr.RPKM)
 
     # go through all the super_clusters and add them to super_clusters
     # THIS WAS NEWS TO YOU ONCE :)
@@ -5176,7 +5303,8 @@ def get_polyA_stats(settings):
     return polyA_stats
 
 def get_dsetreads(settings, region):
-    """ For each dataset, get the number of total reads
+    """ For each dataset, get the number of total reads. The region doesn't
+    matter, because the number of reads are dataset-specific.
     """
 
     dsetreads = {}
@@ -5254,7 +5382,7 @@ def data_scooper(cls, keyw, this_dict):
     return this_dict
 
 
-def get_dsetclusters(subset, region, settings, speedrun):
+def get_dsetclusters(subset, region, settings, speedrun, batch_key):
     """ Get counts for all clusters and 'good' clusters (2 or more reads or
     annotated).
     """
@@ -5289,26 +5417,13 @@ def get_dsetclusters(subset, region, settings, speedrun):
             bigcl[cat1][cat2]['info_dict'] = deepcopy(info_dict)
             bigcl[cat1][cat2]['tail_lens'] = deepcopy(tail_lens)
 
-    dsets, super_3utr = super_falselength(settings, region, subset,
+    dsets, super_3utr = super_falselength(settings, region, batch_key, subset,
                                           speedrun)
 
-    #annot_nr = 0
-    #annot_PAS = 0
-    #annot_GOODPAS = 0
     for utr_name, utr in super_3utr[region].iteritems():
 
         for cls in utr.super_clusters:
 
-            ### temporary
-            #if cls.annotated_polyA_distance != 'NA':
-                #annot_nr += 1
-
-                #if 'AATAAA' in cls.nearby_PAS or 'ATTAAA' in cls.nearby_PAS:
-                    #annot_GOODPAS += 1
-
-                #if cls.nearby_PAS[0] != 'NA':
-                    #annot_PAS += 1
-            ###
 
             if cls.strand == utr.strand:
                 keyw = 'same'
@@ -5335,13 +5450,6 @@ def get_dsetclusters(subset, region, settings, speedrun):
 
                 bigcl['only1'] = data_scooper(cls, keyw, bigcl['only1'])
 
-
-    ## TEMP stats
-    #print region
-    #print subset
-    #print('With annotation: {0}'.format(annot_nr))
-    #print('Annotation PAS: {0:.2f}'.format(annot_PAS/annot_nr))
-    #print('Annotation Good PAS: {0:.2f}'.format(annot_GOODPAS/annot_nr))
 
     return bigcl
 
@@ -5473,18 +5581,17 @@ def clusterladder(settings, speedrun):
     """
     The more reads, the more polyAs, up to a point.
     """
-    p = Plotter()
 
-    #1) Make a dictionary: dataset: nr of total reads
+    #1) Make a dictionary: dataset-> nr of total reads
     dsetreads = get_dsetreads(settings, region='3UTR')
 
     #2) Make super-clusters for your datasets of choice
 
-    c = [ds for ds in settings.datasets if ('Cytoplasm' in ds and
-                                            not 'Minus' in ds)]
+    #c = [ds for ds in settings.datasets if ('Cytoplasm' in ds and
+                                            #not 'Minus' in ds)]
 
-    c_minus = [ds for ds in settings.datasets if ('Cytoplasm' in ds and
-                                            'Minus' in ds)]
+    #c_minus = [ds for ds in settings.datasets if ('Cytoplasm' in ds and
+                                            #'Minus' in ds)]
 
     wc_c = [ds for ds in settings.datasets if (('Cytoplasm' in ds) or
                    ('Whole_Cell' in ds) or ('Nucleus' in ds)) and (not 'Minus' in ds)]
@@ -5494,43 +5601,30 @@ def clusterladder(settings, speedrun):
 
     regions = ['3UTR-exonic', 'anti-3UTR-exonic']
 
-    ##regions = ['3UTR']
-    #regions = ['cds-intronic']
-    #data_grouping {'':}
+    #data_grouping = {'Poly(A) plus': c,
+                    #'Poly(A) minus': c_minus}
+    data_grouping = {'Poly(A) plus': wc_c,
+                     'Poly(A) minus': wc_c_minus}
 
-    #print('Loaded datasets:')
-    #for ds in settings.datasets:
-        #print(ds)
-    #debug()
-
-    #data_grouping = {'Poly(A) plus': all_clCy,
-                  #'Poly(A) minus': all_minusCy}
-    #data_grouping = {'Poly(A) plus': wc_c}
-    data_grouping = {'Poly(A) plus': c}
-
-    # For the plot
-    reg2nicereg = {'All': 'All sites',
-                 'PAS': 'Sites with PAS'}
-
-    linestyle = {'All': '--',
-                 'PAS': ':'}
-
-    (fig, ax) = plt.subplots(1)
+    # small color dictionary
     colors = ['m', 'r', 'b', 'g', 'k']
+    cols = {}
+    for indx, title in enumerate(data_grouping.keys()):
+        cols[title] = colors[indx]
 
     # keep a dictionary with reference to all the plots
     plotdict = {}
 
-    speedrun = True
-    #speedrun = False
+    #speedrun = True
+    speedrun = False
 
     for title, dsets in data_grouping.items():
 
         # sort the dsets in cell_lines by # of reads
         def mysorter(dset):
             return get_dsetreads(settings, region='3UTR')[dset]
-        #all_dsets = sorted(cln, key=mysorter, reverse=True)
-        all_dsets = sorted(dsets, key=mysorter)
+        all_dsets = sorted(dsets, key=mysorter, reverse=True)
+        #all_dsets = sorted(dsets, key=mysorter)
 
         # add more and more datasets
         subsets = [all_dsets[:end] for end in range(1, len(all_dsets)+1)]
@@ -5549,8 +5643,9 @@ def clusterladder(settings, speedrun):
 
                 # Get the number of 'good' and 'all' clusters
                 key = ':'.join(subset)
+                batch_key = 'first_ladder'
                 dsetclusters = get_dsetclusters(subset, region, settings,
-                                                speedrun)
+                                                speedrun, batch_key)
 
                 subsetcounts[key] = count_clusters(dsetclusters, dsetreads)
 
@@ -5564,36 +5659,55 @@ def clusterladder(settings, speedrun):
 
         plotdict[title] = dictsum
 
-    debug()
-    # TODO plot both the rise in +1 and PAS
+    # loop through and do the plotting
+    (fig, axes) = plt.subplots(1,2)
 
-    for title, dictsum in plotdict.items():
+    for plot_nr, (title, dictsum) in enumerate(plotdict.items()):
+        ax = axes[plot_nr]
 
-        colorsSum = ['m', 'r', 'b']
+        read_counts = []
+        cluster_counts = []
+        PAScluster_counts = []
 
-        for indx, merged_cls in enumerate(merged_clusters):
-            co = colorsSum[indx]
-            title = titls[indx]
+        # you must loop throug dependnig on lenghr
+        def sorthelp(tup):
+            return len(tup[0])
+        for dsets, countdict in sorted(dictsum.items(), key=sorthelp):
+            # the the sum of reads from these datasets
+            x = [get_dsetreads(settings, '3UTR')[ds] for ds in dsets.split(':')]
+            read_counts.append(sum(x))
 
-            label = ' '.join([title, reg2nicereg[region]])
-            lstyle = linestyle[region]
+            # get all cluster counts
+            cluster_counts.append(countdict['All'])
+            PAScluster_counts.append(countdict['PAS'])
 
-            plotdict[label] = p.cluster_ladder(merged_cls, dsetreads,
-                                               fig, ax, co, lstyle)
+        pl1 = ax.plot(read_counts, cluster_counts, color=cols[title],
+                      linewidth=2, label='All sites')[0]
+        pl2 = ax.plot(read_counts, PAScluster_counts, ls='--', color=cols[title],
+                      linewidth=2, label='Sites with PAS')[0]
 
         ax.set_xlabel('Billons of reads', size=18)
         ax.set_ylabel('Polyadenylation sites', size=18)
         ax.set_title('Polyadenylation site discovery saturates fast', size=20)
 
         # Sort the legends to your preference
-        sorted_titles = sorted(plotdict.keys(), reverse=True)
-        line_objs = [plotdict[title] for title in sorted_titles]
-        ax.legend(line_objs, sorted_titles, loc=0)
-        #bob.legend(loc='upper right', bbox_to_anchor=(0.97,0.9))
+        ax.legend(loc=0)
 
         # Set a grid on the y-axis
         ax.yaxis.grid(True)
         ax.xaxis.grid(True)
+
+        ax.set_title(title, size=15)
+
+    output_dir = os.path.join(settings.here, 'Results_and_figures',
+                              'GENCODE_report', 'Figures')
+
+    fig.set_size_inches(26,12)
+    filename = 'Saturation_plot'
+    filepath = os.path.join(output_dir, filename+'.pdf')
+    fig.savefig(filepath, format='pdf')
+    filepath = os.path.join(output_dir, filename+'.eps')
+    fig.savefig(filepath, format='eps', papertype='A4')
 
 def count_clusters(dsetclusters, dsetreads):
     """
@@ -5666,8 +5780,8 @@ def super_bed(handle, super_3utr, region):
 
                 beg = cls.polyA_coordinate
 
-                entry = '\t'.join([cls.chrm, str(beg), str(beg+1), cls.ID,
-                                   str(cls.nr_support_reads), cls.strand])
+                entry = '\t'.join([utr.chrm, str(beg), str(beg+1), utr.ID,
+                                   str(cls.nr_support_reads), utr.strand])
 
                 handle.write(entry + '\n')
 
@@ -5732,34 +5846,6 @@ def super_bed(handle, super_3utr, region):
     return one_stats, two_stats, total
 
 
-def annotation_merger(paths, annotations):
-    """ Merge the poly(A) sites in the two anntations
-    # Do this by first extending each site, then merging the two files, then
-    # outputing the centered merged version.
-    """
-
-def regdata_writer(reg_data, outdir, subset):
-    """
-    Write data from the two regions
-    """
-    # Subset is the set of sub-datasets the poly(A) sites were derived from
-    for region, reg_dict in reg_data.items():
-        outfile = os.path.join(outdir, region+'.summary')
-        outhandle = open(outfile, 'wb')
-        outhandle.write("""Summary of super-clustering of poly(A) sites for the
-                      following datasets:\n {0}""".format(' '.join(subset))+'\n')
-
-        "Numbers for poly(A) sites with only 1 read:\n"
-        for name, val in reg_dict['one_stats'].items():
-            outhandle.write('\t'.join([name, str(val)]))
-        outhandle.write('\n')
-
-        "Numbers for poly(A) sites with more than 1 reads:\n"
-        for name, val in reg_dict['two_stats'].items():
-            outhandle.write('\t'.join([name, str(val)]))
-
-        outhandle.close()
-
 def venn_polysites(settings, speedrun):
     """ Output all clustered poly(A) sites for 3UTR exons and for the rest of
     the genome.
@@ -5768,24 +5854,11 @@ def venn_polysites(settings, speedrun):
     are actually expressed in your datasets? That would simplify matters.
     """
 
-    k562 = ['K562_Cytoplasm', 'K562_CytoplasmReplicate',
-            'K562_Whole_Cell', 'K562_Whole_CellReplicate']
-            #'K562_Nucleus', 'K562_NucleusReplicate']
+    all_ds = [ds for ds in settings.datasets if not 'Minus' in ds]
 
-    gm12878 = ['GM12878_Cytoplasm', 'GM12878_CytoplasmReplicate',
-               'GM12878_Whole_Cell', 'GM12878_Whole_CellReplicate']
-               #'GM12878_Nucleus', 'GM12878_NucleusReplicate']
+    #speedrun = True
+    speedrun = False
 
-    helaS3 = ['HeLa-S3_Cytoplasm', 'HeLa-S3_CytoplasmReplicate',
-              'HeLa-S3_Whole_Cell', 'HeLa-S3_Whole_CellReplicate']
-              #'HeLa-S3_Nucleus', 'HeLa-S3_NucleusReplicate']
-
-    all_ds = sum([k562, gm12878, helaS3], [])
-
-    speedrun = True
-    #speedrun = False
-
-    outdir = '/home/jorgsk/work/3UTR/Results_and_figures/GENCODE_report/venn_diagram'
     outdir = os.path.join(settings.here,
                           'Results_and_figures/GENCODE_report/venn_diagram')
 
@@ -5798,13 +5871,15 @@ def venn_polysites(settings, speedrun):
 
     reg_data = {}
     regions = ['3UTR-exonic', 'anti-3UTR-exonic']
+
     for indx, region in enumerate(regions):
 
-        #subset = all_ds
-        subset = k562 # while debugging
+        subset = all_ds
+        #subset = all_ds[0]
 
-        dsets, super_3utr = super_falselength(settings, region, subset,
-                                              speedrun)
+        batch_key = 'venn'
+        dsets, super_3utr = super_falselength(settings, region, batch_key,
+                                              subset, speedrun)
 
         superbed_path = os.path.join(outdir, region+'.bed')
         handle = open(superbed_path, 'wb')
@@ -5821,14 +5896,12 @@ def venn_polysites(settings, speedrun):
 
         paths[region] = superbed_path
 
-    # Write one_stats and two_stats to a file for future reference
-    regdata_writer(reg_data, outdir, subset)
-
     # join the polyA sites in the two regions and give the ensuing filepath to paths
-    paths['genome'] = join_regions(paths, regions, outdir, extendby=5)
+    paths['genome'] = join_regions(settings, paths, regions, outdir, extendby=5)
     regions = regions + ['genome']
 
-    # Make venn-diagrams for each region
+    # Make venn-diagrams for each region (actually, only for whole cell)
+    regions = ['genome']
     for region in regions:
 
         # get all paths to merged polyA files and their linenumbers
@@ -5837,62 +5910,38 @@ def venn_polysites(settings, speedrun):
         # make a venn-diagram of the intersection of poly(A) sites between each of
         # the below regions and the polyAdb and the GENCODE poly(A) annotation.
 
-        make_venn(paths, merged_stats, outdir, region)
+        make_venn(paths, merged_stats, outdir, region, settings)
 
 
-def make_venn(paths, wcdict, outdir, region):
+def make_venn(paths, wcdict, outdir, region, settings):
     """ Call upon R to summon forth the elusive Venn diagrams
     """
 
-    import rpy2.robjects as robjects
-    from rpy2.robjects.packages import importr
+    outfile = open(os.path.join(settings.here, 'analysis', 'R_code', 'venn.r'),
+                   'wb')
 
+    # write the commands to an r script
+    line00 = 'library(Vennerable, lib.loc='\
+            '"/users/rg/jskancke/R/x86_64-unknown-linux-gnu-library/2.13/")'
+    line0 = "pdf('gencode_polyAdb_discovered.pdf')"
+    line1 = 'Vcombo <- Venn(SetNames = c("polyAdb", "GENCODE V7", "Discovered")'\
+            ', Weight= c(0, {0}, {1}, {2}, {3}, {4}, {5}, {6}))'\
+            .format(wcdict['polyAdb'], #onlt polyAdb
+                    wcdict['gencode'], # only GENC
+                    wcdict[region], # only in region
+                    wcdict['_I_'.join(sorted(['gencode','polyAdb']))], # pAdb + GENC
+                    wcdict['_I_'.join(sorted([region,'polyAdb']))],
+                    wcdict['_I_'.join(sorted([region,'gencode']))],
+                    wcdict['_I_'.join(sorted(['gencode','polyAdb', region]))])
 
-    importr("Vennerable") # import the Vennerable package
+    line2 = 'plot(Vcombi, DoWeights=TRUE)'
+    line3 = 'plot(Vcombi, DoWeights=FALSE)'
+    line4 = 'dev.off()'  # close the plot to access the file
 
-    # call in a loop if you want the regions separate.
+    for line in [line00, line0, line1, line2, line3, line4]:
+        outfile.write(line+'\n')
 
-    reg2title = {'genome': 'whole genome',
-                 'anti-3UTR-exonic': 'complement of annotated 3UTRs',
-                 '3UTR-exonic': 'annotated 3UTRs'}
-
-    order = [reg2title[region], 'GENCODE', 'polyAdb']
-    # 000 100 010 110 001 101 011 111
-    # You must keep order, whilst obeying your archaic system.
-
-    # shortcuts
-    A = 'gencode'
-    B = 'polyAdb'
-
-    vend = {'000': 0,
-            '001': wcdict['polyAdb'], #onlt polyAdb
-            '010': wcdict['gencode'], # only GENC
-            '100': wcdict[region], # only in region
-            '011': wcdict['_I_'.join(sorted(['gencode','polyAdb']))], # pAdb + GENC
-            '101': wcdict['_I_'.join(sorted([region,'polyAdb']))],
-            '110': wcdict['_I_'.join(sorted([region,'gencode']))],
-            '111': wcdict['_I_'.join(sorted(['gencode','polyAdb', region]))]}
-
-    names = robjects.StrVector(order)
-
-    weights = robjects.IntVector(vend.values())
-    weights.names = vend.keys()
-
-    x = robjects.r('Venn')(SetNames=names, Weight=weights)
-
-    # save plots both with and without weights
-    for doweights in [True, False]:
-
-        if doweights:
-            output_filename = os.path.join(outdir, region+'_venn_diagram_weighted.pdf')
-        else:
-            output_filename = os.path.join(outdir, region+'_venn_diagram.pdf')
-
-        #robjects.r('pdf')(output_filename, width=width, height=height)
-        robjects.r('pdf')(output_filename) # output plot to pdf
-
-        robjects.r('plot')(x, **{'doWeights': doweights})
-        robjects.r('dev.off()')  # close the plot to access the file
+    outfile.close()
 
 
 def intersect_polyAs(paths, outdir, region):
@@ -5985,7 +6034,7 @@ def intersect_wrap(paths, intersecters, outdir, extendby=20):
     3) return paths dict with link to the intersected path
     """
     #hg19 = '/home/jorgsk/work/3UTR/ext_files/hg19'
-    hg19 = '/users/rg/jskancke/3UTR/the_project/ext_files/hg19'
+    hg19 = '/users/rg/jskancke/phdproject/3UTR/the_project/ext_files/hg19'
 
     # function used only here
     def extender(extendby, path, hg19, ext_path):
@@ -6059,7 +6108,7 @@ def intersect_wrap(paths, intersecters, outdir, extendby=20):
 
     return paths
 
-def join_regions(paths, only_these, outdir, extendby=False):
+def join_regions(settings, paths, only_these, outdir, extendby=False):
     """ Merge the paths in 'only_these' into one file, and then run mergeBed on
     them, and finally report the centers of the mergings obtained.  Return
     'paths' with the path to the merged version.
@@ -6083,10 +6132,10 @@ def join_regions(paths, only_these, outdir, extendby=False):
     joined_handle.close()
 
     # now that you have joined them, merge them back together
-    hg19 = '/home/jorgsk/work/3UTR/ext_files/hg19'
+    #hg19 = '/home/jorgsk/work/3UTR/ext_files/hg19'
+    hg19 = '/users/rg/jskancke/phdproject/3UTR/the_project/ext_files/hg19'
 
     ## lines in jouned_path
-    wc_1 = sum((1 for line in open(joined_path, 'rb')))
 
     cmd1 = ['slopBed', '-b', str(extendby), '-i', joined_path, '-g', hg19]
     cmd2 = ['mergeBed', '-s', '-i', 'stdin']
@@ -6098,10 +6147,9 @@ def join_regions(paths, only_these, outdir, extendby=False):
     joined_merged_path = os.path.join(outdir, joined_merged_name+'.bed')
     jm_handle = open(joined_merged_path, 'wb')
 
-    wc_2 = 0
+
     # Write the center of the merged poly(A) sites
     for line in p2.stdout:
-        wc_2 += 1
         (chrm, beg, end, strnd) = line.split()
 
         center_dist = math.ceil((int(end)-int(beg))/2)
@@ -6111,11 +6159,22 @@ def join_regions(paths, only_these, outdir, extendby=False):
         jm_handle.write('\t'.join([chrm, str(center), str(center+1), '0',
                                    '0',strnd]) + '\n')
 
-    print 'extendby: ', extendby
-    print wc_1, 'before merge of {0}'.format(' '.join(only_these))
-    print wc_2, 'after merge of {0}'.format(' '.join(only_these))
+    jm_handle.close()
+    # filter out the exon-exon junctions
+    junctions = os.path.join(settings.here, 'junctions',
+                             'splice_junctions_merged.bed')
 
-    return joined_merged_path
+
+    final_path = os.path.join(outdir, joined_merged_name+'_junc_free.bed')
+    cmd1 = ['slopBed', '-b', str(extendby), '-i', joined_merged_path, '-g', hg19]
+    cmd2 = ['subtractBed', '-a', 'stdin', '-b', junctions]
+
+    p1 = Popen(cmd1, stdout=PIPE)
+    p2 = Popen(cmd2, stdin=p1.stdout, stdout = open(final_path, 'wb'))
+
+    p2.wait()
+
+    return final_path
 
 def get_dsetnames(settings, compartments, ignorers, demanders):
     all_dsets = []
@@ -6185,12 +6244,15 @@ def cumul_stats_printer_genome(settings, speedrun):
 
             dsetclusters = {}
 
+            batch_key = 'cumul_stats_3utr'
             dsetclusters['3UTR'] = get_dsetclusters(all_dsets, '3UTR-exonic',
-                                                    settings, speedrun)
+                                                    settings, speedrun, batch_key)
 
+            batch_key = 'cumul_stats_anti3utr'
             dsetclusters['anti-3UTR'] = get_dsetclusters(all_dsets,
                                                          'anti-3UTR-exonic',
-                                                         settings, speedrun)
+                                                         settings, speedrun,
+                                                         batch_key)
 
             dsetclusters['genome'] = dsetcluster_join(dsetclusters)
 
@@ -6227,8 +6289,9 @@ def cumul_stats_printer(settings, speedrun):
 
             # Get the number of 'good' and 'all' clusters
             key = ':'.join(subset)
+            batch_key = 'cuml_st_printer'
             dsetclusters[key] = get_dsetclusters(subset, region, settings,
-                                                 speedrun)
+                                                 speedrun, batch_key)
 
             # NEW! Print out some statistics like this for each clustering.
             super_cluster_statprinter(dsetclusters, region, key, settings, filename)
@@ -6291,14 +6354,10 @@ def rpkm_polyA_correlation(settings, speedrun):
     # glipses, as patches of land spotted through shifting coulds as a plane is
     # ascending into the skies.
 
-    # OK! what if we average the RPKM? And use more dataset?
-    # TODO! Average RPKM, use more dataset, and pray to GOD. Alternatively use
-    # only 1 dataet at a time. However, you're not getting any better than 0.5.
-    # 0.6 at most, which is not bad.
-
     # Could it be that the number of poly(A) sites in the 3UTR is independent of
     # the RPKM? Maybe you should compare with the % of "recaptured" poly(A)
     # sites. What is the easiest way to find out about this? 
+
     a_polyA_sites_dict = apa_dict(settings)
 
     # sum the poly(A) sites for the murky few multi-exons out there
@@ -6320,11 +6379,13 @@ def rpkm_polyA_correlation(settings, speedrun):
     region = '3UTR'
     # TODO maybe include whole cell here as well? ta boozt the numbres :S
     # must include dst subset. you must wait till they finish
-    dset_subsets = [ds for ds in settings.datasets if (('Cytoplasm' in ds) or
-                   ('Whole_Cell' in ds)) and (not 'Minus' in ds)]
+    #dset_subsets = [ds for ds in settings.datasets if (('Cytoplasm' in ds) or
+                   #('Whole_Cell' in ds)) and (not 'Minus' in ds)]
 
     #dset_subsets = [ds for ds in settings.datasets if ('Cytoplasm' in ds) and
                    #(not 'Minus' in ds)]
+
+    dset_subsets = [ds for ds in settings.datasets if not 'Minus' in ds]
 
     dsets, super_3utr = get_utrs(settings, region, dset_subsets, speedrun)
 
@@ -6337,6 +6398,9 @@ def rpkm_polyA_correlation(settings, speedrun):
         dsets, super_3utr = get_utrs(settings, region, [dubset], speedrun)
 
         for utr_id, utr in super_3utr.iteritems():
+            debug()
+            utr.RPKM = np.mean(utr.rpkms) # redefine the rpkm
+            debug()
             if utr.RPKM > 0.5:
                 clu_nr = len(utr.super_clusters)
 
@@ -6498,7 +6562,7 @@ def barsense_counter(super_3utr, region):
 
     return bardict, normstranddict
 
-def side_sense_plot(settings, speedrun, intersection):
+def side_sense_plot(settings, speedrun):
     """
     Side plot of poly(A) reads in different regions, as well as the
     sense/antisense debacle. You should probably run the region-stuff with
@@ -6516,10 +6580,7 @@ def side_sense_plot(settings, speedrun, intersection):
 
     compartments = ['Whole_Cell', 'Cytoplasm', 'Nucleus']
 
-    if intersection:
-        fractions = ['+', '-', 'isect']
-    else:
-        fractions = ['+', '-']
+    fractions = ['+', '-']
 
     #regions = ['5UTR-exonic', '5UTR-intronic', '3UTR-exonic', '3UTR-intronic',
                #'CDS-exonic', 'CDS-intronic', 'Nocoding-exonic',
@@ -6544,7 +6605,9 @@ def side_sense_plot(settings, speedrun, intersection):
 
             for region in regions:
 
-                dsets, super_3utr = super_falselength(settings, region, subset,
+                batch_key = 'side_sense'
+                dsets, super_3utr = super_falselength(settings, region,
+                                                      batch_key, subset,
                                                       speedrun=speedrun)
 
                 key = ':'.join([comp, frac, region])
@@ -6626,8 +6689,9 @@ def non_PAS_polyA(settings, speedrun):
 
             for region in regions:
 
+                batch_key = 'nonPAS_polyAz'
                 dsetclusters = get_dsetclusters(subset, region, settings,
-                                                speedrun)
+                                                speedrun, batch_key)
 
                 key = ':'.join([comp, frac, region])
 
@@ -6640,127 +6704,16 @@ def non_PAS_polyA(settings, speedrun):
     # below prints each region separate, not updated. to new level in ratio_dict
     #p.non_PAS_difference_separate(ratio_dict, regions, title, settings.here)
 
-def polyA_plusminus_overlap(settings, speedrun):
-    """
-    For each of the cell compartments, for each of the regions, get the
-    intersection of the poly(A)+ and poly(A)- datasets.
-
-    For each compartment, save the output of the intersection like this:
-        3UTR-exonic 3000    1000    2000
-
-    Which means 3000 in polyA+, 2000 in polyA-, and 1000 in common for 3UTR
-    exonic, for the compartment in the file name. This can subsequently be read
-    by R and R can make a venn diagram of the intersection.
-    """
-
-    min_covr = 1
-    extendby = 15
-
-    compartments = ['Whole_Cell', 'Cytoplasm', 'Nucleus']
-    #compartments = ['Nucleus']
-    #regions = ['5UTR-exonic', '5UTR-intronic', '3UTR-exonic', '3UTR-intronic',
-               #'CDS-exonic', 'CDS-intronic', 'Nocoding-exonic',
-               #'Noncoding-intronic', 'Intergenic']
-    #regions = ['3UTR-exonic', 'CDS-exonic', 'CDS-intronic',
-               #'Nocoding-exonic', 'Noncoding-intronic', 'Intergenic']
-    #regions = ['3UTR-exonic', 'CDS-exonic', 'CDS-intronic', 'Intergenic']
-    regions = ['Intergenic', 'CDS-intronic', 'CDS-exonic', '3UTR-exonic']
-    #regions = ['CDS-intronic', 'Intergenic']
-
-    dsetdict = {}
-    for reg in regions:
-        dsetdict[reg] = settings.only_files(reg)
-
-    # add the regions all together
-    #dsetdict['All'] =\
-            #settings.only_files('anti-3UTR-exonic').values() +\
-            #settings.only_files('3UTR-exonic').values()
-
-    temp_dir = os.path.join(settings.here, 'temp_files')
-    r_filepath = os.path.join(temp_dir, 'intersections_forR')
-    r_filehandle = open(r_filepath, 'wb')
-
-    header = '\t'.join(['Compartment', 'Region', 'P(A)+', 'P(A)-',
-                        'Intersection', 'IntersectionPAS', 'IntersectionGoodPAS'])
-    r_filehandle.write(header+'\n')
-
-    for comp in compartments:
-
-        #for reg in regions+['All']: # skipping all for the moment ..
-        for reg in regions:
-
-            plus_subset = [path for ds, path in dsetdict[reg].items() if 
-                           (not 'Minus' in ds) and comp in ds]
-            minus_subset = [path for ds, path in dsetdict[reg].items() if 
-                            ('Minus' in ds) and comp in ds]
-
-            path_dict = {'plus': plus_subset, 'minus': minus_subset}
-            # Merge the plus and minus subsets individually (all = special case)
-            # Count the number of clusters
-
-            merged = {}
-            for key, paths in path_dict.items():
-                merged[key] = merge_paths(settings, paths, temp_dir, key,
-                                          min_covr, comp, reg)
-
-            merged['isect'] = isect(settings, merged, extendby, temp_dir, comp,
-                                   reg)
-
-            # write to file
-            write_isectfile(r_filehandle, merged, comp, reg)
-
-    r_filehandle.close()
-
-
-def write_isectfile(r_filehandle, merged, comp, reg):
-    """
-    Give R a nice tab-formatted file
-    """
-
-    goodpas = set(['AATAAA', 'ATTAAA'])
-
-    allpas = set(['AATAAA', 'ATTAAA', 'TATAAA', 'AGTAAA', 'AAGAAA', 'AATATA',
-                 'AATACA', 'CATAAA', 'GATAAA', 'AATGAA', 'TTTAAA', 'ACTAAA',
-                 'AATAGA'])
-
-    r_filehandle.write(comp+'\t'+reg+'\t')
-
-    for key in ['plus', 'minus', 'isect']:
-        path = merged[key]
-
-        wc = sum(1 for line in open(path, 'rb'))
-        r_filehandle.write(str(wc)+'\t')
-
-    # get how many of the isect have PAS
-    pas = 0
-    goodPas = 0
-
-    for line in open(merged['isect'], 'rb'):
-        (chrm, beg, end, PAS, covr, strand) = line.split()
-
-        has_pas = False
-        has_good_pas = False
-
-        for pa in PAS.split('#'):
-            if pa in allpas:
-                has_pas = True
-            if pa in goodpas:
-                has_good_pas = True
-
-        if has_pas:
-            pas += 1
-        if has_good_pas:
-            goodPas +=1
-
-    r_filehandle.write('{0}\t{1}\n'.format(pas, goodPas))
-
 
 def isect(settings, merged, extendby, temp_dir, comp, reg):
     """
-    Expand each file by 15 nt, intersect, and return the output
+    Expand file A and B file by 15 nt, intersect, and return
+    A - intersection
+    intersection
+    B - intersection
     """
-    # function used only here
 
+    # function used only here
     def extender(extendby, path, hg19, ext_path):
         cmd1 = ['slopBed', '-b', str(extendby), '-i', path, '-g', hg19]
         p1 = Popen(cmd1, stdout = open(ext_path, 'wb'))
@@ -6778,30 +6731,60 @@ def isect(settings, merged, extendby, temp_dir, comp, reg):
         expanded[pathname] = ext_path
 
     filea, fileb = expanded.values()
-    cmd2 = ['intersectBed', '-wa', '-s', '-a', filea, '-b', fileb]
+    cmd2 = ['intersectBed', '-wa', '-wb', '-s', '-a', filea, '-b', fileb]
     p2 = Popen(cmd2, stdout=PIPE )
 
     isect_name = str(comp)+'_'+str(reg)+'_'+'_I_'.join(expanded.keys())
     isect_path = os.path.join(temp_dir, isect_name)
 
     out_handle = open(isect_path, 'wb')
+
+    # save the intersected path
     for line in p2.stdout:
+        (achrm, abeg, aend, aname, aval, astrnd,
+         bchrm, bbeg, bend, bname, bval, bstrnd) = line.split('\t')
+
+        name = '#'.join(aname.split(' '))
+
         # re-center the intersection
-        (chrm, beg, end, name, val, strnd) = line.split('\t')
-
-        name = '#'.join(name.split(' '))
-
-        center_dist = math.ceil((int(end)-int(beg))/2)
-        center = int(int(end) - center_dist)
+        if int(abeg) < int(bbeg):
+            center_dist = math.ceil((int(bend)-int(abeg))/2)
+            center = int(int(bend) - center_dist)
+        else:
+            center_dist = math.ceil((int(aend)-int(bbeg))/2)
+            center = int(int(aend) - center_dist)
 
         # write the center of the new mergers
-        out_handle.write('\t'.join([chrm, str(center), str(center+1), name,
-                                   val, strnd.rstrip()]) + '\n')
-    return isect_path
+        out_handle.write('\t'.join([achrm, str(center), str(center+1), name,
+                                   aval, astrnd]) + '\n')
+
+    out_handle.close()
+
+    # save the output in an output dict
+    output_dict = {'intersection': isect_path}
+    # remove the intersection from + and -
+
+    # 1) expand the new intersection path!
+    isect_exp_name = isect_name + '_ExPanDeD{0}'.format(extendby)
+    isect_exp_path = os.path.join(temp_dir, isect_exp_name)
+    extender(extendby, isect_path, settings.hg19_path, isect_exp_path)
+
+    # 2) subtract from the two origial files that which overlaps the extended
+    # intersection
+    for pathname, path in merged.items():
+        cmd = ['subtractBed', '-s', '-a', path, '-b', isect_exp_path]
+        outpath = path + '_Sliced'
+        p3 = Popen(cmd, stdout = open(outpath, 'wb'))
+        p3.wait()
+
+        output_dict[pathname+'_sliced'] = outpath
+
+    return output_dict
 
 
 def merge_paths(settings, paths, temp_dir, key, min_covr, comp, reg):
     # the file you will keep expanding and subtracting
+
     extendpath = os.path.join(temp_dir,
                               '{0}_{1}_extendify_{2}'.format(comp, reg, key))
     juncfreepath = os.path.join(temp_dir,\
@@ -6887,6 +6870,531 @@ def merge_paths(settings, paths, temp_dir, key, min_covr, comp, reg):
 
     return finalpath
 
+def intersection_sideplot(settings):
+    """
+    Intersect poly(A)+ and poly(A)- for the different regions and 
+    """
+    compartments = ['Whole_Cell', 'Cytoplasm', 'Nucleus']
+    #compartments = ['Whole_Cell']
+
+    regions = ['5UTR-exonic', '5UTR-intronic', '3UTR-exonic', '3UTR-intronic',
+               'CDS-exonic', 'CDS-intronic', 'Nocoding-exonic',
+               'Noncoding-intronic', 'Intergenic']
+    #regions = ['3UTR-exonic', 'CDS-exonic', 'CDS-intronic',
+               #'Nocoding-exonic', 'Noncoding-intronic', 'Intergenic']
+    #regions = ['3UTR-exonic', 'CDS-exonic', 'CDS-intronic', 'Intergenic']
+    #regions = ['3UTR-exonic']
+
+    # Get one dict for the bar plot and one dict for the sense-plot
+
+    # file paths for all regions
+    dsetdict = dict((reg, settings.only_files(reg)) for reg in regions)
+
+    temp_dir = os.path.join(settings.here, 'temp_files')
+    min_covr = 1
+    extendby = 15
+
+    comp_dict = {}
+    for comp in compartments:
+
+        # Merge the plus and minus subsets for each region
+        reg_dict = {}
+        for reg in regions:
+
+            plus_subset = [path for ds, path in dsetdict[reg].items() if 
+                           (not 'Minus' in ds) and comp in ds]
+            minus_subset = [path for ds, path in dsetdict[reg].items() if 
+                            ('Minus' in ds) and comp in ds]
+
+            path_dict = {'plus': plus_subset, 'minus': minus_subset}
+            merged = {}
+
+            for key, paths in path_dict.items():
+                merged[key] = merge_paths(settings, paths, temp_dir, key,
+                                          min_covr, comp, reg)
+
+            # return a dictionary: separated['plus'/'minus'/'separated]
+            separated = isect(settings, merged, extendby, temp_dir, comp, reg)
+
+            reg_dict[reg] = separated
+
+        comp_dict[comp] = reg_dict
+
+    # save the bedfiles for the different regions
+    save_dir = os.path.join(settings.here, 'analysis', 'pure')
+    save_pure(comp_dict, save_dir)
+
+    data_dict = count_these(comp_dict)
+
+    p = Plotter()
+
+    title = 'Polyadenlyation in different regions for different'\
+            ' cellular compartments'
+
+    p.intersect_lying_bar(data_dict, regions, title, settings.here)
+
+
+def save_pure(comp_dict, save_dir):
+    """
+    Save as bed-files the poly(A) sites from the pure regions
+    """
+
+    for compartment, reg_dict in comp_dict.items():
+        for region, slice_dict in reg_dict.items():
+            for sl, slice_path in slice_dict.items():
+
+                outname = '__'.join([compartment, region, sl])
+                outpath = os.path.join(save_dir, outname)
+                outhandle = open(outpath, 'wb')
+
+                for line in open(slice_path, 'rb'):
+                    outhandle.write(line)
+
+                outhandle.close()
+
+def count_these(some_dict):
+    """
+    Count PAS and all. You know its +1 already
+    """
+
+    goodpas = set(['AATAAA', 'ATTAAA'])
+
+    allpas = set(['AATAAA', 'ATTAAA', 'TATAAA', 'AGTAAA', 'AAGAAA', 'AATATA',
+                 'AATACA', 'CATAAA', 'GATAAA', 'AATGAA', 'TTTAAA', 'ACTAAA',
+                 'AATAGA'])
+
+    data_dict = AutoVivification()
+
+    for comp, comp_dict in some_dict.items():
+        for reg, reg_dict in comp_dict.items():
+            for key, keypath in reg_dict.items():
+
+                # get how many of the isect have PAS
+                pas = 0
+                goodPas = 0
+                All = 0
+
+                for line in open(keypath, 'rb'):
+                    (chrm, beg, end, PAS, covr, strand) = line.split('\t')
+
+                    PAS = '#'.join(PAS.split(' '))
+
+                    All += 1
+
+                    has_pas = False
+                    has_good_pas = False
+
+                    for pa in PAS.split('#'):
+                        if pa in allpas:
+                            has_pas = True
+                        if pa in goodpas:
+                            has_good_pas = True
+
+                    if has_pas:
+                        pas += 1
+                    if has_good_pas:
+                        goodPas +=1
+
+                data_dict[comp][reg][key]['all'] = All
+                data_dict[comp][reg][key]['PAS'] = pas
+
+    return data_dict
+
+def get_genc3_paths(carrie, my_cell_lines):
+
+    #0) make a directory -> cell line dictionary
+    dir_2_cell_line = {}
+    for line in open(os.path.join(carrie, 'Dataset.info.txt')):
+        (dirinfo, cell_l, comp, longshort, rplica) = line.split()
+        dirname = dirinfo[4:]
+        dir_2_cell_line[dirname] = cell_l
+
+    #1 collect file paths for nuclear and cytoplasmic exons
+    regions = ['nuclear', 'cytoplasmic']
+    paths = dict((reg, []) for reg in regions)
+
+    for dirname, dirnames, filenames in os.walk(carrie):
+        if dirname.endswith('exons'):
+
+            main_dir = os.path.split(os.path.split(dirname)[0])[1]
+
+            # include only those cell lines you have been using
+            if main_dir not in dir_2_cell_line:
+                print main_dir
+                continue
+
+            if dir_2_cell_line[main_dir] not in my_cell_lines:
+                continue
+
+            compartment = main_dir[3:]
+
+            # we're only looking at nuclear and cytoplasm
+            if compartment not in ['N','C']:
+                continue
+
+            for f in filenames:
+                if f == 'All.exon.rpkm.pooled.txt.gz':
+
+                    mypath = os.path.join(dirname, f)
+
+                    if compartment == 'C':
+                        paths['cytoplasmic'].append(mypath)
+                    if compartment == 'N':
+                        paths['nuclear'].append(mypath)
+
+    return paths
+
+
+def cytonuclear_rpkms_genc3(settings):
+    """
+    See other function
+    """
+    temp_dir = os.path.join(settings.here, 'temp_files')
+    carrie = '/users/rg/projects/NGS/Projects/ENCODE/hg19main/'\
+            'GingerasCarrie'
+
+    my_cell_lines = ('K562', 'GM12878', 'HUVEC', 'HELAS3', 'HEPG2')
+
+    #0) get paths to cytoplasmic and nuclear rpkms
+    paths = get_genc3_paths(carrie, my_cell_lines)
+
+
+    #1) Get dicts of the exons' rpkms
+    #  Can you keep all exons in memory? I think so.
+
+    ex_dict = {'nuclear': {}, 'cytoplasmic': {}}
+
+    for region in ['nuclear', 'cytoplasmic']:
+
+        for f in paths[region]:
+            cmd = ['zcat', f]
+            p = Popen(cmd, stdout=PIPE)
+            for line in p.stdout:
+                coord, rpkm, d = line.split()
+
+                if coord in ex_dict[region]:
+                    ex_dict[region][coord].append(rpkm)
+                else:
+                    ex_dict[region][coord] = [rpkm]
+
+    # 2) Write a bed-file with the average rpkm of the exons
+    strandmaker = {'1':'+', '-1':'-'}
+
+    rpkm_paths = {}
+    # save all rpkms for getting the average differene between nucleus and
+    # cytoplasm
+    check_rpkms = {'nuclear': [], 'cytoplasmic': []}
+
+    for region in ['nuclear', 'cytoplasmic']:
+
+        outfile = region+'_all_exons_rpkm.bed'
+        outpath = os.path.join(temp_dir, outfile)
+        outhandle = open(outpath, 'wb')
+
+        for coord, rpkms in ex_dict[region].iteritems():
+            (chrm, beg, end, strnd) = coord.split('_')
+
+            mean_rpkm = sum([float(fl) for fl in rpkms])/len(rpkms)
+            check_rpkms[region].append(mean_rpkm)
+
+            outhandle.write('\t'.join([chrm, beg, end, '0', str(mean_rpkm),
+                                       strandmaker[strnd]]) + '\n')
+
+        rpkm_paths[region] = outpath
+
+        outhandle.close()
+
+    # 2.5) As a control, get the average RPKM difference between nucleus and
+    # cytoplasm
+    average_ratio = sum(check_rpkms['cytoplasmic'])/sum(check_rpkms['nuclear'])
+
+    # 3) intersect the two big files with the poly(A) reads you have in the
+    #nucleus (optionally, do this only for exonic poly(A) reads).
+    import glob
+    sliced_reads = os.path.join(settings.here, 'analysis', 'pure', '*')
+
+    rpkms = {'nuclear': {}, 'cytoplasmic': {}}
+
+    for f in glob.glob(sliced_reads):
+        fname = os.path.split(f)[1]
+        (compartment, region, fraction) = fname.split('__')
+
+        for mycompartment in ['nuclear', 'cytoplasmic']:
+
+            #if compartment == 'Nucleus' and region.endswith('exonic') and \
+               #fraction == 'minus_sliced':
+
+            if compartment == 'Nucleus' and fraction == 'minus_sliced':
+
+                cmd = ['intersectBed', '-wa', '-wb', '-a', f, '-b',
+                       rpkm_paths[mycompartment]]
+
+                cmd = ['intersectBed', '-u', '-a', rpkm_paths[mycompartment],
+                       '-b', f]
+
+                p = Popen(cmd, stdout=PIPE)
+
+                for line in p.stdout:
+                    #(chma, bega, enda, pasa, covrga, stranda, chrm, begb, endb,
+                    #d, rpkmb, strandb) = line.split('\t')
+                    (chma, bega, enda, d, rpkma,  stranda) = line.split('\t')
+
+                    if region in rpkms[mycompartment]:
+                        rpkms[mycompartment][region].append(float(rpkma))
+                    else:
+                        rpkms[mycompartment][region] = [float(rpkma)]
+
+    results = {}
+    for region in rpkms['nuclear'].keys():
+        results[region] = sum(rpkms['cytoplasmic'][region])/\
+                sum(rpkms['nuclear'][region])
+
+    debug()
+
+    # would the results be better with gencode 7? who knoes!
+    #Again compare the RPKM values. Do we see a difference?
+    # There is no such difference.
+    #ipdb> pp average_ratio 
+    # results:
+
+        #1.9767955597874043
+        #ipdb> pp results
+        #{'3UTR-exonic': 2.3708455693225732,
+         #'5UTR-exonic': 1.4557833987822002,
+         #'5UTR-intronic': 0.18392529867006108,
+         #'CDS-exonic': 2.1470952631719835,
+         #'CDS-intronic': 1.4636101747123955,
+         #'Intergenic': 3.7702052091564511,
+         #'Nocoding-exonic': 1.7442351505710341,
+         #'Noncoding-intronic': 1.0318510528636997}
+
+
+    debug()
+
+
+def cytonuclear_rpkms(settings):
+    """
+    Observation: there are more poly(A)- reads in exonic regions in the nucleus
+    than in the cytoplasmic regions (this is even more obvious in the intergenic
+    region actually. wonder why.)
+
+    Needs must: 1) Get the exons. They can be found in
+    /users/rg/projects/NGS/Projects/ENCODE/hg19main/gencode7/CSHL_longRNAseq/PolyA/parts/*/exons/K5621LNS.exon.rpkm.pooled.txt.gz
+    etc..
+
+    It seems that the pipeline has not been run for all cell lines.
+    Nevertheless, go through the poly(A)+ libraries and crate 2 big bedfiles
+    from the nuclear and cytoplasmic regions. Do mergeBed and use the mean
+    value. Compare the exon's rpkms so you know the overall rate.
+    # NOTE merge-bed would collapse the exons into each other if they overlap.
+    # You'd better do it yourself: making a hash table for each exon and adding
+    # the rpkms you find
+
+    Then intersect the two big files with the poly(A) reads you have in the
+    nucleus (optionally, do this only for exonic poly(A) reads).
+
+    Again compare the RPKM values. Do we see a difference?
+    """
+
+    temp_dir = os.path.join(settings.here, 'temp_files')
+    polyAplus = '/users/rg/projects/NGS/Projects/ENCODE/hg19main/'\
+            'gencode7/CSHL_longRNAseq/PolyA/parts/'
+    #1 collect file paths for nuclear and cytoplasmic exons
+    regions = ['nuclear', 'cytoplasmic']
+    paths = dict((reg, []) for reg in regions)
+
+    for dirname, dirnames, filenames in os.walk(polyAplus):
+        if dirname.endswith('exons'):
+
+            main_dir = os.path.split(os.path.split(dirname)[0])[1]
+            compartment = main_dir.lstrip('CSHL').rstrip('Plus')[3:]
+
+            if compartment not in ['N', 'WC', 'C']:
+                print('Wrong parsing')
+                debug()
+
+            # we're only looking at nuclear and cytoplasm
+            if compartment == 'WC':
+                continue
+
+            for f in filenames:
+                if f.endswith('exon.rpkm.pooled.txt.gz'):
+
+                    if compartment == 'C':
+                        paths['cytoplasmic'].append(f)
+                    if compartment == 'N':
+                        paths['nuclear'].append(f)
+
+    # XXX you're stopping here because the gencode v.7 run is not finished
+    debug()
+
+
+            #debug()
+
+        #if 'HELAS31LNS.exon.rpkm.pooled.txt.gz' in filenames:
+            #debug()
+        #if myfile in filenames:
+            #readpath = os.path.join(dirname, myfile)
+
+    #1 Get exons
+    #ex_dict = {'nuclear': {}, 'cytoplasmic': {}}
+
+    #for region in ['nuclear', 'cytoplasmic']:
+
+        #outfile = region+'_all_exons_rpkm.bed'
+        #outpath = os.path.join(temp_dir, outfile)
+
+        #handle = open(outpath, 'wb')
+
+def clusterladder_cell_lines(settings):
+    """
+    Same as custerladder but now for each cell line
+    """
+    #1) Make a dictionary: dataset-> nr of total reads
+    dsetreads = get_dsetreads(settings, region='3UTR')
+
+    cell_lines = ['HUVEC', 'GM12878', 'HeLa-S3', 'K562', 'HEPG2']
+    # cell_line color dictionary
+    colors = ['m', 'r', 'b', 'g', 'k']
+    cell_cols = {}
+
+    #speedrun = True
+    speedrun = False
+
+    for indx, cline in enumerate(cell_lines):
+        cell_cols[cline] = colors[indx]
+
+    # set figure and axes
+    (fig, axes) = plt.subplots(1,2)
+
+    for cell_line in cell_lines:
+
+        wc_c = [ds for ds in settings.datasets if ((('Cytoplasm' in ds) or
+                                                    ('Whole_Cell' in ds) or
+                                                    ('Nucleus' in ds)) and
+                                                   (cell_line in ds) and
+                                                   (not 'Minus' in ds))]
+
+        wc_c_minus = [ds for ds in settings.datasets if ((('Cytoplasm' in ds) or
+                                                          ('Whole_Cell' in ds)
+                                                          or ('Nucleus' in ds))
+                                                         and (cell_line in ds)
+                                                         and ('Minus' in ds))]
+
+        #2) Make super-clusters for your datasets of choice
+        c = [ds for ds in settings.datasets if (('Cytoplasm' in ds and cell_line
+                                                 in ds) and not 'Minus' in ds)]
+
+        c_minus = [ds for ds in settings.datasets if (('Cytoplasm' in ds and
+                                                       cell_line in ds) and
+                                                      'Minus' in ds)]
+
+        wc_c = [ds for ds in settings.datasets if (cell_line in ds) and (not
+                'Minus' in ds)]
+
+        wc_c_minus = [ds for ds in settings.datasets if (cell_line in ds) and
+                      ('Minus' in ds)]
+
+        regions = ['3UTR-exonic', 'anti-3UTR-exonic']
+
+        #data_grouping = {'Poly(A) plus': c,
+                        #'Poly(A) minus': c_minus}
+        data_grouping = {'Poly(A) plus': wc_c,
+                         'Poly(A) minus': wc_c_minus}
+
+        # keep a dictionary with reference to all the plots
+        plotdict = {}
+
+        for title, dsets in data_grouping.items():
+
+            # sort the dsets in cell_lines by # of reads
+            def mysorter(dset):
+                return get_dsetreads(settings, region='3UTR')[dset]
+            all_dsets = sorted(dsets, key=mysorter, reverse=True)
+            #all_dsets = sorted(dsets, key=mysorter)
+
+            # add more and more datasets
+            subsets = [all_dsets[:end] for end in range(1, len(all_dsets)+1)]
+
+            # go over 3UTR exonic and anti-3UTR exonic and add up what's there
+            # for each region, go through the subsets of dsets, adding with each
+            # subset the number of PAS and the number of 1+. Save with key of
+            # :-joined subsets.
+            region_storage = []
+            for indx1, region in enumerate(regions):
+
+                # A dictionary with all clusters and +2 or annot clusters
+                subsetcounts = {}
+
+                for subset in subsets:
+
+                    # Get the number of 'good' and 'all' clusters
+                    key = ':'.join(subset)
+                    batch_key = 'cell_line_ladder' # a unique key for super
+                    dsetclusters = get_dsetclusters(subset, region, settings,
+                                                    speedrun, batch_key)
+
+                    subsetcounts[key] = count_clusters(dsetclusters, dsetreads)
+
+                region_storage.append(subsetcounts)
+
+            # sum the two regions for this 'title'
+            dictsum = deepcopy(region_storage[0])
+            for key1, subdict in region_storage[1].items():
+                for key2, val in subdict.items():
+                    dictsum[key1][key2] += val
+
+            plotdict[title] = dictsum
+
+        # go thruogh the sums and plot them
+        for plot_nr, (title, dictsum) in enumerate(plotdict.items()):
+            ax = axes[plot_nr]
+
+            read_counts = []
+            cluster_counts = []
+            PAScluster_counts = []
+
+            # you must loop throug dependnig on length
+            def sorthelp(tup):
+                return len(tup[0])
+            for dsets, countdict in sorted(dictsum.items(), key=sorthelp):
+                # the the sum of reads from these datasets
+                x = [get_dsetreads(settings, '3UTR')[ds] for ds in dsets.split(':')]
+                read_counts.append(sum(x))
+
+                # get all cluster counts
+                cluster_counts.append(countdict['All'])
+                PAScluster_counts.append(countdict['PAS'])
+
+            ax.plot(read_counts, cluster_counts, color=cell_cols[cell_line],
+                          linewidth=2, label=cell_line)[0]
+            ax.plot(read_counts, PAScluster_counts, ls='--',
+                          color=cell_cols[cell_line], linewidth=2)[0]
+
+        # set the axes
+        for ax in axes:
+            ax.set_xlabel('Billons of reads', size=16)
+            ax.set_ylabel('Polyadenylation sites', size=16)
+            ax.set_title('Polyadenylation site discovery saturates fast', size=18)
+
+            # Sort the legends to your preference
+            ax.legend(loc=0)
+
+            # Set a grid on the y-axis
+            ax.yaxis.grid(True)
+            ax.xaxis.grid(True)
+
+            ax.set_title(title, size=13)
+
+    output_dir = os.path.join(settings.here, 'Results_and_figures',
+                              'GENCODE_report', 'Figures')
+
+    fig.set_size_inches(26,12)
+    filename = 'Saturation_plot_cell_lines'
+    filepath = os.path.join(output_dir, filename+'.pdf')
+    fig.savefig(filepath, format='pdf')
+    filepath = os.path.join(output_dir, filename+'.eps')
+    fig.savefig(filepath, format='eps', papertype='A4')
 
 def gencode_report(settings, speedrun):
     """ Make figures for the GENCODE report. The report is an overview of
@@ -6900,9 +7408,6 @@ def gencode_report(settings, speedrun):
         annotated) both with and without normalization to region size
         2) of new poly(A) sites obtained with increasing number of reads
     """
-    # TODO make a small study of the A/T frequency of the poly(A) clusters from
-    # the different datsets
-
     #speedrun = True
     speedrun = False
 
@@ -6913,7 +7418,8 @@ def gencode_report(settings, speedrun):
     #cumul_stats_printer(settings, speedrun)
 
     # 1) nr of polyA sites obtained with increasing readnr
-    clusterladder(settings, speedrun)
+    #clusterladder(settings, speedrun)
+    clusterladder_cell_lines(settings)
     # RESULT: make two plots: one from each of the 'data_groupign' below. One
     # shows best how discovery tapers out, the other shows that poly(A) minus
     # controls have few poly(A) reads. Also list how many of those poly(A) minus
@@ -6930,18 +7436,21 @@ def gencode_report(settings, speedrun):
 
     # 3) plot of correlation between number of poly(A) sites expressed
     # transcript 3UTRs and the RPKM of the 3UTRs.
-    #rpkm_polyA_correlation(settings, speedrun)
+    #rpkm_polyA_correlation(settings, speedrun)# todo: re-reun length files
 
     # 4) Sidewise bar plots of the number of poly(A) incidents in the different
     # genomic regions, for poly(A)+ and poly(A)-. Can also make the plot of the
     # 'sensedness' of the strands, but for this you must change the files in the
     # output directory to come from stranded_sequences.
 
-    #intersectinon = True
-    #side_sense_plot(settings, speedrun, intersection) # DONE!
+    #side_sense_plot(settings, speedrun) # DONE!
 
-    # 5) Overlap of polyadenlyation sites for poly(A) +/-
-    #polyA_plusminus_overlap(settings, speedrun)
+    # 5) Poly(A)+ pure, intersection, poly(A)-
+    #intersection_sideplot(settings)
+
+    # 6) Cytoplasmic vs. nuclear RPKMS in 3UTR exonic exons
+    #cytonuclear_rpkms(settings)
+    #cytonuclear_rpkms_genc3(settings) # negative result
 
     # Within: PAS, Good PAS, Annotated, T/A ratio for these?
     # It's not going to be easiy. Maybe just 3UTR exonic/non-3UTR exonic?
@@ -7013,7 +7522,8 @@ def cufflink_super(settings, speedrun, region):
         subset = [ds for ds in settings.datasets if ('Cytoplasm' in ds) and
                                                            (not 'Minus' in ds)]
 
-    dsets, super_3utr = super_falselength(settings, region, subset,
+    batch_key = 'cuff_super'
+    dsets, super_3utr = super_falselength(settings, region, batch_key, subset,
                                           speedrun)
 
     return super_3utr
@@ -7987,6 +8497,8 @@ def hagen(settings, speedrun):
 
     # 5) Parse the dict at will
     big = 1
+    hagenfile = open(os.path.join(genome_dir, 'All_GM_K562'\
+                                   .format(big, limit)), 'wb')
     #hagenfile1 = open(os.path.join(genome_dir, 'GMbig_Kbig{0}_dist{1}'\
                                    #.format(big, limit)), 'wb')
 
@@ -7995,38 +8507,92 @@ def hagen(settings, speedrun):
 
     hagenfile3 = open(os.path.join(genome_dir, 'GMnone_Kbig{0}_dist{1}'\
                                   .format(big, limit)), 'wb')
+
     for annot_key, polyAsite in annot_dict.iteritems():
-        #if len(polyAsite) == 2:
-            #if polyAsite[0][0] == 'GM12878':
-                #gmlev = polyAsite[0][1]
-                #k5lev = polyAsite[1][1]
-            #else:
-                #k5lev = polyAsite[0][1]
-                #gmlev = polyAsite[1][1]
+        if len(polyAsite) == 2:
+            if polyAsite[0][0] == 'GM12878':
+                gmlev = polyAsite[0][1]
+                k5lev = polyAsite[1][1]
+            else:
+                k5lev = polyAsite[0][1]
+                gmlev = polyAsite[1][1]
 
-            #if gmlev > big and k5lev > big:
-                #(chrm, beg, end, strand) = annot_key.split('_')
-                #hagfrmt1 = '\t'.join([annot_key, str(k5lev), str(gmlev)])
+            if gmlev > big and k5lev > big:
+                (chrm, beg, end, strand) = annot_key.split('_')
+                hagfrmt1 = '\t'.join([annot_key, str(k5lev), str(gmlev)])
 
-                ##hagformt = '_'.join
-                #hagenfile1.write(hagfrmt1 + '\n')
+                #hagformt = '_'.join
+                hagenfile.write(hagfrmt1 + '\n')
 
         if len(polyAsite) == 1:
             if polyAsite[0][0] == 'GM12878' and polyAsite[0][1] > big:
                 (chrm, beg, end, strand) = annot_key.split('_')
                 gmlev = polyAsite[0][1]
                 hagfrmt2 = '\t'.join([annot_key, '0', str(gmlev)])
-                hagenfile2.write(hagfrmt2 + '\n')
+                hagenfile.write(hagfrmt2 + '\n')
 
             if polyAsite[0][0] == 'K562' and polyAsite[0][1] > big:
                 (chrm, beg, end, strand) = annot_key.split('_')
                 k5lev = polyAsite[0][1]
                 hagfrmt3 = '\t'.join([annot_key, str(k5lev), '0'])
-                hagenfile3.write(hagfrmt3 + '\n')
+                hagenfile.write(hagfrmt3 + '\n')
 
     #hagenfile1.close()
     hagenfile2.close()
     hagenfile3.close()
+
+def hagens_rpkms(settings):
+    """
+    Hagen wants poly(A)-site specific RPKMS. It can be done, but it's damn hard.
+    """
+    model = '/users/rg/jskancke/phdproject/3UTR/Annotations/'\
+            'gencode.v3c.annotation.GRCh37.gtf'
+
+    chr1 = True
+    if chr1:
+        model = '/users/rg/jskancke/phdproject/3UTR/Annotations/'\
+                'gencode.v3c.annotation.GRCh37_chr1.gtf'
+
+    an_frmt = 'GENCODE'
+    # get dicts for the cufflinks model
+    import annotation_parser as annparse
+
+    (transcripts, genes) = annparse.make_transcripts(model, an_frmt)
+
+    end_sites = {}
+    all_exons = {}
+
+    #0) Find out which transcripts harbor the annotated poly(A) reads. this
+    #saves time and space
+    #1) write out all transcripts to a bed file
+    #2) write out all distanced-gencode3-intersected poly(A) reads to a bedfile
+    #3) bed-intersect the two, outputting a set of transcripts to look out for
+    # no... well, each 3utr site can have many transcripts associated with it.
+    # you need to find all those that terminate at specific sites.
+
+    #1) You need one dictionary with gencode3 end sites linked to the transcript
+    for ts_id, ts in transcripts:
+        # all exons
+        for ex in ts.exons:
+            key = '_'.join(ts.exons[-1])
+            all_exons[key] = ts_id
+
+        # only the ends
+        if ts.strand == '+':
+            end_key = '_'.join(ts.exons[-1])
+        else:
+            end_key = '_'.join(ts.exons[0])
+
+        end_sites[end_key] = ts_id
+
+    #3) You need a dictionary of the average rpkm for each exon in each cell
+    #line
+
+    # then repeat what you've already done
+
+    # as an alternative to the whole transcript, just get the RPKM of the last
+    # exon. this could be a game changer.
+    pass
 
 def main():
     # The path to the directory the script is located in
@@ -8043,8 +8609,13 @@ def main():
     settings = Settings(os.path.join(here, 'UTR_SETTINGS'), savedir, outputdir,
                         here, chr1)
 
-    # XXX venn-plot ++ here! don't forget !:)
     gencode_report(settings, speedrun=False)
+    # TODO redo the RPKM-# of discovered sites in 3UTRs (need length-data)
+    # TODO redo the venn-diagram 
+    # NOTE you got some bed-errors for both of the above, and the execution took
+    # strangely long. must investigate. I think it is because yuo're using the
+    # same files at the same time. either you must start passing some
+    # function-specific variable, or wait between runs.
 
     # XXX cufflinks report
     #new_cufflinks_report(settings, speedrun=False)
@@ -8057,6 +8628,7 @@ def main():
 
     # Hagen's stuff
     #hagen(settings, speedrun=False)
+    #hagens_rpkms(settings, speedrun=False)
 
     # XXX For the length + polyA (not only) output files:
     # NOTE the difference is that with this one you have more information about
@@ -8066,16 +8638,6 @@ def main():
     # for the onlypolyA files
     # you now have an additional level: the "region" (often the 3UTR)
     #pickfile = 'super_pickle'
-
-    #if not os.path.isfile(pickfile):
-        #pickle.dump((dsets, super_3utr), open(pickfile, 'wb'), protocol=2)
-    #else:
-        #(dsets, super_3utr) = pickle.load(open(pickfile))
-
-    #region = '3UTR'
-    #subset = []
-    #dsets, super_3utr = super_falselength(settings, region, subset,
-                                          #speedrun=True)
 
     # TODO to make this faster and consume less memory, don't save whole
     # clusters. save only the information you need. add as necessary. when
