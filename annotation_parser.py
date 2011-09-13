@@ -1704,9 +1704,9 @@ def exon_intron_junctions(transcripts, chr1, output_dir):
 
 def main():
 
-    for chr1 in [True, False]:
+    #for chr1 in [True, False]:
     ##for chr1 in [True]:
-    #for chr1 in [False]:
+    for chr1 in [False]:
 
         t1 = time.time()
 
@@ -1727,6 +1727,38 @@ def main():
 
         (transcripts, genes) = make_transcripts(annotation, an_frmt)
         print('finished getting transcripts')
+
+        allE = 0
+        cdsE = 0
+        cdsI = 0
+        allI = 0
+        total = 0
+        maxim = 0
+        dist = []
+        for ts_id, ts in transcripts.iteritems():
+            if ts.t_type == 'protein_coding':
+                total += 1
+                allE += len(ts.exons)
+                cdsE += len(ts.cds.exons)
+                allI += len(ts.get_exon_introns())
+                cdsI += len(ts.get_cds_introns())
+                dist.append(len(ts.get_exon_introns()))
+
+                maxim = max(maxim, len(ts.get_cds_introns()))
+
+        print('All and cds exons average')
+        print allE/total
+        print cdsE/total
+        print('All and cds introns average')
+        print allI/total
+        print cdsI/total
+        print('Max introns')
+        print maxim
+        print('All intron dist')
+        import numpy as np
+        print(format(np.mean(dist), '.2f'))
+        print(format(np.std(dist), '.2f'))
+        debug()
 
         # normal annoatation splitting
         #output_dir = '/home/jorgsk/work/pipeline_files/genomic_regions'
