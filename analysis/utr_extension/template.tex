@@ -1,0 +1,38 @@
+\documentclass[11pt]{report}
+
+\usepackage{booktabs}
+\usepackage[table]{xcolor}
+
+\begin{document}
+\begin{table}
+    \centering
+	\rowcolors{1}{pink}{lime}
+    \begin{tabular}{lcccccc}
+    \hline
+    {% for col in head %}
+        \textbf{ {{col}} } 
+        {% if not forloop.last %}
+           &
+        {% endif %}
+    {% endfor %} 
+    \\
+    \hline
+    {% for row in  table %}
+		{% if forloop.counter|divisibleby:"3" %}
+			\hline
+		{% endif %}
+        {% for cell in row %}
+            {{cell}}
+            {% if not forloop.last %} 
+               &
+            {% endif %}
+        {% endfor %}
+        \\
+    {% endfor %}
+    \hline
+    \end{tabular}
+    \caption{Extended 3'UTRs}
+    \label{tab:extension}
+\end{table}
+
+\end{document}  

@@ -1702,8 +1702,10 @@ def exon_intron_junctions(transcripts, chr1, output_dir):
         #if name is not 'three_utr_exonic':
             #os.remove(path)
 
-def main():
-
+def ann_split():
+    """
+    Split the annotation into disparate regions
+    """
     #for chr1 in [True, False]:
     ##for chr1 in [True]:
     for chr1 in [False]:
@@ -1738,16 +1740,111 @@ def main():
 
         #split_annotation(transcripts, chr1, output_dir, hg19_file)
 
-        #gene_limit = 1
-        # XXX problem: how to collect and merge with 50 transcripts per gene and you
-        # need the order?
-        #output_dir = os.path.join(output_dir, 'non_stranded')
-        #only_introns_exons(transcripts, chr1, gene_limit, output_dir)
-
-        # Write exon-intron junctions and merge them
-        exon_intron_junctions(transcripts, chr1, output_dir)
-
         print time.time() - t1
+
+def extended_3utr(annotation):
+    """
+    For the 3'most 3UTR end of a gene, create a genomic region 1000 nt extended.
+
+    Extend them 1000. Don't subtract! Check how many land within the 5UTR
+    (exonic, intronic) of the next one, and also check how many land in the 3UTR
+    exonic intronic, of the opposing one. Finally, how many land in CDS intronic
+    ones? For this, use 
+    """
+
+    an_frmt = 'GENCODE'
+    (transcripts, genes) = make_transcripts(annotation, an_frmt)
+
+    for extendby in [500, 1000, 5000]:
+
+        # 1) Write the 1000 nt extended versions
+        # TODO you are here, making a 1000 nt extension.
+        # don't overreach! Just try to classify some of those in the intergenic
+        # region as extended 3UTRs. So extend your transcripts, but keep only those
+        # parts that fall in intergenic regions, and that are contiguous with the
+        # beginning of your region. Then intersect that with the poly(A) reads that
+        # land in the intergenic regions, and check how many fall in the correct
+        # strand. Claim these as extended. If you have time, verify with reads. Just
+        # run the regions through u-tail and see if you have coverage.
+
+        temp_dir = '/users/rg/jskancke/phdproject/3UTR/annotation_split/extended3UTR'
+        temp_file = 'extended_3UTRs_{0}'.format(extendby)
+        tempPath = os.path.join(temp_dir, temp_file)
+        tempHandle = open(tempPath, 'wb')
+
+        for tsID, tsObj in transcripts.iteritems():
+
+            if (tsObj.t_type == 'protein_coding' or
+                tsObj.t_type == 'processed_transcript'):
+
+                chrm = tsObj.chrm
+                strand = tsObj.strand
+
+                # get the strand/end of the first ts
+                if strand == '+':
+                    end = tsObj.exons[-1][2]
+                else:
+                    end = tsObj.exons[0][1]
+
+                if strand == '+':
+                    beg = end
+                    end = beg+extendby
+                else:
+                    beg = end-extendby
+
+                tempHandle.write('\t'.join([chrm, str(beg), str(end), tsID, '0',
+                                            strand]) + '\n')
+        tempHandle.close()
+
+        # 2) Keep the region that overlaps the intergenic region
+        # BUG: seems like you keep a lot more.
+        annSplitDir = '/users/rg/jskancke/phdproject/3UTR/annotation_split/stranded'
+        intergenic = os.path.join(annSplitDir, 'Intergenic_stranded.bed')
+
+        cmd = ['intersectBed', '-s', '-wa', '-wb', '-a', tempPath, '-b', intergenic]
+
+        p = Popen(cmd, stdout=PIPE)
+
+        trimd_file = 'trimmed_extended_3UTRs_{0}'.format(extendby)
+        trimdPath = os.path.join(temp_dir, trimd_file)
+        trimdHandle = open(trimdPath, 'wb')
+
+        for line in p.stdout:
+            (achrm, abeg, aend, ts_id, aval, astrnd,
+             bchrm, bbeg, bend, bname, bval, bstrnd) = line.split('\t')
+
+            if astrnd == '-':
+                beg = max(int(abeg), int(aend))
+                if aend == bend and (int(bend) - beg > 20):
+                    trimdHandle.write('\t'.join([achrm, str(beg), bend, ts_id,
+                                                 aval, astrnd]) + '\n')
+            if astrnd == '+':
+                end = min(int(aend), int(bend))
+                if abeg == bbeg and (end - int(bbeg) > 20):
+                    trimdHandle.write('\t'.join([achrm, bbeg, str(end), ts_id,
+                                                 aval, astrnd]) + '\n')
+        trimdHandle.close()
+
+    # 3) Intersect this region with the poly(A) sites that fall in the
+    # intergenic region for all datasets TODO! also an idea: change the
+    # saturation plots: using the super_3utr merger is way too slow. you should
+    # GOOD NEWS! you got lots more results witht the new whole cells. The bad
+    # news is that you don't have equal amount of each datasets any more.
+    # write directly to file instead of making objects -- it's overkill.
+
+def main():
+    #for chr1 in [True, False]:
+    for chr1 in [False]:
+    #for chr1 in [True]:
+
+        annotation = '/users/rg/jskancke/phdproject/3UTR/'\
+                'gencode7/gencode7_annotation.gtf'
+
+        if chr1:
+            annotation = '/users/rg/jskancke/phdproject/3UTR/'\
+                    'gencode7/gencode7_annotation_chr1.gtf'
+
+        extended_3utr(annotation)
 
 
 if __name__ == '__main__':
