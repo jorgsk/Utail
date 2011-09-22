@@ -18,6 +18,8 @@ from matplotlib import lines
 #plt.ion() # turn on the interactive mode so you can play with plots
 plt.ioff() # turn off interactive mode for working undisturbed
 
+import csv2latex
+
 from operator import attrgetter
 from operator import itemgetter
 import math
@@ -540,16 +542,15 @@ class Plotter(object):
         filepath = os.path.join(output_dir, filename+'.eps')
         fig.savefig(filepath, format='eps', papertype='A4')
 
-    def intersect_lying_bar(self, data_dict, regions, title, here):
-        """ Plot the poly(A) sites from the different regions
+    def unified_lying_bar(self, data_dict, regions, title, blobs, blob_order,
+                          here, compartments, filename):
         """
-
-        compartments = ['Whole_Cell', 'Cytoplasm', 'Nucleus']
-        fractions = ['plus_sliced', 'intersection', 'minus_sliced']
-
-        titls = {'plus_sliced': 'P(A)+ unique',
-                 'intersection': 'P(A)+/P(A)- intersection',
-                 'minus_sliced':'P(A)- unique'}
+        Side-lying barplot for 2 of your bar plots. You recently joined them to
+        make the code easier to maintain.
+        """
+        blob_order
+        def blobsort(btuple):
+            return blob_order.index(btuple[1])
 
         # The nr and names of bars in the plot
         plot_keys = ['PAS', 'T', 'all']
@@ -561,13 +562,13 @@ class Plotter(object):
         sidelabels = {'Whole_Cell': 'Whole cell', 'Cytoplasm': 'Cytoplasm',
                       'Nucleus': 'Nucleus'}
 
+        colnr = len(blobs)
         for thr in ['2+', '3+']:
-            (fig, axes) = plt.subplots(3,3, sharex=True)
-            #plt.ion()
-            #plt.ioff()
+            (fig, axes) = plt.subplots(3, colnr, sharex=True)
 
             for comp_nr, comp in enumerate(compartments):
-                for frac_nr, frac in enumerate(fractions):
+                for blob_nr, (blob, blob_name)\
+                        in enumerate(sorted(blobs.items(), key = blobsort)):
 
                     plotme = {'all': [], 'PAS': [], 'T': []}
 
@@ -575,7 +576,7 @@ class Plotter(object):
                     for region in regions:
 
                         for k in plot_keys:
-                            plotme[k].append(data_dict[thr][comp][region][frac][k])
+                            plotme[k].append(data_dict[thr][comp][region][blob][k])
 
                     # you want to place the left foot of all at 1,2,3, etc
                     # you want to place the left foot of T at 1.25
@@ -599,7 +600,7 @@ class Plotter(object):
                                        range(knr)])
                             pos[k] = np.arange(start+adjust, dpoints+start)
 
-                    ax = axes[comp_nr, frac_nr]
+                    ax = axes[comp_nr, blob_nr]
                     rects = dict() # save the rect information
 
                     # make the actual plots
@@ -621,7 +622,7 @@ class Plotter(object):
 
                             if pkey == 'all':
                                 txt = width
-                                fsize=10
+                                fsize=11
                             else:
                                 divby = plotme['all'][r_nr]
                                 try:
@@ -629,8 +630,8 @@ class Plotter(object):
                                 except ZeroDivisionError:
                                     txt = '0'
 
-                                fsize=8.5
-                                yloc = yloc - 0.03
+                                fsize=9
+                                yloc = yloc - 0.04
 
                             # ylocation, centered at bar
 
@@ -648,20 +649,20 @@ class Plotter(object):
                     center = sum(heights.values())/2.0
                     yticks = np.arange(start+center, dpoints+start)
 
-                    if frac_nr == 0:
-                        ax.set_ylabel(sidelabels[comp], size=20)
+                    if blob_nr == 0:
+                        ax.set_ylabel(sidelabels[comp], size=22)
                         ax.set_yticks(yticks) # set the 3utr-exonic etc
-                        ax.set_yticklabels(regions) # set the 3utr-exonic etc
+                        ax.set_yticklabels(regions, size=18) # 
                     else:
                         ax.set_yticklabels([])
 
                     ax.set_ylim(start-0.5, dpoints+1) # extend the view
 
                     if comp_nr == 0:
-                        ax.set_title(titls[frac], size=21)
+                        ax.set_title(blobs[blob], size=22)
 
                     # put the legend only in the top-left corner plot
-                    if frac_nr == 1 and comp_nr == 0:
+                    if blob_nr == 1 and comp_nr == 0:
                         ax.legend(loc='upper right')
 
             # Set xlim (it's shared)
@@ -679,175 +680,22 @@ class Plotter(object):
             fig.subplots_adjust(wspace=0.1)
             fig.subplots_adjust(hspace=0.2)
             #fig.suptitle(title+ 'for {0}'.format(titles[key1]), size=20)
-            fig.set_size_inches(14,19)
 
-            output_dir = os.path.join(here, 'Results_and_figures', 'GENCODE_report',
-                                      'Figures')
+            # different size depending on number of blobs
+            if colnr == 2:
+                fig.set_size_inches(16,19)
+            if colnr == 3:
+                fig.set_size_inches(18,19)
 
-            filename = 'Intersected_nr_of_polyA_{0}'.format(thr)
-            filepath = os.path.join(output_dir, filename+'.pdf')
+            output_dir = os.path.join(here, 'Results_and_figures',
+                                      'GENCODE_report', 'Figures')
+
+            fname = filename+'_{0}'.format(thr)
+            filepath = os.path.join(output_dir, fname+'.pdf')
             fig.savefig(filepath, format='pdf')
-            filepath = os.path.join(output_dir, filename+'.eps')
+            filepath = os.path.join(output_dir, fname+'.eps')
             fig.savefig(filepath, format='eps', papertype='A4')
 
-    def lying_bar_regions(self, data_dict, regions, title, ID, here):
-        """ Plot the poly(A) sites from the different regions
-        """
-
-        compartments = ['Whole_Cell', 'Cytoplasm', 'Nucleus']
-        fractions = ['+', '-']
-
-        # The nr and names of bars in the plot
-        #plot_keys = ['all', 'T', 'PAS']
-        plot_keys = ['PAS', 'T', 'all']
-        colors = {'all': 'm', 'T': 'g', 'PAS': 'b'}
-
-        labels = {'all': 'All', 'T': 'Mapped with poly(T)',
-                  'PAS': 'With downstream PAS'}
-
-        titles = {'2+': 'two or more reads or annotated',
-                  '1': 'maximum one read'}
-
-        sidelabels = {'Whole_Cell': 'Whole cell', 'Cytoplasm': 'Cytoplasm',
-                      'Nucleus': 'Nucleus'}
-
-        # Make plots both for 2+/annot reads or for 1/reads
-        # more honest: 2/1 and show % of annot ...
-        for key1 in ['3+', '2+', '1']:
-
-            (fig, axes) = plt.subplots(3,2, sharex=True)
-            #plt.ion()
-            #plt.ioff()
-
-            for comp_nr, comp in enumerate(compartments):
-                for frac_nr, frac in enumerate(fractions):
-
-                    plotme = {'all': [], 'PAS': [], 'T': []}
-
-                    # get the height of the bars from the input
-                    for region in regions:
-                        thiskey = ':'.join([comp, frac, region])
-                        for k in plot_keys:
-                            plotme[k].append(data_dict[thiskey][key1][k])
-
-                    # you want to place the left foot of all at 1,2,3, etc
-                    # you want to place the left foot of T at 1.25
-                    # you want to place the left foot of PAS at 1.375
-                    heights = {'all': 0.25, 'T': 0.125, 'PAS': 0.125}
-
-                    # number of data-points
-                    dpoints = len(plotme.values()[0])
-
-                    # where you want the plotting to start
-                    start = 1
-
-                    # automated calculation of bar positions given the
-                    # height/width. this one's a keeper!
-                    pos = dict()
-                    for knr, k in enumerate(plot_keys):
-                        if knr == 0:
-                            pos[k] = np.arange(start, dpoints+start)
-                        else:
-                            adjust = sum([heights[plot_keys[x]] for x in
-                                       range(knr)])
-                            pos[k] = np.arange(start+adjust, dpoints+start)
-
-                    ax = axes[comp_nr, frac_nr]
-                    rects = dict() # save the rect information
-
-                    # make the actual plots
-                    for pkey in plot_keys:
-                        rects[pkey] = ax.barh(bottom=pos[pkey],
-                                              width=plotme[pkey],
-                                              height=heights[pkey],
-                                              color=colors[pkey],
-                                              label=labels[pkey])
-
-                    # print either the number or percentage
-                    for pkey, rs in rects.items():
-                        for r_nr, rect in enumerate(rs):
-                            width = int(rect.get_width())
-                            if key1 =='2+':
-                                xloc = width + 100
-                            else:
-                                xloc = width + 500
-                            yloc = rect.get_y()+rect.get_height()/2.0
-                            clr = 'black'
-                            align = 'left'
-                            if pkey == 'all':
-                                txt = width
-                                fsize=10
-                            else:
-                                divby = plotme['all'][r_nr]
-                                txt = format(width/divby, '.2f')
-                                fsize=8.5
-                                yloc = yloc - 0.03
-
-                            # ylocation, centered at bar
-
-                            ax.text(xloc, yloc, txt,
-                                     horizontalalignment=align,
-                                     verticalalignment='center', color=clr,
-                                     weight='bold', fontsize=fsize)
-
-                    # print the total number for 'all', and the percentage of
-                    # 'all' for the other two
-                    # specify xticks if needeed
-
-                    # put some titles here and there
-                    # get the y-ticks. they should centered
-                    center = sum(heights.values())/2.0
-                    yticks = np.arange(start+center, dpoints+start)
-
-                    if frac_nr == 0:
-                        ax.set_ylabel(sidelabels[comp], size=20)
-                        ax.set_yticks(yticks) # set the 3utr-exonic etc
-                        ax.set_yticklabels(regions) # set the 3utr-exonic etc
-
-                    ax.set_ylim(start-0.5, dpoints+1) # extend the view
-
-                    if frac_nr == 1:
-                        ax.set_yticklabels([])
-
-                    if comp_nr == 0:
-                        ax.set_title('P(A){0}'.format(frac), size=21)
-
-                    # put the legend only in the top-left corner plot
-                    if frac_nr == 1 and comp_nr == 0:
-                        ax.legend(loc='upper right')
-
-            # Set xlim (it's shared)
-            if ID == 'sense':
-                ax.set_xticks(np.arange(0,1.1,0.1))
-                ax.set_xlim((0,1.0))
-            else:
-                xlm = ax.get_xlim()
-                if key1 == '2+':
-                    stepsize = 5000
-                elif key1 == '3+':
-                    stepsize = 4000
-                else:
-                    stepsize = 10000
-                ax.set_xlim((0, xlm[1]+stepsize))
-                xticks = range(0, xlm[1]+stepsize, stepsize)
-                ax.set_xticks(xticks)
-                f = lambda x: '' if x%(stepsize*2) else x
-                ticklabels = [f(tick) for tick in xticks]
-                ax.set_xticklabels(ticklabels)
-
-            fig.subplots_adjust(wspace=0.1)
-            #fig.suptitle(title+ 'for {0}'.format(titles[key1]), size=20)
-            fig.set_size_inches(14,19)
-
-            output_dir = os.path.join(here, 'Results_and_figures', 'GENCODE_report',
-                                      'Figures')
-
-            filename = 'nr_of_polyA_different_compartments_non_stranded_ABRIDGED'
-            filename += '_{0}'.format(key1)
-            filepath = os.path.join(output_dir, filename+'.pdf')
-            fig.savefig(filepath, format='pdf')
-            filepath = os.path.join(output_dir, filename+'.eps')
-            fig.savefig(filepath, format='eps', papertype='A4')
 
     def non_PAS_difference(self, ratio_dict, regions, title, here):
         compartments = ['Whole_Cell', 'Cytoplasm', 'Nucleus']
@@ -973,8 +821,8 @@ class Plotter(object):
             fig.subplots_adjust(wspace=0.1)
             fig.set_size_inches(14.4,19)
 
-            output_dir = os.path.join(here, 'Results_and_figures', 'GENCODE_report',
-                                      'Figures')
+            output_dir = os.path.join(here, 'Results_and_figures',
+                                      'GENCODE_report', 'Figures')
 
             filename = 'non-PAS ratios'
             filename += '_{0}'.format(key1)
@@ -1007,7 +855,7 @@ class Plotter(object):
             for dsets, countdict in sorted(dictsum.items(), key=sorthelp):
                 countdict = countdict[yek]
                 # the the sum of rpeads from these datasets
-                x = [get_dsetreads(settings, '3UTR-exonic')[ds] 
+                x = [get_dsetreads(settings, '3UTR-exonic')[ds]
                      for ds in dsets.split(':')]
                 read_counts.append(sum(x))
 
@@ -1016,22 +864,26 @@ class Plotter(object):
                 PAScluster_counts.append(countdict['PAS'])
 
             ax.plot(read_counts, cluster_counts, color=cols[title],
-                          linewidth=2, label='All sites')[0]
+                          linewidth=4, label='All sites')[0]
             ax.plot(read_counts, PAScluster_counts, ls='--', color=cols[title],
-                          linewidth=2, label='Sites with PAS')[0]
+                          linewidth=4, label='Sites with PAS')[0]
 
-            ax.set_xlabel('Billons of reads', size=18)
-            ax.set_ylabel('Polyadenylation sites', size=18)
-            ax.set_title('Polyadenylation site discovery saturates fast', size=20)
+            ax.set_xlabel('Billons of reads', size=24)
+            ax.set_ylabel('Polyadenylation sites', size=24)
+            #ax.set_title('Polyadenylation site discovery saturates fast', size=22)
+            ax.set_title(title, size=28)
 
             # Sort the legends to your preference
-            ax.legend(loc=0)
+            from matplotlib.font_manager import FontProperties
+            ax.legend(loc=0, prop=FontProperties(size=18))
 
             # Set a grid on the y-axis
             ax.yaxis.grid(True)
             ax.xaxis.grid(True)
 
-            ax.set_title(title, size=15)
+            # change the size of the ticks
+            for label in ax.get_xticklabels() + ax.get_yticklabels():
+                label.set_fontsize(16)
 
         output_dir = os.path.join(settings.here, 'Results_and_figures',
                                   'GENCODE_report', 'Figures')
@@ -1671,6 +1523,22 @@ def get_dsetreads(settings, region):
 
     return dsetreads
 
+def get_clustercount(settings, region):
+    """ For each dataset, get the number of total reads. The region doesn't
+    matter, because the number of reads are dataset-specific.
+    """
+
+    dsetclusters = {}
+    polyA_files = settings.polyAstats_files(region)
+    for dset, dsetpath in polyA_files.items():
+
+        filedict = dict((line.split('\t')[0], line.split('\t')[1])
+                        for line in open(dsetpath, 'rb'))
+
+        dsetclusters[dset] = int(filedict['Nr of clusters'].rstrip())
+
+    return dsetclusters
+
 def avrg_tail(new_tail, sum_tail):
     """ Add new tail to sum tail. Return sum tail.
     """
@@ -1758,7 +1626,7 @@ def get_dsetclusters(subset, region, settings, speedrun, batch_key):
     # and tail_lens.
 
     categories1 = ['Total clusters', 'morethan1', 'morethan1OA', 'only1',
-                   'morethan2']
+                   'morethan2', 'morethan3', 'morethan4']
     subcategories = ['All', 'annotated', 'wPAS', 'annotated_wPAS', 'goodPAS',
                      'bestPAS']
 
@@ -1788,13 +1656,11 @@ def get_dsetclusters(subset, region, settings, speedrun, batch_key):
             bigcl['Total clusters'] = data_scooper(cls, keyw, bigcl['Total clusters'])
 
             # Count clusters with 2 or more reads
-            if cls.nr_support_reads > 1:
+            for minlim in [1,2,3,4]:
+                if cls.nr_support_reads > minlim:
+                    key = 'morethan{0}'.format(minlim)
 
-                bigcl['morethan1'] = data_scooper(cls, keyw, bigcl['morethan1'])
-
-            if cls.nr_support_reads > 1:
-
-                bigcl['morethan2'] = data_scooper(cls, keyw, bigcl['morethan2'])
+                    bigcl[key] = data_scooper(cls, keyw, bigcl[key])
 
             # Count clusters with 2 or more reads or annotated
             if cls.nr_support_reads > 1 or\
@@ -1814,7 +1680,8 @@ def super_cluster_statprinter(dsetclusters, region, thiskey, settings, filename)
 
     statdict = dsetclusters[thiskey]
 
-    keys = ['Total clusters', 'morethan1OA', 'morethan1', 'only1']
+    keys = ['Total clusters', 'morethan1OA', 'morethan1', 'only1', 'morethan2',
+            'morethan3', 'morethan4']
 
     subkeys =  ['All', 'wPAS', 'goodPAS', 'bestPAS', 'annotated',
                 'annotated_wPAS']
@@ -1823,6 +1690,9 @@ def super_cluster_statprinter(dsetclusters, region, thiskey, settings, filename)
 
     headers = {'Total clusters': '### All clustes ###',
                'morethan1': '### Clusters with 2 or more coverage ###',
+               'morethan2': '### Clusters with 3 or more coverage ###',
+               'morethan3': '### Clusters with 4 or more coverage ###',
+               'morethan4': '### Clusters with 5 or more coverage ###',
                'only1': '### Clusters with only 1 coverage ###',
                'morethan1OA': '### Clusters with 2 or more or annotated ###'}
 
@@ -1938,13 +1808,16 @@ def clusterladder(settings, speedrun):
     The more reads, the more polyAs, up to a point.
     """
 
-    #1) Make a dictionary: dataset-> nr of total reads
+    #1) Make a dictionary: dataset-> nr of total reads and dataset -> nr of
+    #clusters
     dsetreads = get_dsetreads(settings, region='3UTR-exonic')
+    clustercount = get_clustercount(settings, region='3UTR-exonic')
 
     #2) Make super-clusters for your datasets of choice
 
     wc_c = [ds for ds in settings.datasets if (('Cytoplasm' in ds) or
-                   ('Whole_Cell' in ds) or ('Nucleus' in ds)) and (not 'Minus' in ds)]
+                   ('Whole_Cell' in ds) or ('Nucleus' in ds)) and
+            (not 'Minus' in ds)]
 
     wc_c_minus = [ds for ds in settings.datasets if (('Cytoplasm' in ds) or
                    ('Whole_Cell' in ds) or ('Nucleus' in ds)) and 'Minus' in ds]
@@ -1960,19 +1833,20 @@ def clusterladder(settings, speedrun):
     #speedrun = True
     speedrun = False
     if speedrun:
-        data_grouping['Poly(A) plus'] = data_grouping['Poly(A) plus'][:2]
-        data_grouping['Poly(A) minus'] = data_grouping['Poly(A) minus'][:2]
+        data_grouping['Poly(A) plus'] = data_grouping['Poly(A) plus'][:8]
+        data_grouping['Poly(A) minus'] = data_grouping['Poly(A) minus'][:8]
 
     region = 'whole'
     for title, dsets in data_grouping.items():
 
         # sort the dsets in cell_lines by # of reads
         def mysorter(dset):
-            return get_dsetreads(settings, region='3UTR-exonic')[dset]
+            return clustercount[dset]
         all_dsets = sorted(dsets, key=mysorter, reverse=True)
 
         # add more and more datasets
-        subsets = [all_dsets[:end] for end in range(1, len(all_dsets)+1)]
+        subsets = [all_dsets[:end] for end in range(1, len(all_dsets)+1, 2)]
+        #subsets = [all_dsets[:end] for end in range(1, len(all_dsets)+1)]
 
         subsetcounts = {}
 
@@ -2022,8 +1896,8 @@ def venn_polysites(settings, speedrun):
                                                (not 'Minus' in ds))]
     #all_ds = [ds for ds in settings.datasets if (('Cytoplasm' in ds) and
                                                #(not 'Minus' in ds))]
-    #speedrun = True
-    speedrun = False
+    speedrun = True
+    #speedrun = False
 
     outdir = os.path.join(settings.here,
                           'Results_and_figures/GENCODE_report/venn_diagram')
@@ -2031,7 +1905,8 @@ def venn_polysites(settings, speedrun):
     # will hold the paths of all the files that result from merging sites with
     # one another. begin by adding the two sources of poly(A) sites
     paths = {'gencode':\
-             os.path.join(settings.here, 'annotated_polyAsites/gencode_polyA.bed'),
+             os.path.join(settings.here,
+                          'annotated_polyAsites/gencode_polyA_proper.bed'),
              'polyAdb':\
              os.path.join(settings.here, 'annotated_polyAsites/polyA_db_proper.bed')}
 
@@ -2109,6 +1984,7 @@ def make_venn(paths, wcdict, outdir, region, settings, yek):
     for pdf in glob.glob(outdir+'/*.pdf'):
         dirname, filename = os.path.split(pdf)
         shutil.copy(pdf, os.path.join(fig_dir, filename))
+        # run imagemagic to make eps?
 
 
 def intersect_polyAs(paths, outdir, region):
@@ -2354,8 +2230,8 @@ def get_dsetnames(settings, compartments, ignorers, demanders):
 
 def cumul_stats_printer_all(settings, speedrun):
 
-    #speedrun = True
-    speedrun = False
+    speedrun = True
+    #speedrun = False
 
     region = 'whole'
     for fraction in ['Plus', 'Minus']:
@@ -2428,9 +2304,9 @@ def cumul_stats_printer(settings, speedrun):
                     demanders = []
 
                 if ignorers == []:
-                    filename = '+'.join(compartments+demanders+region)
+                    filename = '+'.join(compartments+demanders+[region])
                 else:
-                    filename = '+'.join(compartments+demanders+region)\
+                    filename = '+'.join(compartments+demanders+[region])\
                             +'-'+'-'.join(ignorers)
 
                 subset = get_dsetnames(settings, compartments, ignorers, demanders)
@@ -2700,112 +2576,33 @@ def rpkm_polyA_correlation(settings, speedrun):
         plt.scatter(rpkms, cls_nr)
         # Now going through every single cytoplasm and whole cell alone
 
-def barsense_counter(super_3utr, region):
+def barsense_counter(super_3utr, comp, frac, region, d_keys):
     """
-    Count for making bar plots and strand plots!
-
-    UPDATE the count needs to be like this:
-        [plus1][all, PAS, with T]
-        [only1][all, PAS, with T]
+    Must return [comp][reg][+/-][all, pas, t]
     """
-    subdict = {'all': 0, 'PAS': 0, 'T': 0, 'goodPAS': 0}
-    bardict = {'3+': deepcopy(subdict),
-               '2+': deepcopy(subdict),
-               '1': deepcopy(subdict)}
 
-    stranddict = {'3+': deepcopy(subdict),
-                  '2+': deepcopy(subdict),
-                  '1': deepcopy(subdict)}
+    count_dict = dict((key, {'all': 0, 'PAS': 0, 'T': 0}) for key in d_keys)
 
     for utr_id, utr in super_3utr[region].iteritems():
 
         for cls in utr.super_clusters:
 
-            # 1- sites
-            if cls.nr_support_reads == 1:
-                key = '1'
+            for key in d_keys:
+                minlim = int(key[0])
 
-                bardict[key]['all'] += 1
-                if cls.strand == utr.strand:
-                    stranddict[key]['all'] += 1
+                if cls.nr_support_reads > minlim:
 
-                # any PAS
-                if cls.nearby_PAS[0] != 'NA':
-                    bardict[key]['PAS'] += 1
-                    if cls.strand == utr.strand:
-                        stranddict[key]['PAS'] += 1
+                    count_dict[key]['all'] += 1
 
-                # for one of the two canonical PAS
-                if 'AATAAA' in cls.nearby_PAS or 'ATTAAA' in cls.nearby_PAS:
-                    bardict[key]['goodPAS'] += 1
-                    if cls.strand == utr.strand:
-                        stranddict[key]['goodPAS'] += 1
+                    # any PAS
+                    if cls.nearby_PAS[0] != 'NA':
+                        count_dict[key]['PAS'] += 1
 
-                # Get if this was an A or a T cluster
-                if cls.tail_type == 'T':
-                    bardict[key]['T'] += 1
-                    if cls.strand == utr.strand:
-                        stranddict[key]['T'] += 1
+                    # Get if this was an A or a T cluster
+                    if cls.tail_type == 'T':
+                        count_dict[key]['T'] += 1
 
-            # trusted sites
-            if cls.nr_support_reads > 1:
-                key = '2+'
-
-                bardict[key]['all'] += 1
-                if cls.strand == utr.strand:
-                    stranddict[key]['all'] += 1
-
-                # any PAS
-                if cls.nearby_PAS[0] != 'NA':
-                    bardict[key]['PAS'] += 1
-                    if cls.strand == utr.strand:
-                        stranddict[key]['PAS'] += 1
-
-                # for one of the two canonical PAS
-                if 'AATAAA' in cls.nearby_PAS or 'ATTAAA' in cls.nearby_PAS:
-                    bardict[key]['goodPAS'] += 1
-                    if cls.strand == utr.strand:
-                        stranddict[key]['goodPAS'] += 1
-
-                # Get if this was an A or a T cluster
-                if cls.tail_type == 'T':
-                    bardict[key]['T'] += 1
-                    if cls.strand == utr.strand:
-                        stranddict[key]['T'] += 1
-
-            # more trusted sites
-            if cls.nr_support_reads > 2:
-                key = '3+'
-
-                bardict[key]['all'] += 1
-                if cls.strand == utr.strand:
-                    stranddict[key]['all'] += 1
-
-                # any PAS
-                if cls.nearby_PAS[0] != 'NA':
-                    bardict[key]['PAS'] += 1
-                    if cls.strand == utr.strand:
-                        stranddict[key]['PAS'] += 1
-
-                # for one of the two canonical PAS
-                if 'AATAAA' in cls.nearby_PAS or 'ATTAAA' in cls.nearby_PAS:
-                    bardict[key]['goodPAS'] += 1
-                    if cls.strand == utr.strand:
-                        stranddict[key]['goodPAS'] += 1
-
-                # Get if this was an A or a T cluster
-                if cls.tail_type == 'T':
-                    bardict[key]['T'] += 1
-                    if cls.strand == utr.strand:
-                        stranddict[key]['T'] += 1
-
-    normstranddict = {}
-    # normalize the numbers in stranddict with those in bardict
-    # XXX SKIPPING FOR NOW, not sure you want to use this again
-    #for key, val in bardict.items():
-        #normstranddict[key] = stranddict[key]/val
-
-    return bardict, normstranddict
+    return count_dict
 
 def side_sense_plot(settings, speedrun):
     """
@@ -2834,9 +2631,8 @@ def side_sense_plot(settings, speedrun):
                #'Nocoding-exonic', 'Noncoding-intronic', 'Intergenic']
     regions = ['3UTR-exonic', 'CDS-exonic', 'CDS-intronic', 'Intergenic']
 
-    # Get one dict for the bar plot and one dict for the sense-plot
-    bar_dict = {}
-    sense_dict = {}
+    data_dict_keys = ['2+', '3+']
+    data_dict = dict((key, AutoVivification()) for key in data_dict_keys)
 
     for comp in compartments:
         for frac in fractions:
@@ -2848,6 +2644,9 @@ def side_sense_plot(settings, speedrun):
                 subset = [ds for ds in settings.datasets if (comp in ds) and
                           ('Minus' in ds)]
 
+            if speedrun:
+                subset = subset[:1]
+
             for region in regions:
 
                 batch_key = 'side_sense'
@@ -2855,25 +2654,24 @@ def side_sense_plot(settings, speedrun):
                                                       batch_key, subset,
                                                       speedrun=speedrun)
 
-                key = ':'.join([comp, frac, region])
-
                 # count the number clusters with +1, of those with PAS/good_PAS
-                bar_dict[key], sense_dict[key] = barsense_counter(super_3utr,
-                                                                  region)
-
-    #pickfile = 'TEMP_PICKLE'
-
-    #if not os.path.isfile(pickfile):
-        #pickle.dump(bar_dict, open(pickfile, 'wb'))
-    #else:
-        #bar_dict = pickle.load(open(pickfile, 'rb'))
+                counted = barsense_counter(super_3utr, comp, frac, region,
+                                           data_dict_keys)
+                # add for +2 and +3
+                for key in data_dict_keys:
+                    data_dict[key][comp][region][frac] = counted[key]
 
     p = Plotter()
 
+    # Stuff for the plot
     title = 'Polyadenlyation in different regions for different'\
             ' cellular compartments'
-    ID = 'side'
-    p.lying_bar_regions(bar_dict, regions, title, ID, settings.here)
+    blobs = {'+': 'Poly(A)+', '-': 'Poly(A)-'}
+    blob_order = ['Poly(A)+', 'Poly(A)-']
+    filename = 'Sidebars_pA'
+
+    p.unified_lying_bar(data_dict, regions, title, blobs, blob_order,
+                        settings.here, compartments, filename)
 
 
 def ratio_counter(dsetclusters):
@@ -3141,10 +2939,10 @@ def all_sideplot(settings):
     co = ['Whole_Cell', 'Cytoplasm', 'Nucleus']
     #co = ['Whole_Cell', 'Whole_Cell', 'Whole_Cell']
 
-    #regions = ['5UTR-exonic', '5UTR-intronic', '3UTR-exonic', '3UTR-intronic',
-               #'CDS-exonic', 'CDS-intronic', 'Nocoding-exonic',
-               #'Noncoding-intronic', 'Intergenic']
-    regions = ['3UTR-exonic', 'CDS-exonic', 'CDS-intronic', 'Intergenic']
+    regions = ['5UTR-exonic', '5UTR-intronic', '3UTR-exonic', '3UTR-intronic',
+               'CDS-exonic', 'CDS-intronic', 'Nocoding-exonic',
+               'Noncoding-intronic', 'Intergenic']
+    #regions = ['3UTR-exonic', 'CDS-exonic', 'CDS-intronic', 'Intergenic']
     #regions = ['3UTR-exonic', 'anti-3UTR-exonic']
 
     # Get one dict for the bar plot and one dict for the sense-plot
@@ -3153,7 +2951,7 @@ def all_sideplot(settings):
     dsetdict = dict((reg, settings.only_files(reg)) for reg in regions)
 
     temp_dir = os.path.join(settings.here, 'temp_files')
-    min_covr = 1
+    min_covr = 2
 
     # Merge the plus and minus subsets for each region
     reg_dict = {}
@@ -3194,12 +2992,11 @@ def all_sideplot(settings):
 
     p.all_lying_bar(data_dict, regions, title, settings.here)
 
-def intersection_sideplot(settings):
+def intersection_sideplot(settings, speedrun):
     """
     Intersect poly(A)+ and poly(A)- for the different regions and
     """
     compartments = ['Whole_Cell', 'Cytoplasm', 'Nucleus']
-    #compartments = ['Whole_Cell']
 
     #regions = ['5UTR-exonic', '5UTR-intronic', '3UTR-exonic', '3UTR-intronic',
                #'CDS-exonic', 'CDS-intronic', 'Nocoding-exonic',
@@ -3218,6 +3015,9 @@ def intersection_sideplot(settings):
     min_covr = 1
     extendby = 15
 
+    #speedrun = True
+    speedrun = False
+
     comp_dict = {}
     for comp in compartments:
 
@@ -3229,6 +3029,9 @@ def intersection_sideplot(settings):
                            (not 'Minus' in ds) and comp in ds]
             minus_subset = [path for ds, path in dsetdict[reg].items() if 
                             ('Minus' in ds) and comp in ds]
+            if speedrun:
+                plus_subset = plus_subset[:1]
+                minus_subset = minus_subset[:1]
 
             path_dict = {'plus': plus_subset, 'minus': minus_subset}
             merged = {}
@@ -3255,7 +3058,14 @@ def intersection_sideplot(settings):
     title = 'Polyadenlyation in different regions for different'\
             ' cellular compartments'
 
-    p.intersect_lying_bar(data_dict, regions, title, settings.here)
+    blobs = {'plus_sliced': 'Poly(A)+ unique',
+             'intersection': 'Common to poly(A)+/-',
+             'minus_sliced': 'Poly(A)- unique'}
+
+    filename = 'intersected_sidebars_pA'
+    blob_order = ['Poly(A)+ unique', 'Common to poly(A)+/-', 'Poly(A)- unique']
+    p.unified_lying_bar(data_dict, regions, title, blobs, blob_order,
+                        settings.here, compartments, filename)
 
 
 def save_pure(comp_dict, save_dir):
@@ -3419,8 +3229,6 @@ def get_genc3_paths(carrie, my_cell_lines, regions):
 
     return paths
 
-
-
 def cytonuclear_rpkms_genc3(settings):
     """
     See other function
@@ -3524,8 +3332,6 @@ def cytonuclear_rpkms_genc3(settings):
         results[region] = sum(rpkms['cytoplasmic'][region])/\
                 sum(rpkms['nuclear'][region])
 
-    debug()
-
     # would the results be better with gencode 7? who knoes!
     #Again compare the RPKM values. Do we see a difference?
     # There is no such difference.
@@ -3543,8 +3349,6 @@ def cytonuclear_rpkms_genc3(settings):
          #'Nocoding-exonic': 1.7442351505710341,
          #'Noncoding-intronic': 1.0318510528636997}
 
-
-    debug()
 
 
 def cytonuclear_rpkms(settings):
@@ -3627,8 +3431,9 @@ def clusterladder_cell_lines(settings):
     """
     #1) Make a dictionary: dataset-> nr of total reads
     dsetreads = get_dsetreads(settings, region='3UTR-exonic')
+    clustercount = get_clustercount(settings, region='3UTR-exonic')
 
-    cell_lines = ['HUVEC', 'GM12878', 'HeLa-S3', 'K562', 'HEPG2']
+    cell_lines = ['GM12878', 'HeLa-S3', 'K562']
     # cell_line color dictionary
     colors = ['m', 'r', 'b', 'g', 'k']
     cell_cols = {}
@@ -3668,7 +3473,7 @@ def clusterladder_cell_lines(settings):
 
             # sort the dsets in cell_lines by # of reads
             def mysorter(dset):
-                return get_dsetreads(settings, region='3UTR-exonic')[dset]
+                return clustercount[dset]
             all_dsets = sorted(dsets, key=mysorter, reverse=True)
             #all_dsets = sorted(dsets, key=mysorter)
 
@@ -3768,8 +3573,8 @@ def strand_prediction(settings):
     cell_lines = ['Whole_Cell', 'Cytoplasm', 'Nucleus']
     co = cell_lines
 
-    #speedrun = True
-    speedrun = False
+    speedrun = True
+    #speedrun = False
 
     # 1) get all polyA + datasets
     plus_subset = [ds for ds in settings.datasets if (not 'Minus' in ds) and
@@ -3790,10 +3595,12 @@ def strand_prediction(settings):
     outpath = os.path.join(outdir, outfile)
     outhandle = open(outpath, 'wb')
 
+    minlim = 2
+
     for utr_id, utr in super_3utr[region].iteritems():
         for cls in utr.super_clusters:
 
-            if cls.nr_support_reads > 1: # ?
+            if cls.nr_support_reads > minlim: # ?
 
                 chrm = utr.chrm
                 beg = str(cls.polyA_coordinate-15)
@@ -3810,6 +3617,13 @@ def strand_prediction(settings):
     anns = ['polyAdb_gencode_merged_pure.bed', 'gencode_polyA.bed',
             'polyA_db_proper.bed']
 
+    ann2title = {'polyAdb_gencode_merged_pure.bed': 'Both annotations',
+                 'gencode_polyA.bed': 'GENCODE V.7',
+                 'polyA_db_proper.bed': 'PolyAdb_2'}
+
+    for_latex = {}
+    title = []
+    data = []
     for ann in anns:
         annotation = os.path.join(ann_dir, ann)
 
@@ -3835,11 +3649,30 @@ def strand_prediction(settings):
             if strand1 == strand2:
                 same += 1
 
+        title.append(ann2title[ann])
+        data.append(format(same/total, '.2f'))
         print(ann)
         print('Strand specificity of annotated strands: {0:.2f}'\
               .format(same/total))
         print('\n')
 
+    # because there is only one line
+    data = [data]
+
+    for_latex['caption'] = 'Capturing the strand of annotated poly(A) sites'
+    for_latex['label'] = 'polyA_strand_capture'
+    for_latex['header'] = title
+    for_latex['data'] = data
+    for_latex['template_path'] = '/users/rg/jskancke/phdproject/templates/'\
+                                    'simple_table.tex'
+
+    output_dir = os.path.join(settings.here, 'Results_and_figures',
+                              'GENCODE_report', 'tables')
+
+    for_latex['savedir'] = output_dir
+
+    # create the latex table
+    csv2latex.make_latex_table(for_latex)
 
 def intergenic_finder(settings):
     """
@@ -3971,18 +3804,17 @@ def intergenic_finder(settings):
 
     outhandle.close()
 
+def pet_intersection(settings):
+    """
+    Compare poly(A) sites with Tags.
+    Method: for each region in each compartment, show how many poly(A) sites are
+    supported by TAGs
+    """
+
 
 def gencode_report(settings, speedrun):
     """ Make figures for the GENCODE report. The report is an overview of
     evidence for polyadenylation from the Gingeras RNA-seq experiments.
-
-    NOTE: you should estimate a some kind of maximum value. get the total number
-    of expressed genes and use the average number of poly(A) sites per gene.
-
-    Two main figures:
-        1) Total number of new poly(A) sites in 3UTRs and outside (+2 reads or
-        annotated) both with and without normalization to region size
-        2) of new poly(A) sites obtained with increasing number of reads
     """
     #speedrun = True
     speedrun = False
@@ -3997,7 +3829,18 @@ def gencode_report(settings, speedrun):
     #clusterladder_cell_lines(settings)
 
     # 2) venn diagram of all the poly(A) sites from the whole genome for 3UTR and
-    #venn_polysites(settings, speedrun)
+    venn_polysites(settings, speedrun)
+    # Then: look into the PET data
+    # Then: correct the slides with the numbers. Maybe make a table.
+    # Then: improve the post-3' slide as per your notes
+    # Then: cufflinks
+    # ...
+    # IDEA: For each compartment and for all:
+        # region:
+            #found in gencode (PAS %) (PET%)
+            #novel found with PET (PAS% PET%)
+            #novel with cufflinks (PAS% PET%)
+            # the easiest thing would be if 
 
     # 3) plot of correlation between number of poly(A) sites expressed
     # transcript 3UTRs and the RPKM of the 3UTRs.
@@ -4009,7 +3852,7 @@ def gencode_report(settings, speedrun):
     #side_sense_plot(settings, speedrun) # DONE!
 
     # 5) Poly(A)+ pure, intersection, poly(A)-
-    #intersection_sideplot(settings)
+    #intersection_sideplot(settings, speedrun)
 
     # 6) All side plot!
     #all_sideplot(settings) # just this one left, then copy to 'sum'. then
@@ -4031,6 +3874,9 @@ def gencode_report(settings, speedrun):
     # annotated transcript ends (and, preferably, back this up with read
     # coverage) Got results without coverage.
     #intergenic_finder(settings)
+
+    # 9) How does the PET data fit into all this? Use both good and not-good PET
+    #pet_intersection(settings)
 
     # From working at home: it's most convincing if you give a bar plot that
     # contains 5X2 bars, each one a comparison of the A/T ratio in each region.
@@ -4147,14 +3993,14 @@ def merge_polyAs(settings, toosmall, minus, cell_lines, speedrun, expandby):
                        ((co[0] in ds) or (co[1] in ds) or (co[2] in ds))]
 
     if speedrun:
-        plus_subset = subset[:2]
+        subset = subset[:2]
 
     # 1.1) write each poly(A) site to file with +/- 15 and strand
     batch_key = 'cuffer'
     region = 'whole'
 
     dsets, super_3utr = super_falselength(settings, region, batch_key,
-                                          plus_subset, speedrun)
+                                          subset, speedrun)
 
     outdir = os.path.join(settings.here, 'genome_wide_dir')
     outfile = 'all_pAs.bed'
@@ -4169,9 +4015,12 @@ def merge_polyAs(settings, toosmall, minus, cell_lines, speedrun, expandby):
                 chrm = utr.chrm
                 beg = str(cls.polyA_coordinate-expandby)
                 end = str(cls.polyA_coordinate+expandby)
+                pas = '#'.join(cls.nearby_PAS)
+                covr = str(cls.nr_support_reads)
                 strand = cls.strand
 
-                outhandle.write('\t'.join([chrm, beg, end, strand])+'\n')
+                outhandle.write('\t'.join([chrm, beg, end, pas, covr,
+                                           strand])+'\n')
 
     outhandle.close()
 
@@ -4317,39 +4166,25 @@ def write_gencode_ends(settings, transcripts):
 
     return gencends, total_gencode
 
-def gencode_cufflinks_report(settings, subset):
+def gencode_cufflinks_report(settings):
     """
     Same as for cufflinks, but for gencode
     """
 
     # 1) and 2) merge all polyA files (not poly(A) minus)
-    minus = True
-    #minus = False
+    #minus = True
+    minus = False
 
     expandby = 0
 
-    toosmall = 1
-    minus = False
-    cell_lines = ['Whole_Cell', 'Cytoplasm', 'Nucleus']
+    mincovr = 2
+    compartments = ['Whole_Cell', 'Cytoplasm', 'Nucleus']
 
-    speedrun = True
+    #speedrun = True
+    speedrun = False
 
-    polyA_path = merge_polyAs(settings, toosmall, minus, cell_lines,
+    polyA_path = merge_polyAs(settings, mincovr, minus, compartments,
                                      speedrun, expandby)
-
-    juncfree_pA_path = polyA_path + '_juncfree'
-
-    # remove areas around exon junctions, because it causes biases
-    junctions = os.path.join(settings.here, 'junctions',
-                             'splice_junctions_.bed')
-
-    # i.5) cut away the exon-exon noise
-    cmd = ['subtractBed', '-a', polyA_path, '-b', junctions]
-    p = Popen(cmd, stdout=open(juncfree_pA_path, 'wb'))
-    p.wait()
-
-    merged_polyA_path = juncfree_pA_path
-
     #chr1 = True
     chr1 = False
 
@@ -4370,7 +4205,7 @@ def gencode_cufflinks_report(settings, subset):
     gencode_nrs = dict((key, len(v)) for key, v in total_gencode.items())
 
     # 3) intersect the bed_model with the merged polyA sites
-    cmd = ['intersectBed', '-wo', '-a', gencends, '-b', merged_polyA_path]
+    cmd = ['intersectBed', '-wa', '-wb', '-a', gencends, '-b', polyA_path]
     p = Popen(cmd, stdout=PIPE)
 
     goodpas = set(['AATAAA', 'ATTAAA'])
@@ -4384,11 +4219,11 @@ def gencode_cufflinks_report(settings, subset):
     # for it
     subdict = {'PAS': set([]), 'Good PAS': set([]), 'No PAS': set([]), 'Cov':[]}
 
-    event_counter = {'all': deepcopy(subdict) }
+    event_counter = {'all': deepcopy(subdict)}
 
     for line in p.stdout:
-        (hrm, beg, end, ts_type, ts_id, strand, d,d,d, pas, cov, d,d) = line.split()
-
+        (chrm, beg, end, ts_type, ts_id, strand, d,d,d,
+                                         pas, cov, d) = line.split()
 
         pases = pas.split('#')
 
@@ -4404,6 +4239,7 @@ def gencode_cufflinks_report(settings, subset):
         # check for PAS presence
         has_PAS = False
         has_good_PAS = False
+
         for pa in pases:
             if pa in allpas:
                 has_PAS = True
@@ -4433,11 +4269,11 @@ def gencode_cufflinks_report(settings, subset):
                 event_sum[key][subkey] = len(ts_set)
 
     # use gencode_nrs and event_sum to print out neat statistics about this now
-    output_dir = os.path.join(settings.here, 'Results_and_figures', 'GENCODE_report',
-                                  'csv_files')
+    output_dir = os.path.join(settings.here, 'Results_and_figures',
+                              'GENCODE_report', 'csv_files')
 
     output_path = 'gencode_transcript_types_{0}_{1}_Minus{2}\
-                          '.format(min_covr, subset, str(minus))
+                          '.format(mincovr, 'all+celllines', str(minus))
 
     gencsum_handle = open(os.path.join(output_dir, output_path), 'wb')
 
@@ -4465,12 +4301,12 @@ def gencode_cufflinks_report(settings, subset):
 
         mean_cov =event_sum[key]['Cov']
 
-        gencsum_handle.write('{0}\t{1}\t{2:.2f}\t{3:.2f}\t{4:.2f}\t{5}\n'.format(key,
-                                                           nr_found,
-                                                           pcnt_of_an,
-                                                           pcnt_PAS,
-                                                           pcnt_Good_PAS,
-                                                            mean_cov))
+        outkey = ' '.join(key.split('_')).capitalize()
+        outcov = format(mean_cov, '.0f')
+
+        gencsum_handle.write('{0}\t{1}\t{2:.2f}\t{3:.2f}\t{4:.2f}\t{5}\n'\
+                             .format(outkey, nr_found, pcnt_of_an, pcnt_PAS,
+                                     pcnt_Good_PAS, outcov))
     gencsum_handle.close()
 
 
@@ -5416,6 +5252,7 @@ def main():
     settings = Settings(os.path.join(here, 'UTR_SETTINGS'), savedir, outputdir,
                         here, chr1)
 
+    #debug()
     gencode_report(settings, speedrun=False)
 
     # XXX cufflinks report
@@ -5424,8 +5261,8 @@ def main():
     # XXX same as cufflnksm but for gencode
     #cell_lines = ['All_Cell_Lines', 'GM12878', 'HEPG2', 'HUVEC', 'HeLa-S3',
                   #'K562']
-    #for subset in cell_lines:
-        #gencode_cufflinks_report(settings, subset)
+    # NOTE must fix for individual cell lines
+    #gencode_cufflinks_report(settings)
 
     # Hagen's stuff
     #hagen(settings, speedrun=False) # negative results for your pA
