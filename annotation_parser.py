@@ -1832,10 +1832,39 @@ def extended_3utr(annotation):
     # news is that you don't have equal amount of each datasets any more.
     # write directly to file instead of making objects -- it's overkill.
 
+def histfunc(dataOne, dataTwo, ax):
+    import numpy as np
+
+    hN = ax.hist(dataTwo, orientation='horizontal', normed=0,
+                 rwidth=0.8, label='ONE', bins = 1000)
+    hS = ax.hist(dataOne, bins=hN[1], orientation='horizontal', normed=0,
+                 rwidth=0.8, label='TWO')
+
+    for p in hS[2]:
+        p.set_width( - p.get_width())
+
+    xmin = min([ min(w.get_width() for w in hS[2]),
+                    min([w.get_width() for w in hN[2]]) ])
+    xmin = np.floor(xmin)
+    xmax = max([ max(w.get_width() for w in hS[2]),
+                    max([w.get_width() for w in hN[2]]) ])
+    xmax = np.ceil(xmax)
+
+    mYrange = xmax - xmin
+    delta = 0.0 * mYrange
+    ax.set_xlim([xmin - delta, xmax + delta])
+    #xt = ax.get_xticks()
+    #n = xt[0]
+    #s = ['%.1f'%abs(i) for i in n]
+    #ax.set_xticks(n, s)
+    ax.legend(loc='best')
+    ax.axvline(0.0)
+
 def main():
     #for chr1 in [True, False]:
-    for chr1 in [False]:
-    #for chr1 in [True]:
+    #for chr1 in [False]:
+    #from matplotlib import pyplot as plt
+    for chr1 in [True]:
 
         annotation = '/users/rg/jskancke/phdproject/3UTR/'\
                 'gencode7/gencode7_annotation.gtf'
@@ -1844,11 +1873,25 @@ def main():
             annotation = '/users/rg/jskancke/phdproject/3UTR/'\
                     'gencode7/gencode7_annotation_chr1.gtf'
 
-        extended_3utr(annotation)
+        an_frmt = 'GENCODE'
+        #(transcripts, genes) = make_transcripts(annotation, an_frmt)
+
+        #sizes1 = []
+        #sizes2 = []
+        #for ts_id, ts in transcripts.iteritems():
+            #length = ts.end-ts.beg
+            #if length < 50000:
+                #if ts.t_type in ['protein_coding', 'processed_transcript']:
+                    #sizes1.append(length)
+                #else:
+                    #sizes2.append(length)
+
+        #fig, ax = plt.subplots()
+        #histfunc(sizes1, sizes2, ax)
+        #plt.ion()
+
+        #debug()
 
 
 if __name__ == '__main__':
-    #anno= '/users/rg/jskancke/phdproject/3UTR/'\
-            #'gencode5/gencode5_annotation_chr1.gtf'
-    #get_3utr_bed(anno, 'hell')
     main()

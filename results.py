@@ -543,7 +543,7 @@ class Plotter(object):
         fig.savefig(filepath, format='eps', papertype='A4')
 
     def unified_lying_bar(self, data_dict, regions, title, blobs, blob_order,
-                          here, compartments, filename):
+                          here, compartments, filename, compDsetNr):
         """
         Side-lying barplot for 2 of your bar plots. You recently joined them to
         make the code easier to maintain.
@@ -650,7 +650,9 @@ class Plotter(object):
                     yticks = np.arange(start+center, dpoints+start)
 
                     if blob_nr == 0:
-                        ax.set_ylabel(sidelabels[comp], size=22)
+                        slabel = sidelabels[comp]+ ' ({0} datasets)'\
+                                .format(compDsetNr[blob][comp])
+                        ax.set_ylabel(slabel, size=22)
                         ax.set_yticks(yticks) # set the 3utr-exonic etc
                         ax.set_yticklabels(regions, size=18) # 
                     else:
@@ -973,12 +975,7 @@ def super_falselength(settings, region, batch_key, subset=[], speedrun=False):
 
         # You send stuff to get super 3utr. the dsets themselves and the merged
         # clusters of the dsets
-        #super_3utr[region] = get_super_3utr(dsets[region],
-                                            #*merge_clusters(dsets[region]))
 
-        # TODO implement the same thing with bed-tools and obeserve the same
-        # results but much faster and with mich simpler code. more memory
-        # efficient too. RESULT you save more memory than speed.
         super_3utr[region] = get_super_regions(dsets[region], settings,
                                                batch_key)
 
@@ -1117,188 +1114,6 @@ def get_super_regions(dsets, settings, batch_key):
         #debug()
 
     return super_features
-
-def get_utrs(settings, region, dset_subset=[], speedrun=False):
-    """
-    Return a list of UTR instances. Each UTR instance is
-    instansiated with a list of UTR objects and the name of the datset.
-
-    1) Read through the length file, create UTR objects for each line
-    2) If present, read through the polyA file, updating the UTR object created
-    in step 1
-
-        dsets[cell_line][comp1][utr1])
-
-    Finally merge the dsets in dsets into a super_3utr structure.
-
-    If dset_subset is != [], restrict the analysis to those dsets in the subset
-
-    """
-    # parse the datasets to get the cell lines and compartments in this dataset
-    cell_lines = list(set([ds.split('_')[0] for ds in settings.datasets]))
-
-    # Initialize the dsets
-    dsets = dict((cln, {}) for cln in cell_lines)
-
-    # Do everything for the length files
-    # XXX you must update these things to take the region (UTR etc) into
-    # account, since it's now part of the filename
-    length_files = settings.length_files(region)
-    cluster_files = settings.polyA_files(region)
-
-    # Check if all length files exist or that you have access
-    # if you specify a certain subset, don't check those that are not in the
-    # subset, since they will not be processed anyway
-    for dset, fpath in length_files.items():
-        if dset_subset != []:
-            if dset not in dset_subset:
-                continue
-        else:
-            verify_access(fpath)
-
-    # limit the nr of reads from each dset if you want to be fast
-    if speedrun:
-        maxlines = 300
-
-    linenr = 0
-
-    for dset_name in settings.datasets:
-
-        # Filter against dsets not in subset
-        if dset_subset != []:
-            if dset_name not in dset_subset:
-                continue
-
-        lengthfile = open(length_files[dset_name], 'rb')
-        clusterfile = open(cluster_files[dset_name], 'rb')
-
-        # Skip headers
-        lengthfile.next()
-        clusterfile.next()
-
-        # Create the utr objects from the length file
-        utr_dict = {}
-
-        for (linenr, line) in enumerate(lengthfile):
-            # If a speedrun, limit the nr of 3UTRs to read.
-            if speedrun:
-                if linenr > maxlines:
-                    break
-            # key = utr_ID, value = UTR instance
-            utr_dict[line.split()[5]] = UTR(line)
-
-        # Add cluster objects to the utr objects (line[3] is UTR_ID
-        for line in clusterfile:
-            if line.split()[3] in utr_dict:
-                utr_dict[line.split()[3]].clusters.append(Cluster(line))
-
-        # Update the UTRs
-        for (utr_id, utr_obj) in utr_dict.iteritems():
-
-            # Update with poly(A) cluster info
-            utr_dict[utr_id].cluster_nr = len(utr_obj.clusters)
-
-        # Add the utr_dict for this cellLine-compartment 
-        this_cl = dset_name.split('_')[0]
-        this_comp = '_'.join(dset_name.split('_')[1:])
-
-        dsets[this_cl][this_comp] = utr_dict
-
-    ## Merge all clusters in datset in the dictionary super_cluster. Also
-    ## return the dset_2super dict, which acts as a translator dict from the
-    ## key of each individual cluster to its corresponding key in super_cluster
-    # send them to get_super_2utr to make super_3utrs
-
-
-    super_3utr = get_super_3utr(dsets, *merge_clusters(dsets))
-
-    return dsets, super_3utr
-
-def get_super_3utr(dsets, super_cluster, dset_2super):
-    """
-    Let each 3UTR know about all the cell lines and compartments where its
-    poly(A) clusters are found.
-
-    Update all the 3UTR clusters in dsetswith their super-cluster key
-    At the same time create a 3UTR dict. Each 3UTR has information about the
-    compartments and cell lines where it resides.
-
-    3utr[cell_line][compartment].clusters
-    3utr.super_cluster_coords = super_key: (chr1, 223432, '-')
-    3utr.super_in[cell_line][compartment] = True/False?
-    """
-    super_3utr = {}
-
-    # 1) super cluster key: 'chr1-10518929', for example
-    # 2) the other datasets where this cluster appears (hela nucl etc)
-
-    for cell_line, comp_dict in dsets.items():
-        for comp, utr_dict in comp_dict.items():
-            for utr_id, utr in utr_dict.iteritems():
-
-                # a [super_coord][cell_line][comp] = covr dict
-                utr.super_cover = {}
-
-                # Create the super_key and store the super_cluster information
-                for cl in utr.clusters:
-
-                    # superkey for dset_2super
-                    superkey = cell_line+' '+comp + utr.chrm + cl.strand +\
-                            str(cl.polyA_coordinate)
-
-                    supr_covr = AutoVivification()
-
-                    # Add a in[cell_line][compartment] = covr
-                    for dset_name, cov in zip(*super_cluster[dset_2super[superkey]]):
-                        (cl_line, compart) = dset_name.split(' ')
-                        supr_covr[cl_line][compart] = cov
-
-                    utr.super_cover[dset_2super[superkey]] = supr_covr
-
-                # Add this 3UTR to the super-3utr dict
-                if utr_id not in super_3utr:
-                    super_3utr[utr_id] = utr
-                    super_3utr[utr_id].rpkms = [utr.RPKM]
-
-                # if it's there, add any super-cluster: [cl][comp][covr] that aren't
-                # there already
-                else:
-                    for (s_key, covr_dict) in utr.super_cover.items():
-                        if s_key not in super_3utr[utr_id].super_cover:
-                            super_3utr[utr_id].super_cover[s_key] = covr_dict
-
-                    ## Add the RPKMs for later
-                    super_3utr[utr_id].rpkms.append(utr.RPKM)
-
-    # go through all the super_clusters and add them to super_clusters
-    for (utrid, utr) in super_3utr.items():
-        utr.super_clusters = []
-        for superkey, cl_dict in utr.super_cover.items():
-            this_cls = 0
-            for cl, comp_dict in cl_dict.items():
-                for comp, clstr in comp_dict.items():
-                    # add the first with no adding
-                    if this_cls == 0:
-                        this_cls = clstr
-                        this_cls.from_dsets = ['_'.join([cl, comp])]
-                        this_cls.tail_types = [clstr.tail_type]
-                        this_cls.tail_infos = [clstr.tail_info]
-                        this_cls.strands = [clstr.strand]
-                    else:
-                        this_cls.from_dsets.append('_'.join([cl, comp]))
-                        this_cls.nr_support_reads += clstr.nr_support_reads
-                        this_cls.tail_types.append(clstr.tail_type)
-                        this_cls.tail_infos.append(clstr.tail_info)
-                        this_cls.strands.append(clstr.strand)
-
-            if '+' in superkey:
-                this_cls.polyA_coordinate = superkey.split('+')[-1]
-            else:
-                this_cls.polyA_coordinate = superkey.split('-')[-1]
-
-            utr.super_clusters.append(this_cls)
-
-    return super_3utr
 
 def verify_access(f):
     """
@@ -1916,8 +1731,6 @@ def venn_polysites(settings, speedrun):
     if speedrun:
         subset = subset[:2]
 
-    #subset = subset[:2] # XX
-
     batch_key = 'venn'
     dsets, super_3utr = super_falselength(settings, region, batch_key,
                                           subset, speedrun)
@@ -1929,9 +1742,7 @@ def venn_polysites(settings, speedrun):
         # get all paths to merged polyA files and their linenumbers
         (paths, merged_stats) = intersect_polyAs(paths, outdir, region)
 
-        # make a venn-diagram of the intersection of poly(A) sites between each of
-        # the below regions and the polyAdb and the GENCODE poly(A) annotation.
-
+        # make r-code for making the venn diagrams
         make_venn(paths, merged_stats, outdir, region, settings, yek)
 
 
@@ -1944,7 +1755,7 @@ def make_venn(paths, wcdict, outdir, region, settings, yek):
     outfile = open(outpath, 'wb')
 
     not_weighted = os.path.join(outdir, 'venn_notWeighted_{0}.pdf'.format(yek))
-    weighted = os.path.join(outdir, 'venn__weighted_{0}.pdf'.format(yek))
+    weighted = os.path.join(outdir, 'venn_weighted_{0}.pdf'.format(yek))
 
     # write the commands to an R script
     line00 = 'library(Vennerable, lib.loc='\
@@ -2114,7 +1925,7 @@ def intersect_wrap(paths, outdir, extendby=20):
                 (filea, fileb) = (ext_path,
                                   paths[combo[2]+'_extended_{0}'.format(extendby)])
 
-            cmd2 = ['intersectBed', '-wa', '-wb', '-a', filea, '-b', fileb]
+            cmd2 = ['intersectBed', '-s', '-wa', '-wb', '-a', filea, '-b', fileb]
             p2 = Popen(cmd2, stdout=PIPE)
 
             out_handle = open(isect_path, 'wb')
@@ -2156,6 +1967,7 @@ def whole_tobed(super_3utr, outdir, region, yek):
         minLim = 2
 
     annotated = 0
+
     for utr_name, utr in super_3utr[region].iteritems():
 
         for cls in utr.super_clusters:
@@ -2230,8 +2042,8 @@ def get_dsetnames(settings, compartments, ignorers, demanders):
 
 def cumul_stats_printer_all(settings, speedrun):
 
-    speedrun = True
-    #speedrun = False
+    #speedrun = True
+    speedrun = False
 
     region = 'whole'
     for fraction in ['Plus', 'Minus']:
@@ -2634,6 +2446,11 @@ def side_sense_plot(settings, speedrun):
     data_dict_keys = ['2+', '3+']
     data_dict = dict((key, AutoVivification()) for key in data_dict_keys)
 
+    compDsetNr = {'+': {}, '-':{}}
+
+    #speedrun = True
+    speedrun = False
+
     for comp in compartments:
         for frac in fractions:
 
@@ -2643,6 +2460,8 @@ def side_sense_plot(settings, speedrun):
             if frac == '-':
                 subset = [ds for ds in settings.datasets if (comp in ds) and
                           ('Minus' in ds)]
+
+            compDsetNr[frac][comp] = len(subset)
 
             if speedrun:
                 subset = subset[:1]
@@ -2671,7 +2490,7 @@ def side_sense_plot(settings, speedrun):
     filename = 'Sidebars_pA'
 
     p.unified_lying_bar(data_dict, regions, title, blobs, blob_order,
-                        settings.here, compartments, filename)
+                        settings.here, compartments, filename, compDsetNr)
 
 
 def ratio_counter(dsetclusters):
@@ -2980,6 +2799,7 @@ def all_sideplot(settings):
 
         reg_dict[reg] = merged
 
+
     ## save the bedfiles for the different regions
     #save_dir = os.path.join(settings.here, 'analysis', 'all_sideplot')
     #save_pure(comp_dict, save_dir)
@@ -3018,6 +2838,10 @@ def intersection_sideplot(settings, speedrun):
     #speedrun = True
     speedrun = False
 
+    compDsetNr = {'plus_sliced': {},
+                  'minus_sliced': {},
+                  'intersection': {}}
+
     comp_dict = {}
     for comp in compartments:
 
@@ -3045,6 +2869,10 @@ def intersection_sideplot(settings, speedrun):
 
             reg_dict[reg] = separated
 
+        compDsetNr['plus_sliced'][comp] = len(plus_subset)
+        compDsetNr['intersection'][comp] = len(plus_subset)
+        compDsetNr['minus_sliced'][comp] = len(minus_subset)
+
         comp_dict[comp] = reg_dict
 
     # save the bedfiles for the different regions
@@ -3065,7 +2893,7 @@ def intersection_sideplot(settings, speedrun):
     filename = 'intersected_sidebars_pA'
     blob_order = ['Poly(A)+ unique', 'Common to poly(A)+/-', 'Poly(A)- unique']
     p.unified_lying_bar(data_dict, regions, title, blobs, blob_order,
-                        settings.here, compartments, filename)
+                        settings.here, compartments, filename, compDsetNr)
 
 
 def save_pure(comp_dict, save_dir):
@@ -3697,7 +3525,6 @@ def intergenic_finder(settings):
         if comp == 'All':
             subset = [ds for ds in settings.datasets if ('Minus' not in ds)]
 
-
         if speedrun:
             subset = subset[:2]
 
@@ -3801,15 +3628,136 @@ def intergenic_finder(settings):
                                        ' ('+format(same/total, '.2f')+')',
                                        format(same_PAS/same, '.2f'),
                                        format(same_T/same, '.2f')]) + '\n')
-
     outhandle.close()
 
-def pet_intersection(settings):
+def write_all_pA(settings):
+
+    co = ['Whole_Cell', 'Cytoplasm', 'Nucleus']
+
+    subset = [ds for ds in settings.datasets if (not 'Minus' in ds) and
+                       ((co[0] in ds) or (co[1] in ds) or (co[2] in ds))]
+    speedrun = True
+    #speedrun = False
+    if speedrun:
+        subset = subset[:2]
+
+    # 1.1) write each poly(A) site to file with +/- 15 and strand
+    batch_key = 'PET'
+    region = 'whole'
+
+    speedrun = False
+    dsets, super_3utr = super_falselength(settings, region, batch_key,
+                                          subset, speedrun)
+
+    temp_dir = os.path.join(settings.here, 'temp_files')
+    superbed_path = os.path.join(temp_dir, 'all_pA.bed')
+
+    handle = open(superbed_path, 'wb')
+
+    counter = {'-':0, '+':0}
+    for utr_name, utr in super_3utr[region].iteritems():
+
+        for cls in utr.super_clusters:
+
+            beg = cls.polyA_coordinate
+            if cls.PAS_distance[0] != 'NA':
+                pas = 1
+            else:
+                pas = 0
+
+            entry = '\t'.join([utr.chrm, str(beg-15), str(beg+15),
+                               str(pas), str(cls.nr_support_reads),
+                               utr.strand])
+            handle.write(entry + '\n')
+            counter[utr.strand] +=1
+
+    handle.close()
+
+    debug()
+    return superbed_path
+
+
+def storePetPA(settings):
+    """
+    """
+
+    petDir = '/users/rg/jskancke/phdproject/3UTR/PET'
+
+    pet_all = os.path.join(petDir, 'all_Pet_merged_1+.bed')
+    pA_all = write_all_pA(settings)
+
+    pet_paths = {}
+    pA_paths = {}
+
+    myRange = [(1,1),(2,2),(3,5),(5,10),(10,10000000)]
+
+    #for r in myRange:
+        #pA_path = os.path.join(petDir, 'pA_range')
+        #for 
+
+    # the ranges you want to report 
+    # note: put this in a separate file
+    # the output without verbose is exactly like this:
+    #    Z Score:  64.2057283354
+    #    p-value:  0.0
+
+
+    counts = np.zeros((10,10))
+    PAS = np.zeros((10,10)) # keep track of the PAS % in the various regions
+    paths_PET = dict((val, []) for val in myRange)
+    paths_pA = dict((val, []) for val in myRange)
+
+def pet_intersection(settings, speedrun):
     """
     Compare poly(A) sites with Tags.
     Method: for each region in each compartment, show how many poly(A) sites are
     supported by TAGs
+
+    You might have to include the PET just like another annotation in a way in
+    utail. That's a hassle. But then you could use it much more nicely; for
+    example you could make the bar plot easily. I'd give that a half a day of
+    coding. And a day of running.
+
+    First I'll make a quadrant of 1,2,3-5,5-10,10+ where I separate out the
+    genomic locations of these things in bed-files. Then I'll run 25 jobs in
+    parallel, computing the p-value of the co-llocation of the regions. That
+    will be interesting.
+
+    Finally, do the # of poly(A) sites and the # of sequence tags correlate?
     """
+
+    # 1) Make a 4X4 array of correlation coefficients with bc. For this you need
+    # to write to bedfiles all the PAS and PET with 1,2,3-5,5-10, 10+ into files
+    # and run two for-loops over them, getting the Z and P values
+
+    (petPaths, pAPaths) = storePetPA(settings)
+
+    debug()
+
+    ## 1.2) Intersect the clustered poly(A) sites
+    #cmd = ['intersectBed', '-s', '-wa','-wb','-a', superbed_path, '-b', pet_1plus]
+    #p = Popen(cmd, stdout=PIPE)
+
+    #pA_count = []
+    #PET_count = []
+
+    #for line in p.stdout:
+        #(chrmA, begA, endA, pas, nr_reads_pA, strandA,
+         #chrmB, begB, endB, P, nr_reads_PET, strandB) = line.split()
+        #pA_count.append(nr_reads_pA)
+        #PET_count.append(nr_reads_PET)
+
+    # parse like this [0] != 0 and [1] >1, ==1, > 2 etc
+
+    # How many pA? How many intersect with pet? PAS % for all PAS and for those
+    # that intersect with PET. What % of 1+ p(A) have pet, 2+ p(A) have Pet? 3+
+    # p(A) have pet? etc. What about the p(A) that don't intersect with PET. Why
+    # not? There is a spearman correlation, but the scatter lot shows the normal
+    # crazyness. Even for the 1 sin PAS and 1 PET there is an unequivocal
+    # correlation. You have two totally different p/z zcores depending if you
+    # use pase pair hit or region hit. Without knowing exactly what's happening
+    # it's difficult to know which parameter to chose.
+
 
 
 def gencode_report(settings, speedrun):
@@ -3829,7 +3777,7 @@ def gencode_report(settings, speedrun):
     #clusterladder_cell_lines(settings)
 
     # 2) venn diagram of all the poly(A) sites from the whole genome for 3UTR and
-    venn_polysites(settings, speedrun)
+    #venn_polysites(settings, speedrun) # TODO fix this one
     # Then: look into the PET data
     # Then: correct the slides with the numbers. Maybe make a table.
     # Then: improve the post-3' slide as per your notes
@@ -3876,7 +3824,9 @@ def gencode_report(settings, speedrun):
     #intergenic_finder(settings)
 
     # 9) How does the PET data fit into all this? Use both good and not-good PET
-    #pet_intersection(settings)
+    pet_intersection(settings, speedrun)
+    # It is clear that the PET needs to be merged with more overlap. They don't
+    # map to the 3' end specifically, just to the 3UTR generally.
 
     # From working at home: it's most convincing if you give a bar plot that
     # contains 5X2 bars, each one a comparison of the A/T ratio in each region.
