@@ -894,17 +894,11 @@ def PETorNot(rpoint, pet_sites, strand):
     """
     Within 50 of a pet or not?
     """
-    for a_pA in pet_sites:
-        debug()
-        apoint = int(a_pA[1])
-        if apoint-40 < rpoint < apoint+40:
-            if strand == '+':
-                return rpoint-apoint + 1
-            else:
-                return rpoint-apoint
-            # RESULT: for +, distance is one too little
-            # Otherwise, it seems good.
-            break
+    for pet in pet_sites:
+        if int(pet[1])-100 < rpoint < int(pet[2])+100:
+            return 1
+
+    return 0
 
 def annotation_dist(rpoint, annotated_polyA_sites, strand):
     """
@@ -2157,7 +2151,9 @@ def get_polyA_utr(polyAbed, utrfile_path):
     # Run the above command -- outside the shell -- and loop through output
     f = Popen(cmd, stdout=PIPE)
     for line in f.stdout:
-        (polyA, utr) = (line.split()[:6], line.split()[6:])
+        # NOTE was supposed to be :7 because of tail_info -- which is gone!
+        # where is it?
+        (polyA, utr) = (line.split()[:7], line.split()[7:])
         utr_id = utr[3]
         if not utr_id in utr_polyAs:
             utr_polyAs[utr_id] = [tuple(polyA)]
@@ -2779,7 +2775,7 @@ def only_polyA_writer(dset_id, annotation, pA_seqs, polyA_reads, settings,
     pas_patterns = [re.compile(pas) for pas in PAS_sites]
 
     # Get dict with annotated poly(A) sites and dict with utr exons
-    pet_dict = annotation.PET_dict
+    pet_dict = annotation.PETdict
     a_polyA_sites_dict = annotation.a_polyA_sites_dict
     feature_coords = annotation.feature_coords
 
@@ -2812,7 +2808,7 @@ def only_polyA_writer(dset_id, annotation, pA_seqs, polyA_reads, settings,
                 annotated_polyA_distance = annotation_dist(cls_center,
                                                            annotated_pA_sites,
                                                            strand)
-                PET_support = PETorNot(cls_center, pet_dict, strand)
+                PET_support = PETorNot(cls_center, anyPet, strand)
 
                 # getting PAS. If annotation exists, look at the annotated strand.
                 # If not, look at the "other strand" than the poly(A) read maps to.
@@ -2839,6 +2835,7 @@ def only_polyA_writer(dset_id, annotation, pA_seqs, polyA_reads, settings,
                            'annotated_polyA_distance':str(annotated_polyA_distance),
                            'nearby_PAS': nearby_PAS,
                            'PAS_distance': PAS_distance,
+                           'PET_support': str(PET_support),
                            'polyA_average_composition': tail_info,
                            'number_supporting_reads': str(number_supporting_reads),
                            'number_unique_supporting_reads':\
@@ -3302,7 +3299,7 @@ def main():
     # function (called below). It also affects the 'temp' and 'output'
     # directories, respectively.
 
-    DEBUGGING = True
+    DEBUGGING = True # warning... some stuff wasnt updated here
     #DEBUGGING = False
 
     # with this option, always remake the bedfiles
