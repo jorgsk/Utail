@@ -2314,8 +2314,6 @@ def cluster_polyAs(settings, utr_polyAs, utrs, polyA):
 
         polyA_reads[utr_id] = {'plus_strand': cluster_loop(sorted(plus_sites)),
                                'minus_strand': cluster_loop(sorted(minus_sites))}
-        if utr_id == '100778325':
-            debug()
 
     # For those utr_id that don't have a cluster, give them an empty list; ad hoc
     for utr_id in utrs:
@@ -2376,46 +2374,6 @@ def downstream_sequence(settings, polyA_clusters, feature_coords):
         pA_seqs[reg_id] = orient_dict
 
     return pA_seqs
-
-def splitmapsubtract(just_dset, cache_dir, splitdir, polyA, outdir):
-
-    splitpart = '_splitmapped_reads_merged.bed'
-    splitfile = os.path.join(splitdir, just_dset+splitpart)
-
-    # make an output dir in the polyA cache dir
-    if not os.path.isdir(outdir):
-        os.makedirs(outdir)
-
-    outfile_name = os.path.split(os.path.splitext(polyA)[0]+'_splitfiltered.bed')[1]
-    outfile_path = os.path.join(outdir, outfile_name)
-
-    # if it exists, return it
-    if os.path.isfile(outfile_path):
-        return outfile_path
-
-    elif os.path.isfile(splitfile):
-
-        # Write a log file of how many reads are removed
-        loghandle = open(os.path.join(outdir, 'splitLOG.log'), 'ab')
-        before = sum(1 for line in open(polyA, 'rb'))
-
-        # the -v option returns all reads that DON't overlap
-        cmd = ['intersectBed', '-u', '-s', '-a', polyA, '-b', splitfile]
-        p = Popen(cmd, stdout = open(outfile_path, 'wb'))
-        p.wait()
-
-        after = sum(1 for line in open(outfile_path, 'rb'))
-        diff = before - after
-
-        # write to the logfile
-        loghandle.write(just_dset+'\t')
-        loghandle.write('\t'.join([str(before), str(after), str(diff)])+'\n')
-        loghandle.close()
-
-        return outfile_path
-    else:
-        print('\nNo {0} file found for splitmerging'.format(splitfile))
-
 
 def pipeline(dset_id, dset_reads, tempdir, output_dir, settings, annotation,
              DEBUGGING, polyA_cache, here):
@@ -2516,13 +2474,6 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, settings, annotation,
             outhandle = open(at_count_path, 'wb')
             outhandle.write('{0}\t{1}\t{2}'.format(total_reads, acount, tcount))
             outhandle.close()
-
-        # This split-mapping work didn't lead anywhere. It was a dead end.
-        #splitdir = os.path.join(here, 'splitmapped_reads')
-        #if os.path.isdir(splitdir):
-
-            #polyA_bed_path = splitmapsubtract(just_dset, cache_dir, splitdir,
-                                              #polyA_bed_path, outdir)
 
         utr_polyAs, at_numbers = get_polyA_utr(polyA_bed_path, utrfile_path)
 
