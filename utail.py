@@ -96,11 +96,11 @@ class Settings(object):
         #self.read_limit = 5000000 # less than 10000 no reads map
         self.read_limit = 5000 # less than 10000 no reads map
         self.max_cores = 2
-        #self.get_length = False
-        self.get_length = True
+        self.get_length = False
+        #self.get_length = True
         self.extendby = 10
         #self.extendby = 100
-        self.polyA = False
+        self.polyA = True
         #self.polyA = False
         #self.polyA = '/users/rg/jskancke/phdproject/3UTR/the_project/polyA_files'\
                 #'/polyA_reads_K562_Whole_Cell_processed_mapped.bed'
@@ -146,7 +146,7 @@ class Annotation(object):
 
         return utr_dict
 
-    def get_polyA_dict(self, chr1):
+    def get_annot_polyA_dict(self, chr1):
         """
         Intersect the annotated poly(A) sites with the 3UTR files obtained from
         the annotation. Return a dictionarty of the poly(A) sites that
@@ -184,6 +184,37 @@ class Annotation(object):
                 polyA_dict[utr_id] = []
 
         return polyA_dict
+
+    def get_PET_dict(self):
+        """
+        Intersect the genomic features with PET marks
+        """
+        PET_file = '/users/rg/jskancke/phdproject/3UTR/PET/all_Pet_merged10+.bed'
+
+        utr_path = self.utrfile_path
+
+        cmd = ['intersectBed', '-wa', '-wb', '-a', PET_file, '-b', utr_path]
+
+        pet_dict = {}
+        # Run the above command -- outside the shell -- and loop through output
+        f = Popen(cmd, stdout=PIPE)
+        for line in f.stdout:
+
+            (chrm, beg, end, d, d, strnd, d, d, d, utr_id, d, d) = line.split()
+
+            if utr_id in pet_dict:
+                pet_dict[utr_id].append((chrm, beg, end, strnd))
+            else:
+                pet_dict[utr_id] = [(chrm, beg, end, strnd)]
+
+        # For the multi-exon utrs, add [] (they will probably not intersect with
+        # annotated pet sites.
+        for utr_id in self.feature_coords.iterkeys():
+            if utr_id not in pet_dict:
+                pet_dict[utr_id] = []
+
+        return pet_dict
+
 
 class UTR(object):
     """
@@ -858,6 +889,22 @@ class PolyAReads(object):
                 supp.append('NA')
 
         return supp
+
+def PETorNot(rpoint, pet_sites, strand):
+    """
+    Within 50 of a pet or not?
+    """
+    for a_pA in pet_sites:
+        debug()
+        apoint = int(a_pA[1])
+        if apoint-40 < rpoint < apoint+40:
+            if strand == '+':
+                return rpoint-apoint + 1
+            else:
+                return rpoint-apoint
+            # RESULT: for +, distance is one too little
+            # Otherwise, it seems good.
+            break
 
 def annotation_dist(rpoint, annotated_polyA_sites, strand):
     """
@@ -2105,12 +2152,12 @@ def get_polyA_utr(polyAbed, utrfile_path):
     tmapped_tofeature = 0
 
     # Hey, we do know the strand ... but maybe we're not interested: no -s
-    cmd = ['intersectBed', '-wb', '-a', polyAbed, '-b', utrfile_path]
+    cmd = ['intersectBed', '-wa', '-wb', '-a', polyAbed, '-b', utrfile_path]
 
     # Run the above command -- outside the shell -- and loop through output
     f = Popen(cmd, stdout=PIPE)
     for line in f.stdout:
-        (polyA, utr) = (line.split()[:7], line.split()[7:])
+        (polyA, utr) = (line.split()[:6], line.split()[6:])
         utr_id = utr[3]
         if not utr_id in utr_polyAs:
             utr_polyAs[utr_id] = [tuple(polyA)]
@@ -2598,7 +2645,6 @@ def write_polyA_stats(polyA_reads, acount, tcount, at_numbers, total_nr_reads,
             other_strand_reads = sum(strand_stats['plus_strand'][1], [])
             other_strand_clstrs = strand_stats['plus_strand'][0]
 
-
         this_strand_count += len(this_strand_reads)
         other_strand_count +=len(other_strand_reads)
 
@@ -2769,6 +2815,7 @@ def only_polyA_writer(dset_id, annotation, pA_seqs, polyA_reads, settings,
                     'annotated_polyA_distance',
                     'nearby_PAS',
                     'PAS_distance',
+                    'PET_support',
                     'number_supporting_reads',
                     'number_unique_supporting_reads',
                     'unique_reads_spread']
@@ -2781,6 +2828,7 @@ def only_polyA_writer(dset_id, annotation, pA_seqs, polyA_reads, settings,
     pas_patterns = [re.compile(pas) for pas in PAS_sites]
 
     # Get dict with annotated poly(A) sites and dict with utr exons
+    pet_dict = annotation.PET_dict
     a_polyA_sites_dict = annotation.a_polyA_sites_dict
     feature_coords = annotation.feature_coords
 
@@ -2797,6 +2845,7 @@ def only_polyA_writer(dset_id, annotation, pA_seqs, polyA_reads, settings,
 
         (chrm, beg, end, strand) = feature_coords[feature_id]
         annotated_pA_sites = a_polyA_sites_dict[feature_id]
+        anyPet = pet_dict[feature_id]
 
         # you need to go through both plus and minus strands and write the
         # clusters for each. this will change a lot of downstream readings.
@@ -2812,6 +2861,7 @@ def only_polyA_writer(dset_id, annotation, pA_seqs, polyA_reads, settings,
                 annotated_polyA_distance = annotation_dist(cls_center,
                                                            annotated_pA_sites,
                                                            strand)
+                PET_support = PETorNot(cls_center, pet_dict, strand)
 
                 # getting PAS. If annotation exists, look at the annotated strand.
                 # If not, look at the "other strand" than the poly(A) read maps to.
@@ -3301,8 +3351,8 @@ def main():
     # function (called below). It also affects the 'temp' and 'output'
     # directories, respectively.
 
-    #DEBUGGING = True
-    DEBUGGING = False
+    DEBUGGING = True
+    #DEBUGGING = False
 
     # with this option, always remake the bedfiles
     rerun_annotation_parser = False
@@ -3365,7 +3415,12 @@ def piperunner(settings, annotation, simulate, DEBUGGING, beddir, tempdir,
     # You intersect the annotated polyA files with the region file provided.
     # Put the intersected annotated polyA sites in a dictionary.
     print('Making data structures for annotated poly(A) sites ...\n')
-    annotation.a_polyA_sites_dict = annotation.get_polyA_dict(settings.chr1)
+    annotation.a_polyA_sites_dict = annotation.get_annot_polyA_dict(settings.chr1)
+
+    # AD hoc PET -- should be included in the settings file :(
+    annotation.PETdict = annotation.get_PET_dict()
+
+    # make a similar dictionary but for pet-reads
 
     # If this is true, the poly(A) reads will be saved after getting them. That
     # will save all that reading. They will only be saved if you run with no
@@ -3399,17 +3454,17 @@ def piperunner(settings, annotation, simulate, DEBUGGING, beddir, tempdir,
                          annotation, DEBUGGING, polyA_cache, here)
 
             ###### FOR DEBUGGING ######
-            #akk = pipeline(*arguments)
+            akk = pipeline(*arguments)
             ###########################
 
-            result = my_pool.apply_async(pipeline, arguments)
-            results.append(result)
+            #result = my_pool.apply_async(pipeline, arguments)
+            #results.append(result)
 
-        #debug()
-        my_pool.close()
-        my_pool.join()
+        debug()
+        #my_pool.close()
+        #my_pool.join()
 
-        outp = [result.get() for result in results]
+        #outp = [result.get() for result in results]
 
         # Print the total elapsed time
         print('Total elapsed time: {0}\n'.format(time.time()-t1))
