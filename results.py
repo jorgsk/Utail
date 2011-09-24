@@ -2830,6 +2830,7 @@ def intersection_sideplot(settings, speedrun):
 
     # file paths for all regions
     dsetdict = dict((reg, settings.only_files(reg)) for reg in regions)
+    # maybe this isn't a good idea? Maybe do it like the other function?
 
     temp_dir = os.path.join(settings.here, 'temp_files')
     min_covr = 1
@@ -3636,8 +3637,8 @@ def write_all_pA(settings):
 
     subset = [ds for ds in settings.datasets if (not 'Minus' in ds) and
                        ((co[0] in ds) or (co[1] in ds) or (co[2] in ds))]
-    speedrun = True
-    #speedrun = False
+    #speedrun = True
+    speedrun = False
     if speedrun:
         subset = subset[:2]
 
@@ -3654,7 +3655,6 @@ def write_all_pA(settings):
 
     handle = open(superbed_path, 'wb')
 
-    counter = {'-':0, '+':0}
     for utr_name, utr in super_3utr[region].iteritems():
 
         for cls in utr.super_clusters:
@@ -3665,15 +3665,13 @@ def write_all_pA(settings):
             else:
                 pas = 0
 
-            entry = '\t'.join([utr.chrm, str(beg-15), str(beg+15),
+            entry = '\t'.join([utr.chrm, str(beg-20), str(beg+20),
                                str(pas), str(cls.nr_support_reads),
-                               utr.strand])
+                               cls.strand])
             handle.write(entry + '\n')
-            counter[utr.strand] +=1
 
     handle.close()
 
-    debug()
     return superbed_path
 
 
@@ -3759,6 +3757,67 @@ def pet_intersection(settings, speedrun):
     # it's difficult to know which parameter to chose.
 
 
+def pet_vs_pa(settings, speedrun):
+    """
+    Intersect 3+ pA sites with 3UTRs (strand specific? :) ) and compare the
+    specificity and sensitifity in your own way.
+    """
+
+    pA_reads2 = os.path.join(settings.here, 'temp_files', 'all_pA2+.bed')
+    pA_reads3 = os.path.join(settings.here, 'temp_files', 'all_pA3+.bed')
+    pA_reads4 = os.path.join(settings.here, 'temp_files', 'all_pA4+.bed')
+    pA_reads5 = os.path.join(settings.here, 'temp_files', 'all_pA5+.bed')
+    pet_reads10 = '/users/rg/jskancke/phdproject/3UTR/PET/all_Pet_merged10+.bed'
+    pet_reads20 = '/users/rg/jskancke/phdproject/3UTR/PET/all_Pet_merged20+.bed'
+    pet_reads30 = '/users/rg/jskancke/phdproject/3UTR/PET/all_Pet_merged30+.bed'
+    pet_reads40 = '/users/rg/jskancke/phdproject/3UTR/PET/all_Pet_merged40+.bed'
+
+    #three_utrs = '/users/rg/jskancke/phdproject/3UTR/the_project/'\
+            #'source_bedfiles/3UTR_exons.bed'
+    three_utrs = '/users/rg/jskancke/phdproject/3UTR/the_project/'\
+            'source_bedfiles/3UTR-exonic_stranded.bed'
+
+    # count 3utrs
+    utr_nr = sum((1 for line in open(three_utrs, 'rb')))
+
+    for fin in [pA_reads2, pA_reads3, pA_reads4, pA_reads5, pet_reads10,
+                pet_reads20, pet_reads30, pet_reads40]:
+
+        filename = os.path.split(fin)[1]
+        nr_hit_set = set([])
+        utr_hit_set = set([])
+
+        # count pa/pet
+        nr = sum((1 for line in open(fin, 'rb')))
+
+        cmd = ['intersectBed', '-wa', '-wb', '-s', '-a', fin, '-b', three_utrs]
+        #cmd = ['intersectBed', '-wa', '-wb', '-a', fin, '-b', three_utrs]
+        p = Popen(cmd, stdout = PIPE)
+
+        for line in p.stdout:
+            (chrmA, begA, begB, maybePAS, counts, strandA,
+            chrmB, begB, begB, ts_id, val, strandB) = line.split()
+
+            nr_hit_set.add('_'.join([chrmA, begA, strandA]))
+            utr_hit_set.add('_'.join([chrmB, begB, strandB]))
+
+        # count nr that intersect
+        nr_hit = len(nr_hit_set)
+        utr_hit = len(utr_hit_set)
+
+        print filename
+        # nr and % of pA/pet mapping
+        l1 = '{0} of {1} ({2:.2f}) intersected'.format(nr_hit, nr, nr_hit/nr)
+
+        # nr and of 3UTR covered by pA/pet
+        l2 = 'Covering {0} of {1} ({2:.2f}) 3UTRs'.format(utr_hit, utr_nr,
+                                                      utr_hit/utr_nr)
+        print l1
+        print l2
+        print(' ')
+
+    debug()
+
 
 def gencode_report(settings, speedrun):
     """ Make figures for the GENCODE report. The report is an overview of
@@ -3777,7 +3836,7 @@ def gencode_report(settings, speedrun):
     #clusterladder_cell_lines(settings)
 
     # 2) venn diagram of all the poly(A) sites from the whole genome for 3UTR and
-    #venn_polysites(settings, speedrun) # TODO fix this one
+    #venn_polysites(settings, speedrun)
     # Then: look into the PET data
     # Then: correct the slides with the numbers. Maybe make a table.
     # Then: improve the post-3' slide as per your notes
@@ -3824,9 +3883,12 @@ def gencode_report(settings, speedrun):
     #intergenic_finder(settings)
 
     # 9) How does the PET data fit into all this? Use both good and not-good PET
-    pet_intersection(settings, speedrun)
+    #pet_intersection(settings, speedrun)
     # It is clear that the PET needs to be merged with more overlap. They don't
     # map to the 3' end specifically, just to the 3UTR generally.
+
+    # 10) Compare the % of intersection of PET-3UTR and poly(A) reads
+    pet_vs_pa(settings, speedrun)
 
     # From working at home: it's most convincing if you give a bar plot that
     # contains 5X2 bars, each one a comparison of the A/T ratio in each region.
