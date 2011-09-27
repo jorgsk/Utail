@@ -15,8 +15,8 @@ import matplotlib.pyplot as plt
 #import matplotlib.cm as cm
 from matplotlib import lines
 
-#plt.ion() # turn on the interactive mode so you can play with plots
-plt.ioff() # turn off interactive mode for working undisturbed
+plt.ion() # turn on the interactive mode so you can play with plots
+#plt.ioff() # turn off interactive mode for working undisturbed
 
 import csv2latex
 
@@ -163,7 +163,8 @@ class Super(object):
     """
 
     def __init__(self, dsets, center, covrg, tail_types, tail_infos, strand,
-                 nearby_PASes, PAS_distances, annot_distances):
+                 nearby_PASes, PAS_distances, annot_distances, PET_sup,
+                 cuffL_support):
 
         self.dsets = dsets
         self.polyA_coordinate = center
@@ -237,6 +238,16 @@ class Super(object):
             self.nearby_PAS.append('NA')
             self.PAS_distance.append('NA')
 
+        if any(PET_sup):
+            self.PET_support = 1
+        else:
+            self.PET_support = 0
+
+        if any(cuffL_support):
+            self.cufflinks_support = 1
+        else:
+            self.cufflinks_support = 0
+
 
 class Only(object):
     """ For the onlypolyA files. They don't have coverage and have fewer
@@ -247,8 +258,8 @@ class Only(object):
 
         (chrm, beg, end, utr_ID, strand, polyA_coordinate,
          polyA_coordinate_strand, tail_info, annotated_polyA_distance, nearby_PAS,
-         PAS_distance, number_supporting_reads, nr_unique_supporting_reads,
-         unique_reads_spread) = input_line.split('\t')
+         PAS_distance, PET_support, cuff_support, number_supporting_reads,
+         nr_unique_supporting_reads, unique_reads_spread) = input_line.split('\t')
 
         self.chrm = chrm
         self.beg = str_to_intfloat(beg)
@@ -269,6 +280,8 @@ class Only(object):
 
         self.PAS_distance = [str_to_intfloat(dist) for dist in
                              PAS_distance.split('#')]
+        self.PET_support = int(PET_support)
+        self.cuff_support = cuff_support
 
         self.nr_support_reads = str_to_intfloat(number_supporting_reads)
         self.nr_unique_support_reads = str_to_intfloat(nr_unique_supporting_reads)
@@ -553,11 +566,12 @@ class Plotter(object):
             return blob_order.index(btuple[1])
 
         # The nr and names of bars in the plot
-        plot_keys = ['PAS', 'T', 'all']
-        colors = {'all': 'm', 'T': 'g', 'PAS': 'b'}
+        #plot_keys = ['PAS', 'PET', 'T', 'all']
+        plot_keys = ['PAS', 'PET', 'all']
+        colors = {'all': 'm', 'T': 'g', 'PAS': 'b', 'PET':'g'}
 
         labels = {'all': 'All', 'T': 'Mapped with poly(T)',
-                  'PAS': 'With downstream PAS'}
+                  'PAS': 'With downstream PAS', 'PET': 'Supported by PET'}
 
         sidelabels = {'Whole_Cell': 'Whole cell', 'Cytoplasm': 'Cytoplasm',
                       'Nucleus': 'Nucleus'}
@@ -570,7 +584,8 @@ class Plotter(object):
                 for blob_nr, (blob, blob_name)\
                         in enumerate(sorted(blobs.items(), key = blobsort)):
 
-                    plotme = {'all': [], 'PAS': [], 'T': []}
+                    #plotme = {'all': [], 'PAS': [], 'T': [], 'PET': []}
+                    plotme = {'all': [], 'PAS': [], 'PET': []}
 
                     # get the height of the bars from the input
                     for region in regions:
@@ -581,7 +596,7 @@ class Plotter(object):
                     # you want to place the left foot of all at 1,2,3, etc
                     # you want to place the left foot of T at 1.25
                     # you want to place the left foot of PAS at 1.375
-                    heights = {'all': 0.25, 'T': 0.125, 'PAS': 0.125}
+                    heights = {'all': 0.25, 'PET': 0.125, 'PAS': 0.125}
 
                     # number of data-points
                     dpoints = len(plotme.values()[0])
@@ -849,6 +864,7 @@ class Plotter(object):
             read_counts = []
             cluster_counts = []
             PAScluster_counts = []
+            PETcluster_counts = []
 
             # you must loop throug dependnig on lenghr
             def sorthelp(tup):
@@ -864,11 +880,14 @@ class Plotter(object):
                 # get all cluster counts
                 cluster_counts.append(countdict['All'])
                 PAScluster_counts.append(countdict['PAS'])
+                PETcluster_counts.append(countdict['PET'])
 
             ax.plot(read_counts, cluster_counts, color=cols[title],
-                          linewidth=4, label='All sites')[0]
+                          linewidth=4, label='All sites')
             ax.plot(read_counts, PAScluster_counts, ls='--', color=cols[title],
-                          linewidth=4, label='Sites with PAS')[0]
+                          linewidth=4, label='Sites with PAS')
+            ax.plot(read_counts, PETcluster_counts, ls='-', color=cols[title],
+                          linewidth=4, label='Sites with PET')
 
             ax.set_xlabel('Billons of reads', size=24)
             ax.set_ylabel('Polyadenylation sites', size=24)
@@ -1035,7 +1054,9 @@ def get_super_regions(dsets, settings, batch_key):
                                      cls.tail_info,
                                      PAS,
                                      PAS_distance,
-                                     str(cls.annotated_polyA_distance)])
+                                     str(cls.annotated_polyA_distance),
+                                     str(cls.PET_support),
+                                     str(cls.cuff_support)])
                     # also add PAS_distance and PAS_type
                     out_handle.write('\t'.join([cls.chrm,
                                                 str(cls.polyA_coordinate),
@@ -1054,21 +1075,14 @@ def get_super_regions(dsets, settings, batch_key):
     #p1 = Popen(cmd, stdout=open(temp_cluster_file, 'wb'), stderr=PIPE)
     p1 = Popen(cmd, stdout=open(temp_cluster_file, 'wb'))
     p1.wait()
-    #err1 = p1.stderr.read()
-    #if err1:
-        #debug()
 
     # ii) expand the entries
     cmd = ['slopBed', '-i', temp_cluster_file, '-g', settings.hg19_path, '-b', '15']
     p2 = Popen(cmd, stdout=open(cluster_file, 'wb'))
     p2.wait()
-    #err2 = p2.stderr.read()
-    #if err2:
-        #debug()
 
     # iii) merge and max scores
     cmd = ['mergeBed', '-nms', '-s', '-scores', 'sum', '-i', cluster_file]
-    #cmd = ['mergeBed', '-nms', '-s', '-scores', 'max', '-i', cluster_file]
     #p3 = Popen(cmd, stdout=PIPE, stderr=PIPE)
     p3 = Popen(cmd, stdout=PIPE)
 
@@ -1086,11 +1100,14 @@ def get_super_regions(dsets, settings, batch_key):
         nearby_PASes = []
         PAS_distances = []
         annot_distances = []
+        pet_sup = []
+        cuf_sup = []
 
+        # un-split the joined names
         name_list = names.split(';')
         for names2 in name_list:
-            (dset, f_id, t_type, t_info, nearby_PAS, PAS_distance, annot_dist)\
-                    = names2.split('%')
+            (dset, f_id, t_type, t_info, nearby_PAS, PAS_distance,
+             annot_dist, PET_support, cufflinks_support) = names2.split('%')
             dsets.append(dset)
             f_ids.append(f_id)
             tail_types.append(t_type)
@@ -1098,20 +1115,19 @@ def get_super_regions(dsets, settings, batch_key):
             nearby_PASes.append(nearby_PAS)
             PAS_distances.append(PAS_distance)
             annot_distances.append(annot_dist)
+            pet_sup.append(int(PET_support))
+            cuf_sup.append(int(cufflinks_support))
 
         feature_id = set(f_ids).pop()
 
         # create cluster object
         cls = Super(dsets, center, polyA_coverage, tail_types, tail_infos,
-                    strand, nearby_PASes, PAS_distances, annot_distances)
+                    strand, nearby_PASes, PAS_distances, annot_distances,
+                    pet_sup, cuf_sup)
 
         # add the cluster to super_featuress
         super_features[feature_id].super_clusters.append(cls)
 
-    # any errors?
-    #err3 = p3.stderr.read()
-    #if err3:
-        #debug()
 
     return super_features
 
@@ -1402,6 +1418,19 @@ def data_scooper(cls, keyw, this_dict):
             taildict = this_dict['bestPAS']['tail_lens'][keyw]
             taildict = avrg_tail(cls.tail_info, taildict)
 
+        if cls.PET_support:
+            this_dict['wPASPET']['info_dict'][keyw] += 1
+
+            taildict = this_dict['wPASPET']['tail_lens'][keyw]
+            taildict = avrg_tail(cls.tail_info, taildict)
+
+        if cls.Cufflinks_support:
+            this_dict['wPASCufflinks']['info_dict'][keyw] += 1
+
+            taildict = this_dict['wPASCufflinks']['tail_lens'][keyw]
+            taildict = avrg_tail(cls.tail_info, taildict)
+
+
     if cls.annotated_polyA_distance != 'NA':
         this_dict['annotated']['info_dict'][keyw] += 1
 
@@ -1414,6 +1443,18 @@ def data_scooper(cls, keyw, this_dict):
             taildict = this_dict['annotated_wPAS']\
                     ['tail_lens'][keyw]
             taildict = avrg_tail(cls.tail_info, taildict)
+
+    if cls.PET_support:
+        this_dict['wPET']['info_dict'][keyw] += 1
+
+        taildict = this_dict['wPET']['tail_lens'][keyw]
+        taildict = avrg_tail(cls.tail_info, taildict)
+
+    if cls.Cufflinks_support:
+        this_dict['Cufflinks']['info_dict'][keyw] += 1
+
+        taildict = this_dict['Cufflinks']['tail_lens'][keyw]
+        taildict = avrg_tail(cls.tail_info, taildict)
 
     return this_dict
 
@@ -1441,9 +1482,10 @@ def get_dsetclusters(subset, region, settings, speedrun, batch_key):
     # and tail_lens.
 
     categories1 = ['Total clusters', 'morethan1', 'morethan1OA', 'only1',
-                   'morethan2', 'morethan3', 'morethan4']
+                   'morethan2', 'morethan3', 'morethan4', 'morethan10',
+                   'morethan30']
     subcategories = ['All', 'annotated', 'wPAS', 'annotated_wPAS', 'goodPAS',
-                     'bestPAS']
+                     'bestPAS', 'wPET', 'wPASPET', 'Cufflinks', 'wPASCufflinks']
 
     bigcl = {}
     for cat1 in categories1:
@@ -1471,7 +1513,7 @@ def get_dsetclusters(subset, region, settings, speedrun, batch_key):
             bigcl['Total clusters'] = data_scooper(cls, keyw, bigcl['Total clusters'])
 
             # Count clusters with 2 or more reads
-            for minlim in [1,2,3,4]:
+            for minlim in [1,2,3,4,10,30]:
                 if cls.nr_support_reads > minlim:
                     key = 'morethan{0}'.format(minlim)
 
@@ -1496,23 +1538,30 @@ def super_cluster_statprinter(dsetclusters, region, thiskey, settings, filename)
     statdict = dsetclusters[thiskey]
 
     keys = ['Total clusters', 'morethan1OA', 'morethan1', 'only1', 'morethan2',
-            'morethan3', 'morethan4']
+            'morethan3', 'morethan4', 'morethan10', 'morethan30']
 
-    subkeys =  ['All', 'wPAS', 'goodPAS', 'bestPAS', 'annotated',
-                'annotated_wPAS']
+    #subkeys =  ['All', 'wPAS', 'goodPAS', 'bestPAS', 'annotated',
+                #'annotated_wPAS']
+    subkeys =  ['All', 'wPAS', 'goodPAS', 'annotated', 'annotated_wPAS', 'wPET',
+                'wPASPET', 'Cufflinks', 'wPASCufflinks']
 
     datakeys = ['info_dict', 'tail_lens']
 
     headers = {'Total clusters': '### All clustes ###',
+               'only1': '### Clusters with only 1 coverage ###',
                'morethan1': '### Clusters with 2 or more coverage ###',
                'morethan2': '### Clusters with 3 or more coverage ###',
                'morethan3': '### Clusters with 4 or more coverage ###',
                'morethan4': '### Clusters with 5 or more coverage ###',
-               'only1': '### Clusters with only 1 coverage ###',
-               'morethan1OA': '### Clusters with 2 or more or annotated ###'}
+               'morethan10': '### Clusters with 10 or more coverage ###',
+               'morethan30': '### Clusters with 30 or more coverage ###'}
 
     subheaders = {'wPAS': 'With PAS',
                   'All': 'All',
+                  'wPET': 'With PET',
+                  'wPASPET': 'With PAS and PET',
+                  'wPASCufflinks': 'With PAS and Cufflinks',
+                  'Cufflinks': 'With Cufflinks',
                   'goodPAS': 'AATAAA or ATTAAA',
                   'bestPAS': 'AATAAA',
                   'annotated': 'Annotated',
@@ -1645,11 +1694,11 @@ def clusterladder(settings, speedrun):
     # keep a dictionary with reference to all the plots
     plotdict = {}
 
-    #speedrun = True
-    speedrun = False
+    speedrun = True
+    #speedrun = False
     if speedrun:
-        data_grouping['Poly(A) plus'] = data_grouping['Poly(A) plus'][:8]
-        data_grouping['Poly(A) minus'] = data_grouping['Poly(A) minus'][:8]
+        data_grouping['Poly(A) plus'] = data_grouping['Poly(A) plus'][:2]
+        data_grouping['Poly(A) minus'] = data_grouping['Poly(A) minus'][:2]
 
     region = 'whole'
     for title, dsets in data_grouping.items():
@@ -1670,6 +1719,7 @@ def clusterladder(settings, speedrun):
             # Get the number of 'good' and 'all' clusters
             key = ':'.join(subset)
             batch_key = 'first_ladder'
+            speedrun = False
             dsetclusters = get_dsetclusters(subset, region, settings,
                                             speedrun, batch_key)
 
@@ -1689,10 +1739,12 @@ def count_clusters(dsetclusters, dsetreads):
 
     countdict = {'2+': {
         'All': sum(dsetclusters['morethan1']['All']['info_dict'].values()),
-        'PAS': sum(dsetclusters['morethan1']['wPAS']['info_dict'].values())},
+        'PAS': sum(dsetclusters['morethan1']['wPAS']['info_dict'].values()),
+        'PET': sum(dsetclusters['morethan1']['wPET']['info_dict'].values())},
                 '3+': {
         'All': sum(dsetclusters['morethan2']['All']['info_dict'].values()),
-        'PAS': sum(dsetclusters['morethan2']['wPAS']['info_dict'].values())}
+        'PAS': sum(dsetclusters['morethan2']['wPAS']['info_dict'].values()),
+        'PET': sum(dsetclusters['morethan1']['wPET']['info_dict'].values())}
         }
 
     return countdict
@@ -2104,7 +2156,8 @@ def cumul_stats_printer_genome(settings, speedrun):
 
 def cumul_stats_printer(settings, speedrun):
 
-    regions = ['3UTR-exonic', 'CDS-exonic', 'CDS-intronic', 'Intergenic', 'whole']
+    #regions = ['3UTR-exonic', 'CDS-exonic', 'CDS-intronic', 'Intergenic', 'whole']
+    regions = ['3UTR-exonic']
 
     for region in regions:
 
@@ -2116,15 +2169,14 @@ def cumul_stats_printer(settings, speedrun):
                     demanders = []
 
                 if ignorers == []:
-                    filename = '+'.join(compartments+demanders+[region])
+                    filename = '+'.join(compartments+demanders)
                 else:
-                    filename = '+'.join(compartments+demanders+[region])\
+                    filename = '+'.join(compartments+demanders)\
                             +'-'+'-'.join(ignorers)
 
                 subset = get_dsetnames(settings, compartments, ignorers, demanders)
 
                 dsetclusters = {}
-
 
                 # Get the number of 'good' and 'all' clusters
                 key = ':'.join(subset)
@@ -2393,7 +2445,7 @@ def barsense_counter(super_3utr, comp, frac, region, d_keys):
     Must return [comp][reg][+/-][all, pas, t]
     """
 
-    count_dict = dict((key, {'all': 0, 'PAS': 0, 'T': 0}) for key in d_keys)
+    count_dict = dict((key, {'all':0, 'PAS':0, 'T':0, 'PET':0}) for key in d_keys)
 
     for utr_id, utr in super_3utr[region].iteritems():
 
@@ -2413,6 +2465,9 @@ def barsense_counter(super_3utr, comp, frac, region, d_keys):
                     # Get if this was an A or a T cluster
                     if cls.tail_type == 'T':
                         count_dict[key]['T'] += 1
+
+                    if cls.PET_support:
+                        count_dict[key]['PET'] += 1
 
     return count_dict
 
@@ -2448,8 +2503,8 @@ def side_sense_plot(settings, speedrun):
 
     compDsetNr = {'+': {}, '-':{}}
 
-    #speedrun = True
-    speedrun = False
+    speedrun = True
+    #speedrun = False
 
     for comp in compartments:
         for frac in fractions:
@@ -2463,12 +2518,14 @@ def side_sense_plot(settings, speedrun):
 
             compDsetNr[frac][comp] = len(subset)
 
+            speedrun = True
             if speedrun:
-                subset = subset[:1]
+                subset = subset[:2]
 
             for region in regions:
 
                 batch_key = 'side_sense'
+                speedrun = False
                 dsets, super_3utr = super_falselength(settings, region,
                                                       batch_key, subset,
                                                       speedrun=speedrun)
@@ -2566,7 +2623,7 @@ def non_PAS_polyA(settings, speedrun):
 
 def isect(settings, merged, extendby, temp_dir, comp, reg):
     """
-    Expand file A and B file by 15 nt, intersect, and return
+    Expand file A and B file by 20 nt, intersect, and return
     A - intersection
     intersection
     B - intersection
@@ -2581,7 +2638,6 @@ def isect(settings, merged, extendby, temp_dir, comp, reg):
     # 1) extend all files
     expanded = {}
     for pathname, path in merged.items():
-        # skip those you don't want
 
         ext_name = pathname+'{0}_{1}_REextended_{2}'.format(comp, reg, extendby)
         ext_path = os.path.join(temp_dir, ext_name)
@@ -2664,14 +2720,15 @@ def merge_paths(settings, paths, temp_dir, key, min_covr, comp, reg):
                 (chrm, beg, end, utr_ID, strand, polyA_coordinate,
                  polyA_coordinate_strand, polyA_average_composition,
                  annotated_polyA_distance, nearby_PAS, PAS_distance,
-                 number_supporting_reads, number_unique_supporting_reads,
+                 PET_support, Cuff_support, number_supporting_reads,
+                 number_unique_supporting_reads,
                  unique_reads_spread) = line.split('\t')
 
                 # Get if it is an 'A' or a 'T' tail
                 ga = [g.split('=') for g in polyA_average_composition.split(':')]
                 tail_type = sorted([(float(g[1]), g[0]) for g in ga])[-1][-1]
 
-                name = '%'.join([tail_type, nearby_PAS])
+                name = '%'.join([tail_type, nearby_PAS, PET_support])
 
                 # write a bed format to disc
                 ext_handle.write('\t'.join([chrm,
@@ -2708,12 +2765,20 @@ def merge_paths(settings, paths, temp_dir, key, min_covr, comp, reg):
 
         ta = []
         pas = []
+        pet = []
         name_list = name.split(';')
 
         for name2 in name_list:
-            (t_info, nearby_PAS) = name2.split('%')
+            (t_info, nearby_PAS, PET_support) = name2.split('%')
             ta.append(t_info)
+            pet.append(PET_support)
             pas.append(nearby_PAS)
+
+        # Has PET?
+        if any(pet):
+            pet_support = 1
+        else:
+            pet_support = 0
 
         # A or T read?
         if ta.count('T') > ta.count('A'):
@@ -2733,7 +2798,7 @@ def merge_paths(settings, paths, temp_dir, key, min_covr, comp, reg):
             uniquepas.remove('NA')
 
         pases = '#'.join(uniquepas)
-        name = '%'.join([ta_type, pases])
+        name = '%'.join([ta_type, pases, str(pet_support)])
 
         meanbeg = int((int(beg)+int(end))/2)
 
@@ -2834,10 +2899,10 @@ def intersection_sideplot(settings, speedrun):
 
     temp_dir = os.path.join(settings.here, 'temp_files')
     min_covr = 1
-    extendby = 15
+    extendby = 20
 
-    #speedrun = True
-    speedrun = False
+    speedrun = True
+    #speedrun = False
 
     compDsetNr = {'plus_sliced': {},
                   'minus_sliced': {},
@@ -2855,17 +2920,19 @@ def intersection_sideplot(settings, speedrun):
             minus_subset = [path for ds, path in dsetdict[reg].items() if 
                             ('Minus' in ds) and comp in ds]
             if speedrun:
-                plus_subset = plus_subset[:1]
-                minus_subset = minus_subset[:1]
+                plus_subset = plus_subset[:2]
+                minus_subset = minus_subset[:2]
 
             path_dict = {'plus': plus_subset, 'minus': minus_subset}
             merged = {}
 
+            # merge each plus and minus separately
             for key, paths in path_dict.items():
                 merged[key] = merge_paths(settings, paths, temp_dir, key,
                                           min_covr, comp, reg)
 
-            # return a dictionary: separated['plus'/'minus'/'separated]
+            # join plus and minus and return a dictionary
+            # separated['plus'/'minus'/'intersected']
             separated = isect(settings, merged, extendby, temp_dir, comp, reg)
 
             reg_dict[reg] = separated
@@ -2933,17 +3000,22 @@ def count_these(some_dict):
                 # get how many of the isect have PAS
                 data_dict['2+'][comp][reg][key]['all'] = 0
                 data_dict['2+'][comp][reg][key]['PAS'] = 0
+                data_dict['2+'][comp][reg][key]['PET'] = 0
                 data_dict['2+'][comp][reg][key]['T'] = 0
 
                 data_dict['3+'][comp][reg][key]['all'] = 0
                 data_dict['3+'][comp][reg][key]['PAS'] = 0
+                data_dict['3+'][comp][reg][key]['PET'] = 0
                 data_dict['3+'][comp][reg][key]['T'] = 0
 
                 for line in open(keypath, 'rb'):
                     (chrm, beg, end, name, covr, strand) = line.split('\t')
 
                     data_dict['2+'][comp][reg][key]['all'] +=1
-                    t_info, PAS = name.split('%')
+                    t_info, PAS, PET_support = name.split('%')
+
+                    if PET_support:
+                        data_dict['2+'][comp][reg][key]['PET'] +=1
 
                     if t_info == 'T':
                         data_dict['2+'][comp][reg][key]['T'] +=1
@@ -2964,6 +3036,9 @@ def count_these(some_dict):
 
                         if has_pas:
                             data_dict['3+'][comp][reg][key]['PAS'] += 1
+
+                        if PET_support:
+                            data_dict['3+'][comp][reg][key]['PET'] +=1
 
     return data_dict
 
@@ -3506,15 +3581,15 @@ def strand_prediction(settings):
 def intergenic_finder(settings):
     """
     """
-    #speedrun = True
-    speedrun = False
+    speedrun = True
+    #speedrun = False
     region = 'Intergenic'
 
     outhandle = open(os.path.join(settings.here, 'analysis', 'utr_extension',
                                   '3utr_extension.tsf'), 'wb')
 
     header = '\t'.join(['Compartment', 'Extension', 'Found', 'Same strand (\%)',
-                        'PAS', 'T']) + '\n'
+                        'PAS', 'T', 'PET', 'Cufflinks']) + '\n'
     outhandle.write(header)
 
     #for comp in ['Whole_Cell', 'Cytoplasm', 'Nucleus', 'All']:
@@ -3532,6 +3607,7 @@ def intergenic_finder(settings):
         #speedrun = False
         #speedrun = True
         batch_key = 'intergenicFinder'
+        speedrun = False
         dsets, super_3utr = super_falselength(settings, region, batch_key, subset,
                                               speedrun)
         Fdir = '/users/rg/jskancke/phdproject/3UTR/annotation_split/extended3UTR'
@@ -3555,12 +3631,20 @@ def intergenic_finder(settings):
                     beg = str(cls.polyA_coordinate)
                     end = str(cls.polyA_coordinate)
                     strand = cls.strand
+                    pas = 'pasno'
                     if cls.nearby_PAS[0] != 'NA':
                         pas = 'pasyes'
-                    else:
-                        pas = 'pasno'
 
-                    pAouthandle.write('\t'.join([chrm, beg, end, pas,
+                    pet = 'petno'
+                    if cls.PET_support:
+                        pet = 'petyes'
+
+                    cuff = 'cuffno'
+                    if cls.cufflinks_support:
+                        cuff = 'cuffyes'
+
+                    name = '%'.join([pas, pet, cuff])
+                    pAouthandle.write('\t'.join([chrm, beg, end, name,
                                                cls.tail_type, strand])+'\n')
 
         pAouthandle.close()
@@ -3571,7 +3655,6 @@ def intergenic_finder(settings):
         for dnr, dist in enumerate([500, 1000, 5000]):
             intergenic = os.path.join(Fdir, 'trimmed_extended_3UTRs_{0}'.\
                                      format(dist))
-
             if dnr != 0:
                 comp = ' '
             found = {}
@@ -3580,55 +3663,81 @@ def intergenic_finder(settings):
 
             # store the number of poly(A) sites. Select only 
             total = 0
-            same = 0
-            same_PAS = 0
-            same_T = 0
+            countdict = {'same': {'total': 0, 'PAS': 0, 'T': 0, 'PET': 0,
+                                  'Cufflinks': 0},
+                         'other': {'total': 0, 'PAS': 0, 'T': 0, 'PET': 0,
+                                   'Cufflinks': 0}}
             for line in p.stdout:
-                (chma, bega, enda, ts_id, d, stranda, chrmb, begb, endb, pas,
+                (chma, bega, enda, ts_id, d, stranda, chrmb, begb, endb, name,
                  t_info, strandb) = line.split()
 
+                (pas, pet, cuff) = name.split('%')
                 total +=1
+
                 if stranda == strandb:
+                    keyw = 'same'
                     identical = 1
-                    same +=1
-                    if pas == 'pasyes':
-                        same_PAS += 1
-                    if t_info == 'T':
-                        same_T +=1
                 else:
+                    keyw = 'other'
                     identical = 0
 
-                key = chrm+'_'+begb
-                if key in found:
-                    found[key].append(identical)
+                countdict[keyw]['total'] +=1
 
+                if pas == 'pasyes':
+                    countdict[keyw]['PAS'] +=1
+                if t_info == 'T':
+                    countdict[keyw]['T'] +=1
+                if pet == 'petyes':
+                    countdict[keyw]['PET'] +=1
+                if cuff == 'cuffyes':
+                    countdict[keyw]['Cufflinks'] +=1
+
+                # see if you have from both sides with identical
+                checkkey = chrm+'_'+begb
+                if checkkey in found:
+                    found[checkkey].append(identical)
                 else:
-                    found[key] = [identical]
+                    found[checkkey] = [identical]
 
-            failures = []
+            fails = 0
             for key, hits in found.iteritems():
                 if len(set(hits)) != 1:
-                    failures.append(key)
-            fails = len(failures)
+                    fails +=1
 
-            print('Compartment: {0} Extension: {1}'.format(comp, dist))
-            print('Total: {0}, same strand: {1}, ratio: {2}'.format(total, same,
-                                                                    same/total))
-            print('Same strand with PAS: {0}, with T: {1}'.format(same_PAS,
-                                                                  same_T))
-            print('p(A) sites hit by extensions from both sides: {0}'\
-                  .format(fails))
-            print('')
+            #print('Compartment: {0} Extension: {1}'.format(comp, dist))
+            print('Extension: {0}'.format(dist))
+            print('Total hits: {0}'.format(total))
+            #print('p(A) sites hit by extensions from both sides: {0}'\
+                  #.format(fails))
+            for keyw in ['same', 'other']:
+                keytotal = countdict[keyw]['total']
+                print('\t{3} strand: {1}, ratio: {2:.2f}'\
+                      .format(total, keytotal, keytotal/total, keyw.capitalize()))
 
-            # write to a tab-delimited file for ease of re-use.
-            #Extension Total #Same_strand #Same_w PAS # #Same_w T
-            outhandle.write('\t'.join([comp,
-                                       str(dist)+' nt',
-                                       str(total),
-                                       str(same)+\
-                                       ' ('+format(same/total, '.2f')+')',
-                                       format(same_PAS/same, '.2f'),
-                                       format(same_T/same, '.2f')]) + '\n')
+                CUF = countdict[keyw]['Cufflinks']
+                PAS = countdict[keyw]['PAS']
+                PET = countdict[keyw]['PET']
+                T = countdict[keyw]['T']
+                print("""\t{6} strand with PAS: {0} ({1:.2f}),
+                     with PET: {2} ({3:.2f}),
+                     with Cuffl: {4} ({5:.2f}),
+                     with T: {6} ({7:.2f})"""\
+                      .format(PAS, PAS/keytotal,
+                              PET, PET/keytotal,
+                              CUF, CUF/keytotal,
+                              T, T/keytotal,
+                              keyw.capitalize()))
+                print('')
+
+            ## write to a tab-delimited file for ease of re-use.
+            ##Extension Total #Same_strand #Same_w PAS # #Same_w T
+            #outhandle.write('\t'.join([comp,
+                                       #str(dist)+' nt',
+                                       #str(total),
+                                       #str(same)+\
+                                       #' ('+format(same/total, '.2f')+')',
+                                       #format(same_PAS/same, '.2f'),
+                                       #format(same_T/same, '.2f')]) + '\n')
     outhandle.close()
 
 def write_all_pA(settings):
@@ -3761,6 +3870,10 @@ def pet_vs_pa(settings, speedrun):
     """
     Intersect 3+ pA sites with 3UTRs (strand specific? :) ) and compare the
     specificity and sensitifity in your own way.
+
+    Instead of comparing against all these 3UTR exonic regions, why don't you
+    compare against only those that are expressed? Would be tons better. And
+    tons more work.
     """
 
     pA_reads2 = os.path.join(settings.here, 'temp_files', 'all_pA2+.bed')
@@ -3772,10 +3885,10 @@ def pet_vs_pa(settings, speedrun):
     pet_reads30 = '/users/rg/jskancke/phdproject/3UTR/PET/all_Pet_merged30+.bed'
     pet_reads40 = '/users/rg/jskancke/phdproject/3UTR/PET/all_Pet_merged40+.bed'
 
-    #three_utrs = '/users/rg/jskancke/phdproject/3UTR/the_project/'\
-            #'source_bedfiles/3UTR_exons.bed'
     three_utrs = '/users/rg/jskancke/phdproject/3UTR/the_project/'\
-            'source_bedfiles/3UTR-exonic_stranded.bed'
+            'source_bedfiles/3UTR_exons.bed'
+    #three_utrs = '/users/rg/jskancke/phdproject/3UTR/the_project/'\
+            #'source_bedfiles/3UTR-exonic_stranded.bed'
 
     # count 3utrs
     utr_nr = sum((1 for line in open(three_utrs, 'rb')))
@@ -3799,8 +3912,9 @@ def pet_vs_pa(settings, speedrun):
             chrmB, begB, begB, ts_id, val, strandB) = line.split()
 
             nr_hit_set.add('_'.join([chrmA, begA, strandA]))
-            utr_hit_set.add('_'.join([chrmB, begB, strandB]))
+            utr_hit_set.add(ts_id.split('_')[0])
 
+        # adapt ts_id to not count mulit-exons
         # count nr that intersect
         nr_hit = len(nr_hit_set)
         utr_hit = len(utr_hit_set)
@@ -3816,8 +3930,156 @@ def pet_vs_pa(settings, speedrun):
         print l2
         print(' ')
 
-    debug()
+def regionalizer(settings):
+    """
+    Show the distribution of cufflink ends, PET ends, and poly(A) ends in the
+    different genomic regions. First plot shows counts of cluster, the second
+    plot shows the basepairs of clusters. The second row in both figures show
+    numbers normalized to the size of the genomic regions.
+    """
 
+    utrDir = '/users/rg/jskancke/phdproject/3UTR/'
+    pA_ends = os.path.join(settings.here, 'temp_files', 'all_pA3+.bed')
+    cuffLends = os.path.join(utrDir,'CUFF_LINKS/cufflinks_3UTR_ends_merged.bed')
+    petEnds = os.path.join(utrDir, 'PET/all_Pet_merged10+.bed')
+
+    dfiles = ['Poly(A)', 'PET', 'Cufflinks']
+    dfile2path = {'Poly(A)': pA_ends, 'PET': petEnds, 'Cufflinks': cuffLends}
+
+    #regions = ['5UTR-exonic', '5UTR-intronic', '3UTR-exonic', '3UTR-intronic',
+               #'CDS-exonic', 'CDS-intronic', 'Nocoding-exonic',
+               #'Noncoding-intronic', 'Intergenic']
+    regions = ['3UTR-exonic', 'Intergenic', 'CDS-exonic', 'CDS-intronic',
+               'Nocoding-exonic', 'Noncoding-intronic', '5UTR-exonic',
+               '5UTR-intronic', '3UTR-intronic']
+
+    # if not made, make a region-basepairs dict
+    pickfile = 'region_PICKME'
+    # if not pickled, calculate
+    if not os.path.isfile(pickfile):
+        regnorm = dict((reg, 0) for reg in regions)
+
+    # Intersect the above with all regions
+    regionDir = os.path.join(settings.here, 'genomic_regions_hg19')
+    reg2path = {}
+    for fpath in glob.glob(regionDir+'/*'):
+        for reg in regions:
+            if os.path.split(fpath)[1].startswith(reg):
+                reg2path[reg] = fpath
+
+                # if you haven't aldready made this dictionary
+                if not os.path.isfile(pickfile):
+                    for line in open(fpath):
+                        (chrm, beg, end, d,d,d) = line.split()
+                        bps = int(end)-int(beg)
+                        regnorm[reg] += bps
+
+    ## get the pcikeld file if you have aldready calcluateld
+    if not os.path.isfile(pickfile):
+        pickle.dump(regnorm, open(pickfile, 'wb'))
+    else:
+        regnorm = pickle.load(open(pickfile, 'rb'))
+
+    data_dict = AutoVivification()
+
+    pickfile = 'PICKME'
+    # if not pickled, calculate
+    if not os.path.isfile(pickfile):
+
+        for dname, dfile in dfile2path.items():
+            for reg in regions:
+
+                cmd = ['intersectBed', '-a', dfile, '-b', reg2path[reg]]
+                p = Popen(cmd, stdout=PIPE)
+                data_dict['basepairsXn'][dname][reg] = 0
+                data_dict['counts'][dname][reg] = 0
+
+                for line in p.stdout:
+                    (chrm, beg, end, d, n, m) = line.split()
+
+                    data_dict['counts'][dname][reg] += 1
+
+                    basepairs = int(end) - int(beg)
+                    data_dict['basepairsXn'][dname][reg] += basepairs*int(n)
+
+        pickle.dump(data_dict, open(pickfile, 'wb'))
+
+    # if pickled, read from file
+    else:
+        data_dict = pickle.load(open(pickfile, 'rb'))
+
+    # onw where you normalize for region size and one where you don't
+    for typ_nr, typ in enumerate(['counts', 'basepairsXn']):
+        dset_dict = data_dict[typ]
+        fig, axes = plt.subplots(2,3)
+
+        for regNorm_nr, regNormalized in enumerate(['', 'region_normalized']):
+
+            for dset_nr, dset in enumerate(dfiles):
+                regDict = dset_dict[dset]
+
+                # take into account normalization for region AND
+                # normalization for total basepairs in 'pA, cuff, and 
+                pos = np.arange(1, len(regDict)+1)
+                data = []
+                names = []
+                for reg_nr, reg in enumerate(regions[::-1]):
+                    bpairs = regDict[reg]
+
+                    if regNormalized:
+                        data.append(bpairs/regnorm[reg])
+                    else:
+                        data.append(bpairs)
+
+                    names.append(reg)
+
+                ax = axes[regNorm_nr, dset_nr]
+
+                if regNormalized:
+                    c = 'g'
+                else:
+                    c = 'm'
+
+                ax.barh(bottom=pos, width=data, height=1, color=c)
+
+                if dset_nr == 0:
+                    ax.set_yticks(pos+0.5)
+                    ax.set_yticklabels(names, size=9)
+                else:
+                    ax.set_yticklabels([])
+
+                ax.set_xticklabels([])
+
+                if regNorm_nr == 0:
+                    ax.set_title(dset, size=12)
+
+                if regNorm_nr == 0 and dset_nr == 2:
+                    xax2 = ax.twinx()
+                    xax2.set_yticklabels([])
+                    xax2.set_xticklabels([])
+                    xax2.set_ylabel('Not normalized', size=8)
+
+                if regNorm_nr == 1 and dset_nr == 2:
+                    xax2 = ax.twinx()
+                    xax2.set_yticklabels([])
+                    xax2.set_xticklabels([])
+                    xax2.set_ylabel('Normalized by region size', size=8)
+
+        fig.subplots_adjust(left=0.23)
+        fig.set_size_inches(8,4)
+
+        if typ == 'counts':
+            filename = 'Counts_of_clusters_in_regions'
+        else:
+            filename = 'Basepairs_of_clusters_in_regions'
+
+        output_dir = os.path.join(settings.here, 'Results_and_figures',
+                                  'GENCODE_report', 'Figures')
+
+        filepath = os.path.join(output_dir, filename+'.pdf')
+        fig.savefig(filepath, format='pdf')
+        filepath = os.path.join(output_dir, filename+'.eps')
+        fig.savefig(filepath, format='eps', papertype='A4')
 
 def gencode_report(settings, speedrun):
     """ Make figures for the GENCODE report. The report is an overview of
@@ -3825,6 +4087,10 @@ def gencode_report(settings, speedrun):
     """
     #speedrun = True
     speedrun = False
+
+    # TODO interesting for 3'utrs. Before, how long were they on average -- how
+    # much were they extended by?
+    # How many poly(A) sites without PAS also have PET?
 
     # 0.1) Core stats selected regions + genome
     #cumul_stats_printer(settings, speedrun)
@@ -3837,10 +4103,15 @@ def gencode_report(settings, speedrun):
 
     # 2) venn diagram of all the poly(A) sites from the whole genome for 3UTR and
     #venn_polysites(settings, speedrun)
-    # Then: look into the PET data
     # Then: correct the slides with the numbers. Maybe make a table.
-    # Then: improve the post-3' slide as per your notes
-    # Then: cufflinks
+    # Then: cufflinks. Shit this cufflinks.
+    # Maybe you have to add another 'pet' --> cufflinks data. From all the
+    # cufflinks transcripts, write out the 3'end. Specifically write out the +/-
+    # 50 nt around the 3'end. Put this in a BED-file and check it with your
+    # poly(A) reads.
+    # Then you should make two different plots --> one for 'annotated' poly(A)
+    # reads and another for 'non-annotated' poly(A) reads, where you show the
+    # cufflinks support.
     # ...
     # IDEA: For each compartment and for all:
         # region:
@@ -3854,12 +4125,17 @@ def gencode_report(settings, speedrun):
     #rpkm_polyA_correlation(settings, speedrun)
     # still no correlation. (and you should have kept the old code)
 
+    # TODO why is there a difference in the side_sense and intersection plots?
+    # this is a bummer. You seem to have more hits in intersection. However, you
+    # also remember a time when this wasn't so. What could that mean? Why is
+    # that so?
+
     # 4) Sidewise bar plots of the number of poly(A) incidents in the different
     # genomic regions, for poly(A)+ and poly(A)-
-    #side_sense_plot(settings, speedrun) # DONE!
+    #side_sense_plot(settings, speedrun)
 
     # 5) Poly(A)+ pure, intersection, poly(A)-
-    #intersection_sideplot(settings, speedrun)
+    intersection_sideplot(settings, speedrun)
 
     # 6) All side plot!
     #all_sideplot(settings) # just this one left, then copy to 'sum'. then
@@ -3879,7 +4155,7 @@ def gencode_report(settings, speedrun):
 
     # 8) Show what percentage of the intergenic ones are found within 1000 nt of
     # annotated transcript ends (and, preferably, back this up with read
-    # coverage) Got results without coverage.
+    # coverage) Got results without coverage. With PET. With Cufflinks.
     #intergenic_finder(settings)
 
     # 9) How does the PET data fit into all this? Use both good and not-good PET
@@ -3888,12 +4164,14 @@ def gencode_report(settings, speedrun):
     # map to the 3' end specifically, just to the 3UTR generally.
 
     # 10) Compare the % of intersection of PET-3UTR and poly(A) reads
-    pet_vs_pa(settings, speedrun)
+    #pet_vs_pa(settings, speedrun)
 
-    # From working at home: it's most convincing if you give a bar plot that
-    # contains 5X2 bars, each one a comparison of the A/T ratio in each region.
-    # This information will already be in the big figure, but re-make it in a
-    # standing-up way for emphasis
+    # 11) Compare region distributio for poly(A), PET, and Cufflinks
+    # actually count base-pair overlap, and report how much this is for the
+    # different regions in terms of total size. You will see that PET is less
+    # 3UTR-focused than p(A) data. And the same for cufflinks?
+    # This could be that the annotated poly(A) sites are mostly mRNA?
+    #regionalizer(settings)
 
     # split-mapped reads:     2.94e+07 (0.010)
 
@@ -4114,9 +4392,12 @@ def get_gentrex(novel_ext, model):
     for line_nr, line in enumerate(open(model, 'rb')):
         (chrm, d,d, beg, end, d, strand, d,d,d,d, transcript_id, d, exon_nr)\
                 = line.split()[:14]
+
         transcript_id = transcript_id.rstrip(';').strip('"')
         gene_id = '.'.join(transcript_id.split('.')[:-1])
         exon_nr = exon_nr.rstrip(';').strip('"')
+        if float(exon_nr) == 0.5:
+            debug()
 
         # beg_transcript_ID_exonNr
         Utail_ID = '_'.join([beg, transcript_id, exon_nr])
@@ -4322,6 +4603,52 @@ def gencode_cufflinks_report(settings):
     gencsum_handle.close()
 
 
+def get_cufflink_ends(cuff_dir, model, settings):
+    """
+    Return the region +/- 50 nucleotides around the 3'UTR of cufflink end points
+    """
+    novel_ext = os.path.join(cuff_dir, 'deNovoCuffTrs.merge64.'\
+                             'filteredG7.trTypes.txt')
+    # get dicts for the cufflinks model
+    genes, transcripts, exons = get_gentrex(novel_ext, model)
+
+    ending = os.path.splitext(os.path.split(model)[1])[0].split('_')[-1]
+    cuffends = os.path.join(settings.here, 'source_bedfiles',
+                            'cufflinks_ends_{0}.bed'.format(ending))
+
+    outhandle = open(cuffends, 'wb')
+
+    for ex_id, (chrm, beg, end, exon_nr, ts_id, gene_id, lst) in exons.iteritems():
+
+        # get information from the transcript
+        nov_ext, ts_exon_nr, ts_strand, gene_id = transcripts[ts_id]
+
+        if int(exon_nr) == ts_exon_nr:
+            if ts_strand == '+':
+
+                beg = str(int(end)-50)
+                end = str(int(end)+50)
+
+                outhandle.write('\t'.join([chrm,
+                                           beg,
+                                           end,
+                                           ts_id,
+                                           str(nov_ext),
+                                           ts_strand+'\n']))
+        if int(exon_nr) == 0:
+            if ts_strand == '-':
+
+                beg = str(int(beg)-50)
+                end = str(int(beg)+50)
+
+                outhandle.write('\t'.join([chrm,
+                                           beg,
+                                           end,
+                                           ts_id,
+                                           str(nov_ext),
+                                           ts_strand+'\n']))
+    outhandle.close()
+
 def new_cufflinks_report(settings, speedrun=False):
     """ Basic statistics on the cufflinks data.
     1) How many p(A)? How many overlap annotated?
@@ -4364,47 +4691,11 @@ def new_cufflinks_report(settings, speedrun=False):
     p = Popen(cmd, stdout=open(juncfree_pA_path, 'wb'))
     p.wait()
 
-    cuff_dict = '/users/rg/jskancke/phdproject/3UTR/CUFF_LINKS'
-    model = cuff_dict + '/CuffCode_CSHL_exons_sans_GENCODE7.gtf'
-    #bed_model = os.path.join(settings.here, 'source_bedfiles', 'cufflinks_exons.bed')
+    cuff_dir = '/users/rg/jskancke/phdproject/3UTR/CUFF_LINKS'
+    model = cuff_dir+ '/CuffCode_CSHL_exons_sans_GENCODE7_fromAngelika.gtf'
+    # NOTE doesn't work for model2. parsing error.
 
-    novel_ext = cuff_dict + '/novel_or_extended.txt'
-    # get dicts for the cufflinks model
-    genes, transcripts, exons = get_gentrex(novel_ext, model)
-
-    cuffends = os.path.join(settings.here, 'source_bedfiles', 'cufflinks_ends.bed')
-    outhandle = open(cuffends, 'wb')
-
-    for ex_id, (chrm, beg, end, exon_nr, ts_id, gene_id, lst) in exons.iteritems():
-
-        # get information from the transcript
-        nov_ext, ts_exon_nr, ts_strand, gene_id = transcripts[ts_id]
-
-        if int(exon_nr) == ts_exon_nr:
-            if ts_strand == '+':
-
-                beg = str(int(end)-40)
-                end = str(int(end)+40)
-
-                outhandle.write('\t'.join([chrm,
-                                           beg,
-                                           end,
-                                           ts_id,
-                                           str(nov_ext),
-                                           ts_strand+'\n']))
-        if int(exon_nr) == 0:
-            if ts_strand == '-':
-
-                beg = str(int(beg)-40)
-                end = str(int(beg)+40)
-
-                outhandle.write('\t'.join([chrm,
-                                           beg,
-                                           end,
-                                           ts_id,
-                                           str(nov_ext),
-                                           ts_strand+'\n']))
-    outhandle.close()
+    cuffends = get_cufflink_ends(cuff_dir, model, settings)
 
     # 3) intersect the bed_model with the merged polyA sites
     cmd = ['intersectBed', '-wo', '-a', cuffends, '-b', juncfree_pA_path]
@@ -5256,15 +5547,10 @@ def main():
     # Directory paths for figures and where the output lies
     (savedir, outputdir) = [os.path.join(here, d) for d in ('figures', 'output')]
 
-    # Speedruns with chr1
-    chr1 = False
-    #chr1 = True
-
-    # Read UTR_SETTINGS (there are two -- for two different annotations!)
+    # Keep houskeeping information in a settings object
     settings = Settings(os.path.join(here, 'UTR_SETTINGS'), savedir, outputdir,
-                        here, chr1)
+                        here, chr1=False)
 
-    #debug()
     gencode_report(settings, speedrun=False)
 
     # XXX cufflinks report

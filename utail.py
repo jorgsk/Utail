@@ -215,6 +215,36 @@ class Annotation(object):
 
         return pet_dict
 
+    def get_cuff_dict(self):
+        """
+        Intersect the genomic features with cufflinks 3'utr ends
+        """
+        cuff_file = '/users/rg/jskancke/phdproject/3UTR/CUFF_LINKS/'\
+                'cufflinks_3UTR_ends_merged.bed'
+
+        region_path = self.utrfile_path
+
+        cmd = ['intersectBed', '-wa', '-wb', '-a', cuff_file, '-b', region_path]
+
+        cuff_dict = {}
+        # Run the above command  and loop through output
+        f = Popen(cmd, stdout=PIPE)
+        for line in f.stdout:
+
+            (chrm, beg, end, d, d, strnd, d, d, d, utr_id, d, d) = line.split()
+
+            if utr_id in cuff_dict:
+                cuff_dict[utr_id].append((chrm, beg, end, strnd))
+            else:
+                cuff_dict[utr_id] = [(chrm, beg, end, strnd)]
+
+        # For the multi-exon utrs, add [] (they will probably not intersect with
+        # annotated cuff sites.
+        for utr_id in self.feature_coords.iterkeys():
+            if utr_id not in cuff_dict:
+                cuff_dict[utr_id] = []
+
+        return cuff_dict
 
 class UTR(object):
     """
@@ -892,10 +922,21 @@ class PolyAReads(object):
 
 def PETorNot(rpoint, pet_sites, strand):
     """
-    Within 50 of a pet or not?
+    Within 100 of a pet or not?
     """
     for pet in pet_sites:
         if int(pet[1])-100 < rpoint < int(pet[2])+100:
+            return 1
+
+    return 0
+
+def Cuffme(rpoint, cuff_sites, strand):
+    """
+    Within 1 of cufflinks 3UTR end or not? The cufflink ends are already +/- 50,
+    now you look +/- 50, so in total you look 100nt around the cufflinksend.
+    """
+    for cuff in cuff_sites:
+        if int(cuff[1])-50 < rpoint < int(cuff[2])+50:
             return 1
 
     return 0
@@ -2763,6 +2804,7 @@ def only_polyA_writer(dset_id, annotation, pA_seqs, polyA_reads, settings,
                     'nearby_PAS',
                     'PAS_distance',
                     'PET_support',
+                    'cufflinks_support',
                     'number_supporting_reads',
                     'number_unique_supporting_reads',
                     'unique_reads_spread']
@@ -2776,6 +2818,8 @@ def only_polyA_writer(dset_id, annotation, pA_seqs, polyA_reads, settings,
 
     # Get dict with annotated poly(A) sites and dict with utr exons
     pet_dict = annotation.PETdict
+    cuff_dict = annotation.cufflinksDict
+
     a_polyA_sites_dict = annotation.a_polyA_sites_dict
     feature_coords = annotation.feature_coords
 
@@ -2793,6 +2837,7 @@ def only_polyA_writer(dset_id, annotation, pA_seqs, polyA_reads, settings,
         (chrm, beg, end, strand) = feature_coords[feature_id]
         annotated_pA_sites = a_polyA_sites_dict[feature_id]
         anyPet = pet_dict[feature_id]
+        anyCuff = cuff_dict[feature_id]
 
         # you need to go through both plus and minus strands and write the
         # clusters for each. this will change a lot of downstream readings.
@@ -2809,6 +2854,7 @@ def only_polyA_writer(dset_id, annotation, pA_seqs, polyA_reads, settings,
                                                            annotated_pA_sites,
                                                            strand)
                 PET_support = PETorNot(cls_center, anyPet, strand)
+                cufflinks_support = Cuffme(cls_center, anyCuff, strand)
 
                 # getting PAS. If annotation exists, look at the annotated strand.
                 # If not, look at the "other strand" than the poly(A) read maps to.
@@ -2836,6 +2882,7 @@ def only_polyA_writer(dset_id, annotation, pA_seqs, polyA_reads, settings,
                            'nearby_PAS': nearby_PAS,
                            'PAS_distance': PAS_distance,
                            'PET_support': str(PET_support),
+                           'cufflinks_support': str(cufflinks_support),
                            'polyA_average_composition': tail_info,
                            'number_supporting_reads': str(number_supporting_reads),
                            'number_unique_supporting_reads':\
@@ -3299,8 +3346,8 @@ def main():
     # function (called below). It also affects the 'temp' and 'output'
     # directories, respectively.
 
-    DEBUGGING = True # warning... some stuff wasnt updated here
-    #DEBUGGING = False
+    #DEBUGGING = True # warning... some stuff wasnt updated here
+    DEBUGGING = False
 
     # with this option, always remake the bedfiles
     rerun_annotation_parser = False
@@ -3368,6 +3415,9 @@ def piperunner(settings, annotation, simulate, DEBUGGING, beddir, tempdir,
     # AD hoc PET -- should be included in the settings file :(
     annotation.PETdict = annotation.get_PET_dict()
 
+    # :/ more AD HOC! This time cufflinks
+    annotation.cufflinksDict = annotation.get_cuff_dict()
+
     # make a similar dictionary but for pet-reads
 
     # If this is true, the poly(A) reads will be saved after getting them. That
@@ -3402,17 +3452,18 @@ def piperunner(settings, annotation, simulate, DEBUGGING, beddir, tempdir,
                          annotation, DEBUGGING, polyA_cache, here)
 
             ###### FOR DEBUGGING ######
-            akk = pipeline(*arguments)
+            #akk = pipeline(*arguments)
             ###########################
 
-            #result = my_pool.apply_async(pipeline, arguments)
-            #results.append(result)
+            result = my_pool.apply_async(pipeline, arguments)
+            results.append(result)
 
-        debug()
-        #my_pool.close()
-        #my_pool.join()
+        #debug()
+        my_pool.close()
+        my_pool.join()
 
-        #outp = [result.get() for result in results]
+        # we don't return anything, but get results anyway
+        [result.get() for result in results]
 
         # Print the total elapsed time
         print('Total elapsed time: {0}\n'.format(time.time()-t1))
