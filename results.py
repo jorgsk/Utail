@@ -11,12 +11,14 @@ from copy import deepcopy
 
 from subprocess import Popen, PIPE
 
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 #import matplotlib.cm as cm
 from matplotlib import lines
 
-plt.ion() # turn on the interactive mode so you can play with plots
-#plt.ioff() # turn off interactive mode for working undisturbed
+#plt.ion() # turn on the interactive mode so you can play with plots
+plt.ioff() # turn off interactive mode for working undisturbed
 
 import csv2latex
 
@@ -429,8 +431,6 @@ class Plotter(object):
         labels = {'all': 'All', 'PAS': 'With downstream PAS'}
 
         (fig, axes) = plt.subplots(1,2, sharex=True)
-        #plt.ion()
-        #plt.ioff()
 
         for frac_nr, frac in enumerate(fractions):
 
@@ -713,141 +713,6 @@ class Plotter(object):
             filepath = os.path.join(output_dir, fname+'.eps')
             fig.savefig(filepath, format='eps', papertype='A4')
 
-
-    def non_PAS_difference(self, ratio_dict, regions, title, here):
-        compartments = ['Whole_Cell', 'Cytoplasm', 'Nucleus']
-        fractions = ['+', '-']
-
-        # The nr and names of bars in the plot
-        plot_keys = ['T percentage', 'non_gPAS_Ts']
-        plot_keys = ['T percentage', 'non_gPAS_Ts', 'non_PAS_Ts']
-        colors = {'non_gPAS_Ts': 'm', 'non_PAS_Ts': 'g', 'T percentage': 'b'}
-
-        labels = {'non_gPAS_Ts': 'Non-canonical-PAS clusters',
-                  'non_PAS_Ts': 'Non-PAS clusters',
-                  'T percentage': 'T percentage'}
-
-        sidelabels = {'Whole_Cell': 'Whole cell', 'Cytoplasm': 'Cytoplasm',
-                      'Nucleus': 'Nucleus'}
-
-        # Make plots both for 2+/annot reads or for 1/reads
-        # more honest: 2/1 and show % of annot ...
-        for key1 in ['morethan1OA', 'only1']:
-
-            (fig, axes) = plt.subplots(3,2, sharex=True)
-            #plt.ion()
-            #plt.ioff()
-
-            for comp_nr, comp in enumerate(compartments):
-                for frac_nr, frac in enumerate(fractions):
-
-                    plotme = {'non_gPAS_Ts': [],
-                              'non_PAS_Ts': [],
-                              'T percentage': []}
-
-                    # get the height of the bars from the input
-                    for region in regions:
-                        thiskey = ':'.join([comp, frac, region])
-                        for k in plot_keys:
-                            plotme[k].append(ratio_dict[thiskey][key1][k])
-
-                    # you want to place the left foot of all at 1,2,3, etc
-                    # you want to place the left foot of T at 1.25
-                    # you want to place the left foot of PAS at 1.375
-                    heights = {'T percentage': 0.25,
-                               'non_gPAS_Ts': 0.125,
-                               'non_PAS_Ts': 0.125}
-
-                    # number of data-points
-                    dpoints = len(plotme.values()[0])
-
-                    # where you want the plotting to start
-                    start = 1
-
-                    # automated calculation of bar positions given the
-                    # height/width. this one's a keeper!
-                    pos = dict()
-                    for knr, k in enumerate(plot_keys):
-                        if knr == 0:
-                            pos[k] = np.arange(start, dpoints+start)
-                        else:
-                            adjust = sum([heights[plot_keys[x]] for x in
-                                       range(knr)])
-                            pos[k] = np.arange(start+adjust, dpoints+start)
-
-                    ax = axes[comp_nr, frac_nr]
-                    rects = dict() # save the rect information
-
-                    # make the actual plots
-                    #for pkey in plot_keys:
-                    for pkey in plot_keys[:-1]:
-                        rects[pkey] = ax.barh(bottom=pos[pkey],
-                                              width=plotme[pkey],
-                                              height=heights[pkey],
-                                              color=colors[pkey],
-                                              label=labels[pkey])
-
-                    # print either the number or percentage
-                    for pkey, rs in rects.items():
-                        for r_nr, rect in enumerate(rs):
-                            width = rect.get_width()
-                            xloc = width + 0.01
-                            # ylocation, centered at bar
-                            yloc = rect.get_y()+rect.get_height()/2.0
-                            clr = 'black'
-                            align = 'left'
-                            #if pkey == 'all':
-                            txt = format(width, '.2f')
-                            fsize = 9
-
-                            ax.text(xloc, yloc, txt,
-                                     horizontalalignment=align,
-                                     verticalalignment='center', color=clr,
-                                     weight='bold', fontsize=fsize)
-
-                    # print the total number for 'all', and the percentage of
-                    # 'all' for the other two
-                    # specify xticks if needeed
-
-                    # put some titles here and there
-                    # get the y-ticks. they should centered
-                    center = sum(heights.values())/2.0
-                    yticks = np.arange(start+center, dpoints+start)
-
-                    if frac_nr == 0:
-                        ax.set_ylabel(sidelabels[comp], size=20)
-                        ax.set_yticks(yticks) # set the 3utr-exonic etc
-                        ax.set_yticklabels(regions) # set the 3utr-exonic etc
-
-                    ax.set_ylim(start-0.5, dpoints+1) # extend the view
-
-                    if frac_nr == 1:
-                        ax.set_yticklabels([])
-
-                    if comp_nr == 0:
-                        ax.set_title('P(A){0}'.format(frac), size=21)
-
-                    # put the legend only in the top-left corner plot
-                    if frac_nr == 1 and comp_nr == 0:
-                        ax.legend(loc='upper right')
-
-            # Set xlim (it's shared)
-            ax.set_xticks(np.arange(0,1.1,0.1))
-            ax.set_xlim((0,1.1))
-
-            fig.subplots_adjust(wspace=0.1)
-            fig.set_size_inches(14.4,19)
-
-            output_dir = os.path.join(here, 'Results_and_figures',
-                                      'GENCODE_report', 'Figures')
-
-            filename = 'non-PAS ratios'
-            filename += '_{0}'.format(key1)
-            filepath = os.path.join(output_dir, filename+'.pdf')
-            fig.savefig(filepath, format='pdf')
-            filepath = os.path.join(output_dir, filename+'.eps')
-            fig.savefig(filepath, format='eps', papertype='A4')
-
     def AllLadderPlot(self, plotdict, settings, data_grouping, yek):
 
         # small color dictionary
@@ -886,7 +751,7 @@ class Plotter(object):
                           linewidth=4, label='All sites')
             ax.plot(read_counts, PAScluster_counts, ls='--', color=cols[title],
                           linewidth=4, label='Sites with PAS')
-            ax.plot(read_counts, PETcluster_counts, ls='-', color=cols[title],
+            ax.plot(read_counts, PETcluster_counts, ls=':', color=cols[title],
                           linewidth=4, label='Sites with PET')
 
             ax.set_xlabel('Billons of reads', size=24)
@@ -915,6 +780,46 @@ class Plotter(object):
         fig.savefig(filepath, format='pdf')
         filepath = os.path.join(output_dir, filename+'.eps')
         fig.savefig(filepath, format='eps', papertype='A4')
+
+    def CyNucComp(self, data_dict, nr_comp, settings):
+        """
+        Make a 2X2 plot of Cyto Nucl with #clustrs and #reads falling in those
+        clusters RoyalBlue is a nice color
+
+    {'Cytoplasm': {'count': [4081, 2938, 7796],
+                   'magnitude': [142051, 88724, 438443]},
+     'Nucleus': {'count': [3104, 2376, 7299], 'magnitude': [75848, 45606, 282801]}}
+        """
+
+        fig, axes = plt.subplots(2,2)
+        c = 'RoyalBlue'
+
+        ylabdict = {'count': '# of clusters',
+                    'magnitude': '# of poly(A) reads'}
+
+        xpos = np.arange(1,nr_comp+1)
+
+        for measure_nr, measure in enumerate(['count', 'magnitude']):
+            for comp_nr, comp in enumerate(['Cytoplasm', 'Nucleus']):
+
+                ax = axes[measure_nr, comp_nr]
+
+                heights = data_dict[comp][measure]
+                ax.bar(xpos, heights, color=c, width=1)
+                #midpart = [' ' for x in range(len(xpos-2))]
+                #ax.set_xticklabels(['beginning'] + midpart + ['end'])
+                ax.set_xlim(1, nr_comp+2)
+
+                if measure_nr == 0:
+                    ax.set_title(comp)
+                if comp_nr == 0:
+                    ax.set_ylabel(ylabdict[measure])
+
+        output_dir = os.path.join(settings.here, 'Results_and_figures',
+                                  'GENCODE_report', 'Figures')
+        filename = 'PolyA_site_usage_{0}'.format(nr_comp)
+        filepath = os.path.join(output_dir, filename+'.pdf')
+        fig.savefig(filepath, format='pdf')
 
 
 def super_falselength(settings, region, batch_key, subset=[], speedrun=False):
@@ -1027,7 +932,7 @@ def get_super_regions(dsets, settings, batch_key):
     # 1) super cluster key: 'chr1-10518929', for example
     # 2) the other datasets where this cluster appears (hela nucl etc)
 
-    cluster_file = os.path.join(settings.here, 'merge_dir', 'merged_pA_' + batch_key)
+    cluster_file = os.path.join(settings.here,'merge_dir','merged_pA_'+batch_key)
     temp_cluster_file = cluster_file + '_temp'
 
     out_handle = open(cluster_file, 'wb')
@@ -1424,7 +1329,7 @@ def data_scooper(cls, keyw, this_dict):
             taildict = this_dict['wPASPET']['tail_lens'][keyw]
             taildict = avrg_tail(cls.tail_info, taildict)
 
-        if cls.Cufflinks_support:
+        if cls.cufflinks_support:
             this_dict['wPASCufflinks']['info_dict'][keyw] += 1
 
             taildict = this_dict['wPASCufflinks']['tail_lens'][keyw]
@@ -1450,7 +1355,7 @@ def data_scooper(cls, keyw, this_dict):
         taildict = this_dict['wPET']['tail_lens'][keyw]
         taildict = avrg_tail(cls.tail_info, taildict)
 
-    if cls.Cufflinks_support:
+    if cls.cufflinks_support:
         this_dict['Cufflinks']['info_dict'][keyw] += 1
 
         taildict = this_dict['Cufflinks']['tail_lens'][keyw]
@@ -1481,9 +1386,8 @@ def get_dsetclusters(subset, region, settings, speedrun, batch_key):
     # subcategories. these subcategories will have one of two dicsts: info_dict
     # and tail_lens.
 
-    categories1 = ['Total clusters', 'morethan1', 'morethan1OA', 'only1',
-                   'morethan2', 'morethan3', 'morethan4', 'morethan10',
-                   'morethan30']
+    categories1 = ['Total clusters', 'morethan1', 'only1', 'morethan2',
+                   'morethan3', 'morethan4', 'morethan10', 'morethan30']
     subcategories = ['All', 'annotated', 'wPAS', 'annotated_wPAS', 'goodPAS',
                      'bestPAS', 'wPET', 'wPASPET', 'Cufflinks', 'wPASCufflinks']
 
@@ -1510,7 +1414,8 @@ def get_dsetclusters(subset, region, settings, speedrun, batch_key):
 
             total_reads[keyw] += cls.nr_support_reads
 
-            bigcl['Total clusters'] = data_scooper(cls, keyw, bigcl['Total clusters'])
+            bigcl['Total clusters'] = data_scooper(cls, keyw,
+                                                   bigcl['Total clusters'])
 
             # Count clusters with 2 or more reads
             for minlim in [1,2,3,4,10,30]:
@@ -1518,12 +1423,6 @@ def get_dsetclusters(subset, region, settings, speedrun, batch_key):
                     key = 'morethan{0}'.format(minlim)
 
                     bigcl[key] = data_scooper(cls, keyw, bigcl[key])
-
-            # Count clusters with 2 or more reads or annotated
-            if cls.nr_support_reads > 1 or\
-               cls.annotated_polyA_distance != 'NA':
-
-                bigcl['morethan1OA'] = data_scooper(cls, keyw, bigcl['morethan1OA'])
 
             # Count clusters with only 1 read
             if cls.nr_support_reads == 1:
@@ -1537,7 +1436,7 @@ def super_cluster_statprinter(dsetclusters, region, thiskey, settings, filename)
 
     statdict = dsetclusters[thiskey]
 
-    keys = ['Total clusters', 'morethan1OA', 'morethan1', 'only1', 'morethan2',
+    keys = ['Total clusters', 'morethan1', 'only1', 'morethan2',
             'morethan3', 'morethan4', 'morethan10', 'morethan30']
 
     #subkeys =  ['All', 'wPAS', 'goodPAS', 'bestPAS', 'annotated',
@@ -1694,11 +1593,11 @@ def clusterladder(settings, speedrun):
     # keep a dictionary with reference to all the plots
     plotdict = {}
 
-    speedrun = True
-    #speedrun = False
+    #speedrun = True
+    speedrun = False
     if speedrun:
-        data_grouping['Poly(A) plus'] = data_grouping['Poly(A) plus'][:2]
-        data_grouping['Poly(A) minus'] = data_grouping['Poly(A) minus'][:2]
+        data_grouping['Poly(A) plus'] = data_grouping['Poly(A) plus'][:3]
+        data_grouping['Poly(A) minus'] = data_grouping['Poly(A) minus'][:3]
 
     region = 'whole'
     for title, dsets in data_grouping.items():
@@ -1719,7 +1618,6 @@ def clusterladder(settings, speedrun):
             # Get the number of 'good' and 'all' clusters
             key = ':'.join(subset)
             batch_key = 'first_ladder'
-            speedrun = False
             dsetclusters = get_dsetclusters(subset, region, settings,
                                             speedrun, batch_key)
 
@@ -1744,7 +1642,7 @@ def count_clusters(dsetclusters, dsetreads):
                 '3+': {
         'All': sum(dsetclusters['morethan2']['All']['info_dict'].values()),
         'PAS': sum(dsetclusters['morethan2']['wPAS']['info_dict'].values()),
-        'PET': sum(dsetclusters['morethan1']['wPET']['info_dict'].values())}
+        'PET': sum(dsetclusters['morethan2']['wPET']['info_dict'].values())}
         }
 
     return countdict
@@ -1763,8 +1661,8 @@ def venn_polysites(settings, speedrun):
                                                (not 'Minus' in ds))]
     #all_ds = [ds for ds in settings.datasets if (('Cytoplasm' in ds) and
                                                #(not 'Minus' in ds))]
-    speedrun = True
-    #speedrun = False
+    #speedrun = True
+    speedrun = False
 
     outdir = os.path.join(settings.here,
                           'Results_and_figures/GENCODE_report/venn_diagram')
@@ -2097,7 +1995,8 @@ def cumul_stats_printer_all(settings, speedrun):
     #speedrun = True
     speedrun = False
 
-    region = 'whole'
+    #region = 'whole'
+    region = 'Intergenic'
     for fraction in ['Plus', 'Minus']:
 
         if fraction == 'Plus':
@@ -2454,7 +2353,7 @@ def barsense_counter(super_3utr, comp, frac, region, d_keys):
             for key in d_keys:
                 minlim = int(key[0])
 
-                if cls.nr_support_reads > minlim:
+                if cls.nr_support_reads > minlim-1:
 
                     count_dict[key]['all'] += 1
 
@@ -2503,8 +2402,8 @@ def side_sense_plot(settings, speedrun):
 
     compDsetNr = {'+': {}, '-':{}}
 
-    speedrun = True
-    #speedrun = False
+    #speedrun = True
+    speedrun = False
 
     for comp in compartments:
         for frac in fractions:
@@ -2518,7 +2417,6 @@ def side_sense_plot(settings, speedrun):
 
             compDsetNr[frac][comp] = len(subset)
 
-            speedrun = True
             if speedrun:
                 subset = subset[:2]
 
@@ -2548,78 +2446,6 @@ def side_sense_plot(settings, speedrun):
 
     p.unified_lying_bar(data_dict, regions, title, blobs, blob_order,
                         settings.here, compartments, filename, compDsetNr)
-
-
-def ratio_counter(dsetclusters):
-    """ Count the numbers important for plotting difference between non-PAS
-    ratios in datasets
-    """
-    thisdict = {'only1': {}, 'morethan1OA': {}}
-
-    for dkey in ['morethan1OA', 'only1']:
-
-        total_As = 0
-        total_Ts = 0
-        PAS_Ts = 0
-        gPAS_Ts = 0
-
-        for kw in ['opposite', 'same']:
-            total_Ts += dsetclusters[dkey]['All']['tail_lens'][kw]['T'][0]
-            total_As += dsetclusters[dkey]['All']['tail_lens'][kw]['A'][0]
-            PAS_Ts += dsetclusters[dkey]['wPAS']['tail_lens'][kw]['T'][0]
-            gPAS_Ts += dsetclusters[dkey]['goodPAS']['tail_lens'][kw]['T'][0]
-
-        thisdict[dkey]['non_PAS_Ts'] = (total_Ts - PAS_Ts)/total_Ts
-        thisdict[dkey]['non_gPAS_Ts'] = (total_Ts - gPAS_Ts)/total_Ts
-        thisdict[dkey]['T percentage'] =  total_Ts/(total_Ts+total_As)
-        thisdict[dkey]['TA ratio'] =  total_Ts/total_As
-
-    return thisdict
-
-def non_PAS_polyA(settings, speedrun):
-    """ Make a measure from the relative amounts of non-PAS T-reads to T-reads.
-    """
-    compartments = ['Whole_Cell', 'Cytoplasm', 'Nucleus']
-    fractions = ['+', '-']
-    #regions = ['5UTR-exonic', '5UTR-intronic', '3UTR-exonic', '3UTR-intronic',
-               #'CDS-exonic', 'CDS-intronic', 'Nocoding-exonic',
-               #'Noncoding-intronic', 'Intergenic']
-    #regions = ['3UTR-exonic', 'CDS-exonic', 'CDS-intronic',
-               #'Nocoding-exonic', 'Noncoding-intronic', 'Intergenic']
-    regions = ['3UTR-exonic', 'CDS-exonic', 'CDS-intronic', 'Intergenic',
-               'anti-3UTR-exonic']
-
-    #regions = ['anti-3UTR-exonic']
-
-    #speedrun = True
-    speedrun = False
-
-    # Get one dict for the bar plot and one dict for the sense-plot
-    ratio_dict = {}
-    for comp in compartments:
-        for frac in fractions:
-
-            if frac == '+':
-                subset = [ds for ds in settings.datasets if (comp in ds) and
-                          (not 'Minus' in ds)]
-            if frac == '-':
-                subset = [ds for ds in settings.datasets if (comp in ds) and
-                          ('Minus' in ds)]
-
-            for region in regions:
-
-                batch_key = 'nonPAS_polyAz'
-                dsetclusters = get_dsetclusters(subset, region, settings,
-                                                speedrun, batch_key)
-
-                key = ':'.join([comp, frac, region])
-
-                # count the number clusters with +1, of those with PAS/good_PAS
-                ratio_dict[key] = ratio_counter(dsetclusters)
-
-    p = Plotter()
-    title = 'Non-PAS polyadenylation'
-    p.non_PAS_difference(ratio_dict, regions, title, settings.here)
 
 def isect(settings, merged, extendby, temp_dir, comp, reg):
     """
@@ -2659,7 +2485,23 @@ def isect(settings, merged, extendby, temp_dir, comp, reg):
         (achrm, abeg, aend, aname, aval, astrnd,
          bchrm, bbeg, bend, bname, bval, bstrnd) = line.split('\t')
 
-        name = '#'.join(aname.split(' '))
+        aTA, aPAS, aPET = aname.split('%')
+        bTA, bPAS, bPET = bname.split('%')
+
+        pases = aPAS.split('#') + bPAS.split('#')
+        pasuniq = list(set(pases))
+        if len(pasuniq)>1 and 'NA' in pasuniq:
+            pasuniq.remove('NA')
+
+        PAS = '#'.join(pasuniq)
+        T = aTA
+
+        if int(aPET)+int(bPET):
+            PET = 1
+        else:
+            PET = 0
+
+        name = '%'.join([T, PAS, str(PET)])
 
         # re-center the intersection
         if int(abeg) < int(bbeg):
@@ -2672,7 +2514,6 @@ def isect(settings, merged, extendby, temp_dir, comp, reg):
         # write the center of the new mergers
         out_handle.write('\t'.join([achrm, str(center), str(center+1), name,
                                    aval, astrnd]) + '\n')
-
     out_handle.close()
 
     # save the output in an output dict
@@ -2771,7 +2612,7 @@ def merge_paths(settings, paths, temp_dir, key, min_covr, comp, reg):
         for name2 in name_list:
             (t_info, nearby_PAS, PET_support) = name2.split('%')
             ta.append(t_info)
-            pet.append(PET_support)
+            pet.append(int(PET_support))
             pas.append(nearby_PAS)
 
         # Has PET?
@@ -2853,6 +2694,7 @@ def all_sideplot(settings):
         # FOR SPEED
         #plus_subset = plus_subset[:1]
         #minus_subset = minus_subset[:1]
+        debug()
 
         path_dict = {'plus': plus_subset, 'minus': minus_subset}
         merged = {}
@@ -2901,8 +2743,8 @@ def intersection_sideplot(settings, speedrun):
     min_covr = 1
     extendby = 20
 
-    speedrun = True
-    #speedrun = False
+    #speedrun = True
+    speedrun = False
 
     compDsetNr = {'plus_sliced': {},
                   'minus_sliced': {},
@@ -2937,11 +2779,11 @@ def intersection_sideplot(settings, speedrun):
 
             reg_dict[reg] = separated
 
+        comp_dict[comp] = reg_dict
+
         compDsetNr['plus_sliced'][comp] = len(plus_subset)
         compDsetNr['intersection'][comp] = len(plus_subset)
         compDsetNr['minus_sliced'][comp] = len(minus_subset)
-
-        comp_dict[comp] = reg_dict
 
     # save the bedfiles for the different regions
     save_dir = os.path.join(settings.here, 'analysis', 'pure')
@@ -3014,7 +2856,7 @@ def count_these(some_dict):
                     data_dict['2+'][comp][reg][key]['all'] +=1
                     t_info, PAS, PET_support = name.split('%')
 
-                    if PET_support:
+                    if int(PET_support):
                         data_dict['2+'][comp][reg][key]['PET'] +=1
 
                     if t_info == 'T':
@@ -3037,7 +2879,7 @@ def count_these(some_dict):
                         if has_pas:
                             data_dict['3+'][comp][reg][key]['PAS'] += 1
 
-                        if PET_support:
+                        if int(PET_support):
                             data_dict['3+'][comp][reg][key]['PET'] +=1
 
     return data_dict
@@ -3581,8 +3423,8 @@ def strand_prediction(settings):
 def intergenic_finder(settings):
     """
     """
-    speedrun = True
-    #speedrun = False
+    #speedrun = True
+    speedrun = False
     region = 'Intergenic'
 
     outhandle = open(os.path.join(settings.here, 'analysis', 'utr_extension',
@@ -3604,10 +3446,7 @@ def intergenic_finder(settings):
         if speedrun:
             subset = subset[:2]
 
-        #speedrun = False
-        #speedrun = True
         batch_key = 'intergenicFinder'
-        speedrun = False
         dsets, super_3utr = super_falselength(settings, region, batch_key, subset,
                                               speedrun)
         Fdir = '/users/rg/jskancke/phdproject/3UTR/annotation_split/extended3UTR'
@@ -3652,6 +3491,7 @@ def intergenic_finder(settings):
         # transcripts that go into the intergenic region
         if comp == 'Whole_Cell':
             comp = 'Whole Cell'
+
         for dnr, dist in enumerate([500, 1000, 5000]):
             intergenic = os.path.join(Fdir, 'trimmed_extended_3UTRs_{0}'.\
                                      format(dist))
@@ -4126,29 +3966,23 @@ def gencode_report(settings, speedrun):
     # still no correlation. (and you should have kept the old code)
 
     # TODO why is there a difference in the side_sense and intersection plots?
-    # this is a bummer. You seem to have more hits in intersection. However, you
-    # also remember a time when this wasn't so. What could that mean? Why is
-    # that so?
+    # this is a bummer. If you add the intersection-number of +3 to poly(A)+, the
+    # number fits exactly to the +2. So there is a +3 +2 mix. Damn. Go carefully
+    # through every step. OK, you find the +2 to +3. Redraw. Rethink.
 
     # 4) Sidewise bar plots of the number of poly(A) incidents in the different
     # genomic regions, for poly(A)+ and poly(A)-
     #side_sense_plot(settings, speedrun)
 
     # 5) Poly(A)+ pure, intersection, poly(A)-
-    intersection_sideplot(settings, speedrun)
+    #intersection_sideplot(settings, speedrun)
 
     # 6) All side plot!
-    #all_sideplot(settings) # just this one left, then copy to 'sum'. then
-    #compare. then choose.
+    #all_sideplot(settings)
 
     # 6) Cytoplasmic vs. nuclear RPKMS in 3UTR exonic exons
     #cytonuclear_rpkms_genc3(settings) # negative result
     #transcripts
-
-    # 6) Comparison of A/T PAS annotated etc for poly(A)- C/N show that there is
-    # enriched expression of short polyA(A) reads. Can potentially be
-    # spontaneous premature annotation, or degradation related polyadenylation.
-    #non_PAS_polyA(settings, speedrun)
 
     # 7) Demonstrate that you can predict the strand with 3UTR
     #strand_prediction(settings)
@@ -5540,6 +5374,91 @@ def get_genc3_rpkm_paths(settings, carrie, my_cell_lines):
 
     return paths
 
+def enders(beg, end, nr_comp):
+
+    beg, end = int(beg), int(end)
+    length = end - beg
+    interval_length = math.ceil(length/nr_comp)
+
+    checkpoints = [beg+interval_length*n for n in range(nr_comp-1)]
+
+    return checkpoints + [end]
+
+
+def EML(settings):
+    """
+    Simply count the number and cluster number of poly(A) site in early, medium,
+    andl late 3UTR, divided by 3.
+
+    Maybe the extension ruins this? Extend by 100!
+
+    # Select only those that have 2/3 polyA sites and all are found in both
+    # nuclear and cytoplasmic.
+    """
+
+    region = '3UTR'
+
+    nr_comp = 3
+
+    counters = [0 for n in range(nr_comp)]
+
+    #speedrun = True
+    speedrun = False
+
+    data_dict = {'Cytoplasm': {'count': deepcopy(counters),
+                               'magnitude': deepcopy(counters)},
+                'Nucleus': {'count': deepcopy(counters),
+                            'magnitude': deepcopy(counters)}}
+
+    for comp in ['Cytoplasm', 'Nucleus']:
+        subset = [ds for ds in settings.datasets if comp in ds and
+                     ('Minus' not in ds)]
+
+        #subset = subset[:2] # XXX REMOVE
+
+        batch_key = 'EML'
+        dsets, super_3utr = super_falselength(settings, region, batch_key,
+                                              subset, speedrun)
+
+        for utr_name, utr in super_3utr[region].iteritems():
+
+            if len(utr.super_clusters) != nr_comp:
+                continue
+
+            for cls in utr.super_clusters:
+
+                # divide the 3UTR into X pieces, and see where the poly(A) sites
+                utrEnd, utrBeg = int(utr.end), int(utr.beg)
+
+                # skip those not on the same strand
+                if cls.strand != utr.strand:
+                    break
+
+                if cls.nr_support_reads < 2:
+                    break
+
+                checkpoints = np.linspace(utrBeg, utrEnd, nr_comp)[1:]
+
+                this_pA = cls.polyA_coordinate
+
+                # TODO something is strange, the distribution is turned on its
+                # head; lowhighlow. fixaftermeeting.
+                for c_nr, cpoint in enumerate(checkpoints):
+
+                    if utr.strand == '+':
+                        index = c_nr
+                    if utr.strand == '-':
+                        index = nr_comp - (c_nr+1)
+
+                    if this_pA < cpoint:
+                        data_dict[comp]['count'][index] += 1
+                        data_dict[comp]['magnitude'][index] += cls.nr_support_reads
+                        break
+
+    p = Plotter()
+    p.CyNucComp(data_dict, nr_comp, settings)
+
+
 def main():
     # The path to the directory the script is located in
     here = os.path.dirname(os.path.realpath(__file__))
@@ -5552,6 +5471,9 @@ def main():
                         here, chr1=False)
 
     gencode_report(settings, speedrun=False)
+
+    # early, medium, late poly(A) in cytoplasm and nucleus
+    #EML(settings)
 
     # XXX cufflinks report
     #new_cufflinks_report(settings, speedrun=False)

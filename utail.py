@@ -1212,6 +1212,9 @@ def coverage_wrapper(dset_id, filtered_reads, utrfile_path):
     is large, this takes a lot of time, and the resulting file is huge.
     """
 
+    ## XXX This is a sin: I'm introducing a once-in-a-lifetime piece of code
+    #here. It outputs the coverage 
+
     # Rename path to 'covered_...'
     (dirpath, basename) = os.path.split(filtered_reads)
     out_path = os.path.join(dirpath, 'covered_'+dset_id)
@@ -2978,7 +2981,7 @@ def parse_clusters(in_clusters, out_clusters, out_header):
     outfile.close()
 
 
-def make_bigwigs(settings, annotation, tempdir, output_dir, here):
+def make_bigwigs(settings, annotation, tempdir, output_dir, here, onlyBed):
     """
     Make bigwig files of the polyA reads and the normal reads of the datasets
     specified under [BIGWIG] in the UTR_SETTINGS file.
@@ -3070,6 +3073,10 @@ def make_bigwigs(settings, annotation, tempdir, output_dir, here):
         bedG_path = os.path.join(savedir, shortname + '.bedGraph')
         bigW_path = os.path.join(savedir, shortname + '.bigWig')
 
+        if onlyBed:
+            bed_path = os.path.join(savedir, shortname + '_coverage_.bed')
+
+
         dset_sort = dset+'_sorted'
         # Don't sort file if sorted file exists. DANGEROUS BUT FASTER.
         if not os.path.isfile(dset_sort):
@@ -3089,6 +3096,11 @@ def make_bigwigs(settings, annotation, tempdir, output_dir, here):
             cmd_intersect = ['intersectBed', '-a', dset_sort, '-b', utrfile_path]
             cmd_bedGraph = ['genomeCoverageBed', '-bg', '-i', 'stdin', '-g', hg19]
             cmd_bedGtoBW = [bedGtoBigWig, bedG_path, hg19, bigW_path]
+
+            # of only bed don't make the other stuff
+            if onlyBed:
+                f = Popen(cmd_intersect, stdout = open(bed_path, 'wb'))
+                continue
 
             f = Popen(cmd_intersect, stdout = PIPE)
             g = Popen(cmd_bedGraph, stdin = f.stdout, stdout = open(bedG_path, 'wb'))
@@ -3309,7 +3321,7 @@ def pas_dist_bed_length(in_PAS, out_PAS, header):
     can check the result in the genome browser.
     """
     infile = open(in_PAS, 'rb')
-    in_header = infile.next()
+    infile.next() # skip header
 
     outfile = open(out_PAS, 'wb')
     outfile.write(header + '\n')
@@ -3333,7 +3345,8 @@ def pas_dist_bed_length(in_PAS, out_PAS, header):
 
                 pas_and_dist = pas+'_'+dist
 
-                outfile.write('\t'.join([chrm, pas_beg, pas_end, pas_and_dist])+'\n')
+                outfile.write('\t'.join([chrm, pas_beg, pas_end,
+                                         pas_and_dist])+'\n')
 
     outfile.close()
 
@@ -3350,8 +3363,8 @@ def main():
     DEBUGGING = False
 
     # with this option, always remake the bedfiles
-    rerun_annotation_parser = False
-    #rerun_annotation_parser = True
+    #rerun_annotation_parser = False
+    rerun_annotation_parser = True
 
     # The path to the directory the script is located in
     here = os.path.dirname(os.path.realpath(__file__))
@@ -3383,11 +3396,7 @@ def main():
                             settings.annotation_format,
                             settings.annotated_polyA_sites)
 
-    # DEBUGGING: only the first two regions
-    #settings.region_files = settings.region_files[:2]
-    # REMOVE LATER
-
-    # loop through all regions supplied (often this will be just 1 -- the 3UTR)
+    # loop through all regions supplied
     for region_file in settings.region_files:
         # update the region bedfile for each run
 
@@ -3470,13 +3479,14 @@ def piperunner(settings, annotation, simulate, DEBUGGING, beddir, tempdir,
 
     ###################################################################
 
-    ## if set, make bigwig files
-    #if settings.bigwig:
-        #make_bigwigs(settings, annotation, tempdir, output_dir, here)
+    # if you only want the bed coverage, set it here.
+    onlyBed = True
+    # if set, make bigwig files
+    if settings.bigwig:
+        make_bigwigs(settings, annotation, tempdir, output_dir, here, onlyBed)
 
 if __name__ == '__main__':
     main()
-
 
 # NOTES:
     # Time for transcription < 10 minutes
