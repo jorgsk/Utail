@@ -90,8 +90,8 @@ class Settings(object):
         debugging!
         """
 
-        self.chr1 = True
-        #self.chr1 = False
+        #self.chr1 = True
+        self.chr1 = False
         #self.read_limit = False
         #self.read_limit = 5000000 # less than 10000 no reads map
         self.read_limit = 5000 # less than 10000 no reads map
@@ -961,7 +961,7 @@ def annotation_dist(rpoint, annotated_polyA_sites, strand):
     # If you get here, you didn't find any annotated distances
     return 'NA'
 
-def get_pas_and_distance(pas_patterns, sequence, settings, pm_strand):
+def get_pas_and_distance(pas_patterns, sequence):
     """
     Go through the -40 from the polya read average. Collect PAS and distance
     as you find them. Must supply poly(A) sites relative to UTR-beg. The
@@ -1998,8 +1998,14 @@ def map_reads(processed_reads, avrg_read_len, settings):
                 noisecount += 1
                 continue
 
+            # Get the PAS and the PAS distance of this read
+            PAS, PAS_dist = get_early_PAS(seq, at, strand)
+            nPAS = ':'.join(PAS)
+            nPAS_dist = ':'.join([str(d) for d in PAS_dist])
+
             # Write to file in .bed format
-            name = ' '.join([at, tail_info])
+            name = '#'.join([at, tail_info, nPAS, nPAS_dist])
+            debug()
             reads_file.write('\t'.join([chrom, beg, str(int(beg)+len(seq)), name,
                                       '0', strand]) + '\n')
 
@@ -2018,6 +2024,19 @@ def map_reads(processed_reads, avrg_read_len, settings):
         noiselog.close()
 
     return polybed_path
+
+def get_early_PAS(seq, at, strand, pas_patterns):
+    """
+    Get the PAS and the distance of the putative poly(A) read.
+    """
+
+    # if it came from a T-read, reverse-complement first
+    if at == 'T':
+        seq = reverseComplement(seq)
+
+    return get_pas_and_distance(pas_patterns, seq)
+
+
 
 def read_is_noise(chrm, strand, beg, seq, at, tail_info, settings):
     """
@@ -2195,8 +2214,9 @@ def get_polyA_utr(polyAbed, utrfile_path):
     # Run the above command -- outside the shell -- and loop through output
     f = Popen(cmd, stdout=PIPE)
     for line in f.stdout:
-        # NOTE was supposed to be :7 because of tail_info -- which is gone!
-        # where is it?
+        # you are here: get the output righ
+        debug()
+
         (polyA, utr) = (line.split()[:7], line.split()[7:])
         utr_id = utr[3]
         if not utr_id in utr_polyAs:
@@ -2863,9 +2883,7 @@ def only_polyA_writer(dset_id, annotation, pA_seqs, polyA_reads, settings,
                 # If not, look at the "other strand" than the poly(A) read maps to.
                 sequence = pA_seqs[feature_id][pm_strand][cls_center]
                 (nearby_PAS, PAS_distance) = get_pas_and_distance(pas_patterns,
-                                                                  sequence,
-                                                                  settings,
-                                                                 pm_strand)
+                                                                  sequence)
 
                 if nearby_PAS != 'NA':
                     nearby_PAS = '#'.join(nearby_PAS)
@@ -3359,8 +3377,8 @@ def main():
     # function (called below). It also affects the 'temp' and 'output'
     # directories, respectively.
 
-    #DEBUGGING = True # warning... some stuff wasnt updated here
-    DEBUGGING = False
+    DEBUGGING = True # warning... some stuff wasnt updated here
+    #DEBUGGING = False
 
     # with this option, always remake the bedfiles
     #rerun_annotation_parser = False
