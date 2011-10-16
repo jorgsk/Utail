@@ -1046,9 +1046,6 @@ def zcat_wrapper(dset_id, bed_reads, read_limit, out_path, polyA, polyA_path,
     # Accept up to two mismatches. Make as set for speedup.
     acceptable = set(('1:0:0', '0:1:0', '0:0:1'))
 
-    # nucleotides
-    nucleotides = set(['G', 'A', 'T', 'C'])
-
     # A dictionary of strands
     getstrand = {'R':'-', 'F':'+'}
 
@@ -1118,33 +1115,38 @@ def zcat_wrapper(dset_id, bed_reads, read_limit, out_path, polyA, polyA_path,
                     continue
 
                 # Check for putative poly(T)-head. Remove tail and write to file.
-                if (seq[:min_length] == min_T) or (seq[:rd].count('T') >=rd-1)\
-                   or (seq[:2*rd].count('T') >=2*rd-2):
+                if seq[:min_length] == min_T or\
+                   seq[:rd].count('T') >=rd-1 or\
+                   seq[:2*rd].count('T') >=2*rd-2:
 
                     t_strip = strip_tailT(seq, lead_T, non_T, min_length, rd,
                                           min_T)
                     striplen = len(t_strip)
+
                     if striplen > 25:
                         seqlen = len(seq)
                         tail = seq[:seqlen-striplen]
-                        tail_rep = ':'.join([l+'='+str(tail.count(l)) for
-                                             l in nucleotides])
-                        polyA_file.write(t_strip + ' T '+tail_rep+'\n')
+                        name = '#'.join([t_strip, tail, 'T'])
+
+                        polyA_file.write(name + '\n')
                         tcount +=1
 
                 # Check for putative poly(A)-tail. Remove tail and write to file.
-                if (seq[-min_length:] == min_A) or (seq[-rd:].count('A') >=rd-1)\
-                   or (seq[-2*rd:].count('A') >=2*rd-2):
+                if seq[-min_length:] == min_A or\
+                   seq[-rd:].count('A') >=rd-1 or\
+                   seq[-2*rd:].count('A') >=2*rd-2:
 
                     a_strip = strip_tailA(seq, trail_A, non_A, min_length, rd,
                                           min_A)
                     striplen = len(a_strip)
+
                     if striplen > 25:
                         seqlen = len(seq)
                         tail = seq[-(seqlen-striplen):]
-                        tail_rep = ':'.join([l+'='+str(tail.count(l)) for
-                                             l in nucleotides])
-                        polyA_file.write(a_strip + ' A '+tail_rep+'\n')
+
+                        name = '#'.join([a_strip, tail, 'A'])
+
+                        polyA_file.write(name + '\n')
                         acount += 1
 
     out_file.close()
@@ -1914,7 +1916,9 @@ def process_reads(pA_reads_path):
 
     for line in open(pA_reads_path, 'rb'):
         # add lines until there are 2 entries in linepair
-        (seq, at, tail_info) = line.split()
+        (seq, tail, at) = line.split('#')
+        at = at.strip('\n') # remove linebreak
+
         seqlen = len(seq)
         if seqlen > 25:
             As = seq.count('A')
@@ -1923,8 +1927,8 @@ def process_reads(pA_reads_path):
             if (As/seqlen < 0.70) and (Ts/seqlen < 0.70):
                 length_sum += seqlen
                 tot_reads += 1
-                # trim the title
-                outfile.write('>{0}\t{1}\n'.format(at, tail_info)+seq+'\n')
+                # write to fasta format
+                outfile.write('>{0}\t{1}\n'.format(at, tail)+seq+'\n')
 
     if tot_reads > 0:
         avrg_len = length_sum/float(tot_reads)
@@ -1946,12 +1950,6 @@ def map_reads(processed_reads, avrg_read_len, settings):
     Regardless, only accept uniquely mapping reads.
     """
 
-    PAS_sites = ['AATAAA', 'ATTAAA', 'TATAAA', 'AGTAAA', 'AAGAAA', 'AATATA',
-                 'AATACA', 'CATAAA', 'GATAAA', 'AATGAA', 'TTTAAA', 'ACTAAA',
-                 'AATAGA']
-
-    pas_patterns = [re.compile(pas) for pas in PAS_sites]
-
     # File path of the mapped reads
     mapped_reads = os.path.splitext(processed_reads)[0]+'_mapped'
 
@@ -1967,12 +1965,15 @@ def map_reads(processed_reads, avrg_read_len, settings):
         mismatch_nr = 3
 
     ### mapping trimmed reads
-    ### DEBUG skipping this step for speedy work :) XXX
     command = "gem-mapper -I {0} -i {1} -o {2} -q ignore -m {3}"\
             .format(settings.gem_index, processed_reads, mapped_reads, mismatch_nr)
 
-    p = Popen(command.split())
-    p.wait()
+    # XX REMOVE ME!!! JUST TO SKIP THE MAPPING DEBUG!! XXX 
+    if not os.path.isfile(mapped_reads + '.0.map'):
+        p = Popen(command.split())
+        p.wait()
+    else:
+        pass
 
     # Accept mismatches according to average read length
     acceptables = {1: set(('1:0', '0:1')), 2: set(('1:0:0', '0:1:0', '0:0:1')),
@@ -1989,7 +1990,7 @@ def map_reads(processed_reads, avrg_read_len, settings):
     allcount = 0
 
     for line in open(mapped_reads + '.0.map', 'rb'):
-        (at, tail_info, seq, mapinfo, position) = line.split('\t')
+        (at, tail, seq, mapinfo, position) = line.split('\t')
 
         # Acceptable reads and poly(A) reads are mutually exclusive.
         if mapinfo in acceptable:
@@ -1999,26 +2000,33 @@ def map_reads(processed_reads, avrg_read_len, settings):
             strand = getstrand[rest[0]]
             beg = start_re.match(rest[1:]).group()
 
+            # Determine the cleavage site and strand of the read
+
+            # it came from the - strand
+            if (at == 'T' and strand == '+') or (at == 'A' and strand == '-'):
+                realStrand = '-'
+                cleaveSite = beg
+
+            # it came from the + strand
+            if (at == 'T' and strand == '-') or (at == 'A' and strand == '+'):
+                realStrand = '+'
+                cleaveSite = str(int(beg)+len(seq))
+
             ## Don't write if this was a noisy read
-            if read_is_noise(chrom, strand, beg, seq, at, tail_info, settings):
+            if read_is_noise(chrom, realStrand, int(cleaveSite), seq, at, tail,
+                             settings):
                 noisecount += 1
                 continue
 
-            # Get the PAS and the PAS distance of this read
-            PAS, PAS_dist = get_early_PAS(seq, at, pas_patterns)
-
-            if PAS != 'NA':
-                nPAS = ':'.join(PAS)
-                nPAS_dist = ':'.join([str(d) for d in PAS_dist])
-            else:
-                nPAS = 'NA'
-                nPAS_dist = 'NA'
+            # Store the seq-file with the PAS-cluster. You will align them in
+            # downstream code.
 
             # Write to file in .bed format
-            name = '#'.join([at, tail_info, nPAS, nPAS_dist])
+            name = '#'.join([at, tail, seq])
+            end = str(int(cleaveSite) + 1)
 
-            reads_file.write('\t'.join([chrom, beg, str(int(beg)+len(seq)), name,
-                                      '0', strand]) + '\n')
+            reads_file.write('\t'.join([chrom, cleaveSite, end, name,
+                                      '0', realStrand]) + '\n')
 
     # close file
     reads_file.close()
@@ -2056,7 +2064,7 @@ def get_early_PAS(seq, at, pas_patterns):
 
     return PAS, tuple(PAS_dist)
 
-def read_is_noise(chrm, strand, beg, seq, at, tail_info, settings):
+def read_is_noise(chrm, realStrand, cleaveSite, seq, at, tail, settings):
     """
     Get the original sequence. If the A/T count on the geneomic sequence is
     within 30% of the A/T count on the genome, ignore the read. This corresponds
@@ -2066,49 +2074,76 @@ def read_is_noise(chrm, strand, beg, seq, at, tail_info, settings):
     of course, this is a simply solution. In fact, the longer the tail, the less
     likely it is that the reads follow each other. But this will have to do.
 
+    There are two scenarios of genomic noise:
+
+        1)
+        GGCCCAAAAAAAA
+        CCGGGTTTTTTTT
+
+    and
+
+        2)
+        TTTTTTTTGGAC
+        AAAAAAAACCTG
+
+    (XXXXTTTT on + and TTTTXXXX on - don't apply because you look for A-ends and
+    T-heads)
+
+    In 1), you classify this as a poly(A) read on the + strand. Thus, you need
+    to check the + sequence where the tail is for As.
+    in 2), you classify this as a poly(A) read on the - strand. Thus, check the
+    - strand for As.
+
     However, keep in mind that you accept all kinds of reads, irrespective of
     quality measure. God, to do this properly, you need to take qualities into
     account ...
     """
-    frac = 0.3
+    frac = 0.3 # if the polyA tail has 10A, accept 6 or fewer As in the genomic
+    # sequence.
+
     # get the sequences! note: the sequence fetcher automatically
     # reverse-transribes regions on the - strand. In other words, it
     # always returns sequences in the 5->3 direction.
-    # However
-    seq_len = len(seq)
-    beg = int(beg)
-    end = beg+seq_len
-    # for getting the nucleotide counts fast
-    nuc_dicts = dict(b.split('=') for b in tail_info.split(':'))
-    strip_len = sum([int(val) for val in nuc_dicts.values()])
+
+    tailCount = tail.count(at)
+
+    tail_len = len(tail)
 
     ## it came from the - strand
-    if (at == 'T' and strand == '+') or (at == 'A' and strand == '-'):
+    if realStrand == '-':
         # get beg-strip_len:beg
-        seq_dict = {'seq': (chrm, beg-strip_len-1, beg, strand)}
-        d = genome.get_seqs(seq_dict, settings.hgfasta_path)
+        seq_dict = {'seq': (chrm, cleaveSite - tail_len - 1, cleaveSite,
+                            realStrand)}
+        genomeSeq = genome.get_seqs(seq_dict, settings.hgfasta_path)['seq']
 
     ## it came from the + strand
-    if (at == 'T' and strand == '-') or (at == 'A' and strand == '+'):
+    if realStrand == '+':
         # get beg+seq_len:beg+seq_len+strip_len
-        seq_dict = {'seq': (chrm, end, end+strip_len+1, strand)}
-        d = genome.get_seqs(seq_dict, settings.hgfasta_path)
+        seq_dict = {'seq': (chrm, cleaveSite, cleaveSite + tail_len + 1,
+                            realStrand)}
+        genomeSeq = genome.get_seqs(seq_dict, settings.hgfasta_path)['seq']
 
-    genome_count = d['seq'].count(at)
-    tail_count = int(nuc_dicts[at])
+    genomeAs = genomeSeq.count('A')
 
-    winsize = int(math.floor(tail_count*frac))
-    window = range(tail_count-winsize, tail_count) +\
-            range(tail_count, tail_count+winsize)
+    winsize = int(math.floor(genomeAs*frac))
+    window = range(genomeAs - winsize, genomeAs+1)
+
+    print (tail, 'tail')
+    print (genomeSeq, 'genomic')
+    print genomeAs
+    print window
 
     # return as true noise 
-    if genome_count in window:
+    if tailCount in window:
+        print 'Noise'
+        debug()
         return True
     # return as not-noise
     else:
+        print 'Not noise!'
+        debug()
         return False
 
-    pass
 
 def get_bed_reads(dset_reads, dset_id, read_limit, tempdir, polyA, get_length,
                   polyA_path):
@@ -2285,7 +2320,7 @@ def cluster_loop(ends):
     clustcount = 0
     this_cluster = []
     clusters = []
-    for indx, (val, info) in enumerate(ends):
+    for indx, (val, name) in enumerate(ends):
         ival = int(val)
 
         clustsum = clustsum + ival
@@ -2294,26 +2329,34 @@ def cluster_loop(ends):
 
         # If dist between new entry and cluster mean is < 20, keep in cluster
         if abs(ival - mean) < 20:
-            this_cluster.append((ival, info))
+            this_cluster.append((ival, name))
 
         else: # If not, start a new cluster, and save the old one
             clusters.append(this_cluster)
             clustsum = ival
             clustcount = 1
-            this_cluster = [(ival, info)]
+            this_cluster = [(ival, name)]
 
     # Append the last cluster
     clusters.append(this_cluster)
 
     # Get the mean of the clusters
     cluster_avrg = []
+
     # Store the average tail info from the clusters
     nucsums = []
+
+    # store all sequences
+    seqs = []
 
     for clus in clusters:
         # skip empty clusters
         if clus == []:
             continue
+
+        (at, tail_info, seq) = name.split('#')
+
+        debug()
 
         # The averaged location of the clusters
         clu_sum = sum([k[0] for k in clus])
@@ -2358,14 +2401,16 @@ def cluster_polyAs(settings, utr_polyAs, utrs, polyA):
     tuples. The second piece of information in the tuple is the tail-info. This
     information must be stacked. Should you keep all the information or just the
     average number of nucleotides in the tails? Maybe average is enough.
+
+    A more recent update includes the PAS found on the poly(A) read itself. This
+    is for comparing with the PAS'es in the genome reference sequence.
     """
 
     # If there are no polyA reads or polyA is false: return empty lists 
-    if utr_polyAs == {} or polyA == False:
+    if polyA == False or utr_polyAs == {}:
         polyA_reads = dict((utr_id, {'plus_strand':[[],[], []],
                                      'minus_strand':[[], [], []]})
                            for utr_id in utrs)
-
         return polyA_reads
 
     polyA_reads = {}
@@ -2379,15 +2424,15 @@ def cluster_polyAs(settings, utr_polyAs, utrs, polyA):
         # map to 
         for tup in polyAs:
 
-            (chrm, beg, end, at, tail_info, val, strand) = tup
+            (chrm, beg, end, name, val, strand) = tup
 
             # it came from the - strand
-            if (at == 'T' and strand == '+') or (at == 'A' and strand == '-'):
-                minus_sites.append((beg, tail_info))
+            if  strand == '-':
+                minus_sites.append((beg, name))
 
             # it came from the + strand
-            if (at == 'T' and strand == '-') or (at == 'A' and strand == '+'):
-                plus_sites.append((end, tail_info))
+            if  strand == '+':
+                plus_sites.append((beg, name))
 
         polyA_reads[utr_id] = {'plus_strand': cluster_loop(sorted(plus_sites)),
                                'minus_strand': cluster_loop(sorted(minus_sites))}
@@ -2560,6 +2605,7 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, settings, annotation,
     # clustering somehow
     if polyA:
         print('Clustering poly(A) reads ...')
+
     polyA_clusters = cluster_polyAs(settings, utr_polyAs, feature_coords, polyA)
 
     if polyA:
