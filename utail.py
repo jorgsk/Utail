@@ -2272,7 +2272,12 @@ def get_at_counts(polyAbed, utrfile_path):
 
         # save the intersection of poly(A) sites 
         utr_id = utr[3]
-        utr_polyAs[utr_id] = polyA
+
+        # add all poly(A) sites to each region element
+        if not utr_id in utr_polyAs:
+            utr_polyAs[utr_id] = [tuple(polyA)]
+        else:
+            utr_polyAs[utr_id].append(tuple(polyA))
 
         if polyA[3] == 'T':
             tmapped += 1
@@ -2288,7 +2293,7 @@ def get_at_counts(polyAbed, utrfile_path):
 
     at_bundle = (amapped, tmapped, amapped_tofeature, tmapped_tofeature)
 
-    return at_bundle
+    return at_bundle, utr_polyAs
 
 def cluster_loop(ends):
     """
@@ -2572,7 +2577,7 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, settings, annotation,
     if type(polyA) == str or type(polyA) == unicode:
         polyA_bed_path = polyA
         # Get numbers of As and Ts for a log file
-        at_numbers = get_at_counts(polyA_bed_path, utrfile_path)
+        at_numbers, utr_polyAs = get_at_counts(polyA_bed_path, utrfile_path)
 
     # If polyA is True, trim the extracted polyA reads, remap them, and save the
     # uniquely mapping ones to bed format
@@ -2597,7 +2602,7 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, settings, annotation,
             outhandle = open(at_count_path, 'wb')
             outhandle.write('{0}\t{1}\t{2}'.format(total_reads, acount, tcount))
             outhandle.close()
-        at_numbers = get_at_counts(polyA_bed_path, utrfile_path)
+        at_numbers, utr_polyAs = get_at_counts(polyA_bed_path, utrfile_path)
 
     # Cluster the poly(A) reads for each utr_id. If polyA is false or no polyA
     # reads were found, return a placeholder, since this variable is assumed to
