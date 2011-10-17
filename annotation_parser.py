@@ -1791,9 +1791,8 @@ def extended_3utr(annotation):
         annSplitDir = '/users/rg/jskancke/phdproject/3UTR/annotation_split/non_stranded'
         intergenic = os.path.join(annSplitDir, 'Intergenic_non_stranded.bed')
 
-        # FIX? removed strandeness. Previous setting resulted in only +
-        # extensions. 
-        cmd = ['intersectBed', '-wa', '-wb', '-a', tempPath, '-b', intergenic]
+        # Demand 99% overlap of extension with intergenic
+        cmd = ['intersectBed', '-f', '0.99', '-wa', '-wb', '-a', tempPath, '-b', intergenic]
 
         p = Popen(cmd, stdout=PIPE)
 
