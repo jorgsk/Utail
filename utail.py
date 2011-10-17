@@ -2212,14 +2212,12 @@ def bed_field_converter(out_path, field_nr):
     # Move the temp file to the original file
     os.rename(temp_path, out_path)
 
-def get_polyA_utr(polyAbed, utrfile_path):
+def get_at_counts(polyAbed, utrfile_path):
     """
-    Call intersectBed on the poly(A) reads and on the genomic region file. Return
-    the surviving poly(A) reads in a dictionary, where each region (key) points
-    to all its polyA sites.
+    Get counts of A and T reads that map and how many map to features in your
+    genomic region
     """
     # A dictionary to hold the utr_id -> poly(A)-reads relation
-    utr_polyAs = {}
     amapped = 0
     tmapped = 0
 
@@ -2234,12 +2232,6 @@ def get_polyA_utr(polyAbed, utrfile_path):
     for line in f.stdout:
 
         polyA, utr = line.split()[:7], line.split()[7:]
-        utr_id = utr[3]
-
-        if not utr_id in utr_polyAs:
-            utr_polyAs[utr_id] = [tuple(polyA)]
-        else:
-            utr_polyAs[utr_id].append(tuple(polyA))
 
         if polyA[3] == 'T':
             tmapped += 1
@@ -2255,7 +2247,7 @@ def get_polyA_utr(polyAbed, utrfile_path):
 
     at_bundle = (amapped, tmapped, amapped_tofeature, tmapped_tofeature)
 
-    return utr_polyAs, at_bundle
+    return at_bundle
 
 def cluster_loop(ends):
     """
@@ -2343,7 +2335,7 @@ def cluster_loop(ends):
     # Return the clusters and their average
     return (cluster_avrg, new_clusters, nucsums)
 
-def cluster_polyAs(settings, utr_polyAs, utrs, polyA):
+def cluster_polyAs(settings, polyA_bed_path, utrfile_path, utrs, polyA):
     """
     For each UTR, save the clustered poly(A)-reads from both strands. For
     double-stranded reads, it is known that the poly(A) reads map to the
@@ -2360,8 +2352,9 @@ def cluster_polyAs(settings, utr_polyAs, utrs, polyA):
     average number of nucleotides in the tails? Maybe average is enough.
     """
 
-    # If there are no polyA reads or polyA is false: return empty lists 
-    if utr_polyAs == {} or polyA == False:
+    # you you shouldn't get polyA files or none are found, return empty lists,
+    # because this is needed in downstream code and I've no time to fix that
+    if polyA == False or os.path.getsize(polyA_bed_path) == 0:
         polyA_reads = dict((utr_id, {'plus_strand':[[],[], []],
                                      'minus_strand':[[], [], []]})
                            for utr_id in utrs)
@@ -2370,6 +2363,8 @@ def cluster_polyAs(settings, utr_polyAs, utrs, polyA):
 
     polyA_reads = {}
 
+    # expand the poly(A) sites 
+
     for utr_id, polyAs in utr_polyAs.iteritems():
 
         plus_sites = []
@@ -2377,13 +2372,21 @@ def cluster_polyAs(settings, utr_polyAs, utrs, polyA):
 
         # you know the strand of the poly(A) reads from the A/T and strand they
         # map to 
-        for tup in polyAs:
 
+        # NOTE to use the bedTOols for this you need to get this information
+        # into downstream code. The poly(A) sites must come with the cleavage
+        # site already determined. It's OK! You are alrady doing this with 'true
+        # strand'. Just add the beg/end correctly and replace true strand with
+        # strand, and there you go! Then return here and use extend + merge bed
+
+        for tup in polyAs:
             (chrm, beg, end, at, tail_info, val, strand) = tup
+            (at, tail_info, PAS, PAS_dist) = name.split('#')
 
             # it came from the - strand
             if (at == 'T' and strand == '+') or (at == 'A' and strand == '-'):
                 minus_sites.append((beg, tail_info))
+                minus_sites.append((beg, tail_info, PAS, PAS_dist))
 
             # it came from the + strand
             if (at == 'T' and strand == '-') or (at == 'A' and strand == '+'):
@@ -2525,8 +2528,8 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, settings, annotation,
     # If polyA is a string, it is a path of a bedfile with the polyA sequences
     if type(polyA) == str or type(polyA) == unicode:
         polyA_bed_path = polyA
-        # Get a dictionary for each utr_id with its overlapping polyA reads
-        utr_polyAs, at_numbers = get_polyA_utr(polyA_bed_path, utrfile_path)
+        # Get numbers of As and Ts for a log file
+        at_numbers = get_at_counts(polyA_bed_path, utrfile_path)
 
     # If polyA is True, trim the extracted polyA reads, remap them, and save the
     # uniquely mapping ones to bed format
@@ -2551,16 +2554,16 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, settings, annotation,
             outhandle = open(at_count_path, 'wb')
             outhandle.write('{0}\t{1}\t{2}'.format(total_reads, acount, tcount))
             outhandle.close()
-
-        utr_polyAs, at_numbers = get_polyA_utr(polyA_bed_path, utrfile_path)
+        at_numbers = get_at_counts(polyA_bed_path, utrfile_path)
 
     # Cluster the poly(A) reads for each utr_id. If polyA is false or no polyA
     # reads were found, return a placeholder, since this variable is assumed to
     # exist in downstream code. Further, save the tail information in the
     # clustering somehow
+
     if polyA:
-        print('Clustering poly(A) reads ...')
-    polyA_clusters = cluster_polyAs(settings, utr_polyAs, feature_coords, polyA)
+        polyA_clusters = cluster_polyAs(settings, polyA_bed_path, utrfile_path,
+                                        feature_coords, polyA)
 
     if polyA:
         tx = time.time()
