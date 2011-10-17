@@ -1781,6 +1781,7 @@ def extended_3utr(annotation):
                     end = beg+extendby
                 else:
                     beg = end-extendby
+                    end = end
 
                 tempHandle.write('\t'.join([chrm, str(beg), str(end), tsID, '0',
                                             strand]) + '\n')
@@ -1804,16 +1805,20 @@ def extended_3utr(annotation):
             (achrm, abeg, aend, ts_id, aval, astrnd,
              bchrm, bbeg, bend, bname, bval, bstrnd) = line.split('\t')
 
+            # skip chromosme M
+            if achrm == 'chrmM':
+                continue
+
             if astrnd == '-':
-                beg = max(int(abeg), int(aend))
-                if aend == bend and (int(bend) - beg > 20):
-                    trimdHandle.write('\t'.join([achrm, str(beg), bend, ts_id,
-                                                 aval, astrnd]) + '\n')
+                #beg = max(int(abeg), int(aend))
+                #if aend == bend and (int(bend) - beg > 20):
+                trimdHandle.write('\t'.join([achrm, str(abeg), aend, ts_id,
+                                             aval, astrnd]) + '\n')
             if astrnd == '+':
-                end = min(int(aend), int(bend))
-                if abeg == bbeg and (end - int(bbeg) > 20):
-                    trimdHandle.write('\t'.join([achrm, bbeg, str(end), ts_id,
-                                                 aval, astrnd]) + '\n')
+                #end = min(int(aend), int(bend))
+                #if abeg == bbeg and (end - int(bbeg) > 20):
+                trimdHandle.write('\t'.join([achrm, abeg, aend, ts_id, aval,
+                                             astrnd]) + '\n')
         trimdHandle.close()
 
 
