@@ -3423,8 +3423,8 @@ def strand_prediction(settings):
 def intergenic_finder(settings):
     """
     """
-    #speedrun = True
-    speedrun = False
+    speedrun = True
+    #speedrun = False
     region = 'Intergenic'
 
     outhandle = open(os.path.join(settings.here, 'analysis', 'utr_extension',
@@ -3446,59 +3446,70 @@ def intergenic_finder(settings):
         if speedrun:
             subset = subset[:2]
 
-        batch_key = 'intergenicFinder'
-        dsets, super_3utr = super_falselength(settings, region, batch_key, subset,
-                                              speedrun)
+        # PS! For fast working! I'm commenting out the re-getting if poly(A)
+        # sites
+        #batch_key = 'intergenicFinder'
+        #dsets, super_3utr = super_falselength(settings, region, batch_key, subset,
+                                              #speedrun)
         Fdir = '/users/rg/jskancke/phdproject/3UTR/annotation_split/extended3UTR'
 
-        # use all cell lines and intergenic
+        ## use all cell lines and intergenic
 
         outdir = Fdir
-        outfile = 'intergenic_pAsites'
-        outpath = os.path.join(outdir, outfile)
-        pAouthandle = open(outpath, 'wb')
+        interfile = 'intergenic_pAsites'
+        interPApath = os.path.join(outdir, outfile)
+        #pAouthandle = open(outpath, 'wb')
 
-        toosmall = 1
-        # Write the intergenic ones to file
-        for gulp_id, gulp in super_3utr[region].iteritems():
+        #toosmall = 1
+        ## Write the intergenic ones to file
+        #for gulp_id, gulp in super_3utr[region].iteritems():
 
-            for cls in gulp.super_clusters:
+            #for cls in gulp.super_clusters:
 
-                if cls.nr_support_reads > toosmall: # ?
+                #if cls.nr_support_reads > toosmall: # ?
 
-                    chrm = gulp.chrm
-                    beg = str(cls.polyA_coordinate)
-                    end = str(cls.polyA_coordinate)
-                    strand = cls.strand
-                    pas = 'pasno'
-                    if cls.nearby_PAS[0] != 'NA':
-                        pas = 'pasyes'
+                    #chrm = gulp.chrm
+                    #beg = str(cls.polyA_coordinate)
+                    #end = str(cls.polyA_coordinate)
+                    #strand = cls.strand
+                    #pas = 'pasno'
+                    #if cls.nearby_PAS[0] != 'NA':
+                        #pas = 'pasyes'
 
-                    pet = 'petno'
-                    if cls.PET_support:
-                        pet = 'petyes'
+                    #pet = 'petno'
+                    #if cls.PET_support:
+                        #pet = 'petyes'
 
-                    cuff = 'cuffno'
-                    if cls.cufflinks_support:
-                        cuff = 'cuffyes'
+                    #cuff = 'cuffno'
+                    #if cls.cufflinks_support:
+                        #cuff = 'cuffyes'
 
-                    name = '%'.join([pas, pet, cuff])
-                    pAouthandle.write('\t'.join([chrm, beg, end, name,
-                                               cls.tail_type, strand])+'\n')
+                    #name = '%'.join([pas, pet, cuff])
+                    #pAouthandle.write('\t'.join([chrm, beg, end, name,
+                                               #cls.tail_type, strand])+'\n')
 
-        pAouthandle.close()
+        #pAouthandle.close()
+
         # intersect the intergenic poly(A) sites with the extended
         # transcripts that go into the intergenic region
         if comp == 'Whole_Cell':
             comp = 'Whole Cell'
 
-        for dnr, dist in enumerate([500, 1000, 5000]):
-            intergenic = os.path.join(Fdir, 'trimmed_extended_3UTRs_{0}'.\
+        for dnr, dist in enumerate([500, 1000, 5000, '5k+']):
+            interExtension = os.path.join(Fdir, 'trimmed_extended_3UTRs_{0}'.\
                                      format(dist))
             if dnr != 0:
                 comp = ' '
             found = {}
-            cmd = ['intersectBed', '-wa', '-wb', '-a', intergenic, '-b', outpath]
+
+            cmd = ['intersectBed', '-wa', '-wb', '-a', interPApath, '-b', interExtension]
+
+            # for 5k+, report those that do not overlap with -v
+            if dist == '5k+':
+                interExtension = os.path.join(Fdir, 'trimmed_extended_3UTRs_5000'
+                cmd = ['intersectBed', '-v', '-wa', '-wb', '-a', interPApath, '-b',
+                      interExtension]
+
             p = Popen(cmd, stdout=PIPE)
 
             # store the number of poly(A) sites. Select only 
@@ -3506,10 +3517,12 @@ def intergenic_finder(settings):
             countdict = {'same': {'total': 0, 'PAS': 0, 'T': 0, 'PET': 0,
                                   'Cufflinks': 0},
                          'other': {'total': 0, 'PAS': 0, 'T': 0, 'PET': 0,
+                                   'Cufflinks': 0},
+                         'ambiguous': {'total': 0, 'PAS': 0, 'T': 0, 'PET': 0,
                                    'Cufflinks': 0}}
             for line in p.stdout:
-                (chma, bega, enda, ts_id, d, stranda, chrmb, begb, endb, name,
-                 t_info, strandb) = line.split()
+                (chmPa, begPa, endPa, name, t_info, strandPa, chrmEx, begEx,
+                 endeX, strandEx) = line.split()
 
                 (pas, pet, cuff) = name.split('%')
                 total +=1
@@ -3990,7 +4003,7 @@ def gencode_report(settings, speedrun):
     # 8) Show what percentage of the intergenic ones are found within 1000 nt of
     # annotated transcript ends (and, preferably, back this up with read
     # coverage) Got results without coverage. With PET. With Cufflinks.
-    #intergenic_finder(settings)
+    intergenic_finder(settings)
 
     # 9) How does the PET data fit into all this? Use both good and not-good PET
     #pet_intersection(settings, speedrun)
@@ -4127,7 +4140,7 @@ def merge_polyAs(settings, toosmall, minus, cell_lines, speedrun, expandby):
                                           subset, speedrun)
 
     outdir = os.path.join(settings.here, 'genome_wide_dir')
-    outfile = 'all_pAs.bed'
+    outfile = 'all_pAs_{0}.bed'.format(toosmall)
     outpath = os.path.join(outdir, outfile)
     outhandle = open(outpath, 'wb')
 
@@ -4304,11 +4317,12 @@ def gencode_cufflinks_report(settings):
 
     expandby = 0
 
-    mincovr = 2
     compartments = ['Whole_Cell', 'Cytoplasm', 'Nucleus']
 
     #speedrun = True
     speedrun = False
+
+    mincovr = 1
 
     polyA_path = merge_polyAs(settings, mincovr, minus, compartments,
                                      speedrun, expandby)
@@ -5470,7 +5484,7 @@ def main():
     settings = Settings(os.path.join(here, 'UTR_SETTINGS'), savedir, outputdir,
                         here, chr1=False)
 
-    gencode_report(settings, speedrun=False)
+    #gencode_report(settings, speedrun=False)
 
     # early, medium, late poly(A) in cytoplasm and nucleus
     #EML(settings)
