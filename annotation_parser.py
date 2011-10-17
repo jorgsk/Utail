@@ -1749,23 +1749,13 @@ def extended_3utr(annotation):
     Extend them 1000. Don't subtract! Check how many land within the 5UTR
     (exonic, intronic) of the next one, and also check how many land in the 3UTR
     exonic intronic, of the opposing one. Finally, how many land in CDS intronic
-    ones? For this, use 
+    ones?
     """
 
     an_frmt = 'GENCODE'
     (transcripts, genes) = make_transcripts(annotation, an_frmt)
 
     for extendby in [500, 1000, 5000]:
-
-        # 1) Write the 1000 nt extended versions
-        # TODO you are here, making a 1000 nt extension.
-        # don't overreach! Just try to classify some of those in the intergenic
-        # region as extended 3UTRs. So extend your transcripts, but keep only those
-        # parts that fall in intergenic regions, and that are contiguous with the
-        # beginning of your region. Then intersect that with the poly(A) reads that
-        # land in the intergenic regions, and check how many fall in the correct
-        # strand. Claim these as extended. If you have time, verify with reads. Just
-        # run the regions through u-tail and see if you have coverage.
 
         temp_dir = '/users/rg/jskancke/phdproject/3UTR/annotation_split/extended3UTR'
         temp_file = 'extended_3UTRs_{0}'.format(extendby)
@@ -1798,10 +1788,11 @@ def extended_3utr(annotation):
 
         # 2) Keep the region that overlaps the intergenic region
         # BUG: seems like you keep a lot more.
-        annSplitDir = '/users/rg/jskancke/phdproject/3UTR/annotation_split/stranded'
-        intergenic = os.path.join(annSplitDir, 'Intergenic_stranded.bed')
+        annSplitDir = '/users/rg/jskancke/phdproject/3UTR/annotation_split/non_stranded'
+        intergenic = os.path.join(annSplitDir, 'Intergenic_non_stranded.bed')
 
-        cmd = ['intersectBed', '-s', '-wa', '-wb', '-a', tempPath, '-b', intergenic]
+        # Demand 99% overlap of extension with intergenic
+        cmd = ['intersectBed', '-f', '0.99', '-wa', '-wb', '-a', tempPath, '-b', intergenic]
 
         p = Popen(cmd, stdout=PIPE)
 
@@ -1825,12 +1816,6 @@ def extended_3utr(annotation):
                                                  aval, astrnd]) + '\n')
         trimdHandle.close()
 
-    # 3) Intersect this region with the poly(A) sites that fall in the
-    # intergenic region for all datasets TODO! also an idea: change the
-    # saturation plots: using the super_3utr merger is way too slow. you should
-    # GOOD NEWS! you got lots more results witht the new whole cells. The bad
-    # news is that you don't have equal amount of each datasets any more.
-    # write directly to file instead of making objects -- it's overkill.
 
 def histfunc(dataOne, dataTwo, ax):
     import numpy as np
@@ -1862,9 +1847,9 @@ def histfunc(dataOne, dataTwo, ax):
 
 def main():
     #for chr1 in [True, False]:
-    #for chr1 in [False]:
+    for chr1 in [False]:
     #from matplotlib import pyplot as plt
-    for chr1 in [True]:
+    #for chr1 in [True]:
 
         annotation = '/users/rg/jskancke/phdproject/3UTR/'\
                 'gencode7/gencode7_annotation.gtf'
@@ -1874,6 +1859,8 @@ def main():
                     'gencode7/gencode7_annotation_chr1.gtf'
 
         an_frmt = 'GENCODE'
+        # save extensions to the 3UTR.
+        extended_3utr(annotation)
         #(transcripts, genes) = make_transcripts(annotation, an_frmt)
 
         #sizes1 = []
