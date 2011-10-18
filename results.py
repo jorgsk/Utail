@@ -3457,7 +3457,7 @@ def intergenic_finder(settings):
 
         outdir = Fdir
         interfile = 'intergenic_pAsites'
-        interPApath = os.path.join(outdir, outfile)
+        interPApath = os.path.join(outdir, interfile)
         #pAouthandle = open(outpath, 'wb')
 
         #toosmall = 1
@@ -3506,9 +3506,8 @@ def intergenic_finder(settings):
 
             # for 5k+, report those that do not overlap with -v
             if dist == '5k+':
-                interExtension = os.path.join(Fdir, 'trimmed_extended_3UTRs_5000'
-                cmd = ['intersectBed', '-v', '-wa', '-wb', '-a', interPApath, '-b',
-                      interExtension]
+                interExtension = os.path.join(Fdir, 'trimmed_extended_3UTRs_5000')
+                cmd = ['intersectBed', '-v', '-wa', '-wb', '-a', interPApath, '-b', interExtension]
 
             p = Popen(cmd, stdout=PIPE)
 
@@ -3520,14 +3519,20 @@ def intergenic_finder(settings):
                                    'Cufflinks': 0},
                          'ambiguous': {'total': 0, 'PAS': 0, 'T': 0, 'PET': 0,
                                    'Cufflinks': 0}}
+            nr_ts = set({})
             for line in p.stdout:
-                (chmPa, begPa, endPa, name, t_info, strandPa, chrmEx, begEx,
-                 endeX, strandEx) = line.split()
+                if dist == '5k+':
+                    (chmPa, begPa, endPa, name, t_info, strandPa) = line.split()
+                else:
+                    (chmPa, begPa, endPa, name, t_info, strandPa, chrmEx, begEx,
+                     endeX, ExId, val, strandEx) = line.split()
 
                 (pas, pet, cuff) = name.split('%')
                 total +=1
 
-                if stranda == strandb:
+                nr_ts.add(ExId)
+
+                if strandPa == strandEx:
                     keyw = 'same'
                     identical = 1
                 else:
@@ -3546,7 +3551,7 @@ def intergenic_finder(settings):
                     countdict[keyw]['Cufflinks'] +=1
 
                 # see if you have from both sides with identical
-                checkkey = chrm+'_'+begb
+                checkkey = chrmEx+'_'+begEx
                 if checkkey in found:
                     found[checkkey].append(identical)
                 else:
@@ -3560,6 +3565,8 @@ def intergenic_finder(settings):
             #print('Compartment: {0} Extension: {1}'.format(comp, dist))
             print('Extension: {0}'.format(dist))
             print('Total hits: {0}'.format(total))
+            print('Nr genes hit: {0}'.format(len(nr_ts)))
+
             #print('p(A) sites hit by extensions from both sides: {0}'\
                   #.format(fails))
             for keyw in ['same', 'other']:
@@ -5484,7 +5491,7 @@ def main():
     settings = Settings(os.path.join(here, 'UTR_SETTINGS'), savedir, outputdir,
                         here, chr1=False)
 
-    #gencode_report(settings, speedrun=False)
+    gencode_report(settings, speedrun=False)
 
     # early, medium, late poly(A) in cytoplasm and nucleus
     #EML(settings)

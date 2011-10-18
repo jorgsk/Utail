@@ -1755,6 +1755,8 @@ def extended_3utr(annotation):
     an_frmt = 'GENCODE'
     (transcripts, genes) = make_transcripts(annotation, an_frmt)
 
+    # TODO make this (0, 500), (500, 1000), (1000, 5000)
+    # then make 5k+ by extracting from intergenic these three regions
     for extendby in [500, 1000, 5000]:
 
         temp_dir = '/users/rg/jskancke/phdproject/3UTR/annotation_split/extended3UTR'
@@ -1772,16 +1774,11 @@ def extended_3utr(annotation):
 
                 # get the strand/end of the first ts
                 if strand == '+':
-                    end = tsObj.exons[-1][2]
-                else:
-                    end = tsObj.exons[0][1]
-
-                if strand == '+':
-                    beg = end
+                    beg = tsObj.exons[-1][2]
                     end = beg+extendby
                 else:
+                    end = tsObj.exons[0][1]
                     beg = end-extendby
-                    end = end
 
                 tempHandle.write('\t'.join([chrm, str(beg), str(end), tsID, '0',
                                             strand]) + '\n')
