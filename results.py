@@ -3600,19 +3600,24 @@ def intergenic_finder(settings):
                                        #format(same_T/same, '.2f')]) + '\n')
     outhandle.close()
 
-def write_all_pA(settings):
+def write_all_pA(settings, minus):
 
     co = ['Whole_Cell', 'Cytoplasm', 'Nucleus']
 
-    subset = [ds for ds in settings.datasets if (not 'Minus' in ds) and
-                       ((co[0] in ds) or (co[1] in ds) or (co[2] in ds))]
+    if not minus:
+        subset = [ds for ds in settings.datasets if (not 'Minus' in ds) and
+                           ((co[0] in ds) or (co[1] in ds) or (co[2] in ds))]
+    else:
+        subset = [ds for ds in settings.datasets if ('Minus' in ds) and
+                           ((co[0] in ds) or (co[1] in ds) or (co[2] in ds))]
+
     #speedrun = True
     speedrun = False
     if speedrun:
         subset = subset[:2]
 
     # 1.1) write each poly(A) site to file with +/- 15 and strand
-    batch_key = 'PET'
+    batch_key = 'all'
     region = 'whole'
 
     speedrun = False
@@ -3620,7 +3625,10 @@ def write_all_pA(settings):
                                           subset, speedrun)
 
     temp_dir = os.path.join(settings.here, 'temp_files')
-    superbed_path = os.path.join(temp_dir, 'all_pA.bed')
+    if minus:
+        superbed_path = os.path.join(temp_dir, 'all_pA_minus.bed')
+    else:
+        superbed_path = os.path.join(temp_dir, 'all_pA_plus.bed')
 
     handle = open(superbed_path, 'wb')
 
@@ -4010,7 +4018,7 @@ def gencode_report(settings, speedrun):
     # 8) Show what percentage of the intergenic ones are found within 1000 nt of
     # annotated transcript ends (and, preferably, back this up with read
     # coverage) Got results without coverage. With PET. With Cufflinks.
-    intergenic_finder(settings)
+    #intergenic_finder(settings)
 
     # 9) How does the PET data fit into all this? Use both good and not-good PET
     #pet_intersection(settings, speedrun)
@@ -5491,8 +5499,11 @@ def main():
     settings = Settings(os.path.join(here, 'UTR_SETTINGS'), savedir, outputdir,
                         here, chr1=False)
 
-    gencode_report(settings, speedrun=False)
+    #gencode_report(settings, speedrun=False)
 
+    # simply write out all polyA sites
+    minus = True
+    write_all_pA(settings, minus)
     # early, medium, late poly(A) in cytoplasm and nucleus
     #EML(settings)
 

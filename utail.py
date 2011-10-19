@@ -220,7 +220,7 @@ class Annotation(object):
         Intersect the genomic features with cufflinks 3'utr ends
         """
         cuff_file = '/users/rg/jskancke/phdproject/3UTR/CUFF_LINKS/'\
-                'cufflinks_3UTR_ends_merged.bed'
+                'cufflinks_3UTR_ends_merged_zeroed.bed'
 
         region_path = self.utrfile_path
 
@@ -3446,8 +3446,8 @@ def main():
     # function (called below). It also affects the 'temp' and 'output'
     # directories, respectively.
 
-    DEBUGGING = True # warning... some stuff wasnt updated here
-    #DEBUGGING = False
+    #DEBUGGING = True # warning... some stuff wasnt updated here
+    DEBUGGING = False
 
     # with this option, always remake the bedfiles
     rerun_annotation_parser = False
@@ -3519,8 +3519,8 @@ def piperunner(settings, annotation, simulate, DEBUGGING, beddir, tempdir,
     # If this is true, the poly(A) reads will be saved after getting them. That
     # will save all that reading. They will only be saved if you run with no
     # restriction in reads.
-    #polyA_cache = True
-    polyA_cache = False # XX fix this sometime
+    polyA_cache = True
+    #polyA_cache = False # XX fix this sometime
 
     # Extract the name of the bed-region you are checking for poly(A) reads
     # you might have to extract it differently, because 'intergenic' doesn't
@@ -3548,13 +3548,13 @@ def piperunner(settings, annotation, simulate, DEBUGGING, beddir, tempdir,
                          annotation, DEBUGGING, polyA_cache, here)
 
             ###### FOR DEBUGGING ######
-            akk = pipeline(*arguments)
+            #akk = pipeline(*arguments)
             ###########################
 
-            #result = my_pool.apply_async(pipeline, arguments)
-            #results.append(result)
+            result = my_pool.apply_async(pipeline, arguments)
+            results.append(result)
 
-        debug()
+        #debug()
         my_pool.close()
         my_pool.join()
 
