@@ -90,8 +90,8 @@ class Settings(object):
         debugging!
         """
 
-        self.chr1 = True
-        #self.chr1 = False
+        #self.chr1 = True
+        self.chr1 = False
         #self.read_limit = False
         self.read_limit = 1000000 # less than 10000 no reads map
         #self.read_limit = 5000 # less than 10000 no reads map
@@ -2268,9 +2268,8 @@ def get_at_counts(polyAbed, utrfile_path):
     f = Popen(cmd, stdout=PIPE)
     for line in f.stdout:
 
-        polyA, utr = line.split()[:7], line.split()[7:]
-
         # save the intersection of poly(A) sites 
+        (polyA, utr) = (line.split()[:7], line.split()[7:])
         utr_id = utr[3]
 
         # add all poly(A) sites to each region element
