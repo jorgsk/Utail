@@ -220,7 +220,7 @@ class Annotation(object):
         Intersect the genomic features with cufflinks 3'utr ends
         """
         cuff_file = '/users/rg/jskancke/phdproject/3UTR/CUFF_LINKS/'\
-                'cufflinks_3UTR_ends_merged.bed'
+                'cufflinks_3UTR_ends_merged_zeroed.bed'
 
         region_path = self.utrfile_path
 
