@@ -90,14 +90,14 @@ class Settings(object):
         debugging!
         """
 
-        #self.chr1 = True
-        self.chr1 = False
+        self.chr1 = True
+        #self.chr1 = False
         #self.read_limit = False
-        self.read_limit = 1000000 # less than 10000 no reads map
-        #self.read_limit = 5000 # less than 10000 no reads map
+        #self.read_limit = 1000000 # less than 10000 no reads map
+        self.read_limit = 10000 # less than 10000 no reads map
         self.max_cores = 2
-        #self.get_length = False
-        self.get_length = True
+        self.get_length = False
+        #self.get_length = True
         self.extendby = 10
         #self.extendby = 100
         self.polyA = True
@@ -2128,20 +2128,11 @@ def read_is_noise(chrm, realStrand, cleaveSite, seq, at, tail, settings):
     winsize = int(math.floor(genomeAs*frac))
     window = range(genomeAs - winsize, genomeAs+1)
 
-    print (tail, 'tail')
-    print (genomeSeq, 'genomic')
-    print genomeAs
-    print window
-
     # return as true noise 
     if tailCount in window:
-        print 'Noise'
-        debug()
         return True
     # return as not-noise
     else:
-        print 'Not noise!'
-        debug()
         return False
 
 
@@ -2269,7 +2260,7 @@ def get_at_counts(polyAbed, utrfile_path):
     for line in f.stdout:
 
         # save the intersection of poly(A) sites 
-        (polyA, utr) = (line.split()[:7], line.split()[7:])
+        (polyA, utr) = (line.split()[:6], line.split()[6:])
         utr_id = utr[3]
 
         # add all poly(A) sites to each region element
@@ -2316,7 +2307,7 @@ def cluster_loop(ends):
 
     # If you get an empty set in, return emtpy out
     if ends == []:
-        return [[], [], []]
+        return [[], [], [], []]
 
     clustsum = 0
     clustcount = 0
@@ -2356,20 +2347,16 @@ def cluster_loop(ends):
         if clus == []:
             continue
 
-        (at, tail_info, seq) = name.split('#')
-
-        debug()
-
         # The averaged location of the clusters
         clu_sum = sum([k[0] for k in clus])
         cluster_avrg.append(int(math.floor(clu_sum/len(clus))))
 
         nucsum = {'G':0, 'A':0, 'T':0, 'C':0}
         # Add all nucleotides to the sum
-        nuc_dicts = [dict([b.split('=') for b in k[1].split(':')]) for k in clus]
-        for ndict in nuc_dicts:
-            for nucl, nr in ndict.items():
-                nucsum[nucl] += int(nr)
+        # TODO check if this changes. the k is not like before. XXX
+        for k in clus:
+            this_nuc = k[1].split('#')[0]
+            nucsum[this_nuc] += 1
 
         # Average the nucsum (first name int -> str)
         tmp = []
@@ -2379,6 +2366,12 @@ def cluster_loop(ends):
 
         nucsums.append(nucsum_avrg)
 
+        (at, tail_info, seq) = name.split('#')
+        cluster_seqs =  [k[1].split('#')[2] for k in clus]
+
+        # store the seqs as a $-separated string
+        seqs.append('$'.join(cluster_seqs))
+
     # Strip the tail info from the clusters
     new_clusters = []
     for subcl in clusters:
@@ -2386,7 +2379,7 @@ def cluster_loop(ends):
         new_clusters.append(new_subcl)
 
     # Return the clusters and their average
-    return (cluster_avrg, new_clusters, nucsums)
+    return (cluster_avrg, new_clusters, nucsums, seqs)
 
 def cluster_polyAs(settings, utr_polyAs, utrfile_path, utrs, polyA):
     """
@@ -2404,14 +2397,12 @@ def cluster_polyAs(settings, utr_polyAs, utrfile_path, utrs, polyA):
     information must be stacked. Should you keep all the information or just the
     average number of nucleotides in the tails? Maybe average is enough.
 
-    A more recent update includes the PAS found on the poly(A) read itself. This
-    is for comparing with the PAS'es in the genome reference sequence.
     """
 
     # If there are no polyA reads or polyA is false: return empty lists 
     if polyA == False or utr_polyAs == {}:
-        polyA_reads = dict((utr_id, {'plus_strand':[[],[], []],
-                                     'minus_strand':[[], [], []]})
+        polyA_reads = dict((utr_id, {'plus_strand': [[], [], [], []],
+                                     'minus_strand':[[], [], [], []]})
                            for utr_id in utrs)
         return polyA_reads
 
@@ -2428,15 +2419,14 @@ def cluster_polyAs(settings, utr_polyAs, utrfile_path, utrs, polyA):
         # map to 
 
         for tup in polyAs:
-            (chrm, beg, end, name, val, strand) = tup
-            (at, tail_info, PAS, PAS_dist) = name.split('#')
+            (chrm, beg, end, name, val, realStrand) = tup
 
             # it came from the - strand
-            if  strand == '-':
+            if  realStrand == '-':
                 minus_sites.append((beg, name))
 
             # it came from the + strand
-            if  strand == '+':
+            if  realStrand == '+':
                 plus_sites.append((beg, name))
 
         polyA_reads[utr_id] = {'plus_strand': cluster_loop(sorted(plus_sites)),
@@ -2445,8 +2435,8 @@ def cluster_polyAs(settings, utr_polyAs, utrfile_path, utrs, polyA):
     # For those utr_id that don't have a cluster, give them an empty list; ad hoc
     for utr_id in utrs:
         if utr_id not in polyA_reads:
-            polyA_reads[utr_id] = {'plus_strand': [[],[], []],
-                                   'minus_strand': [[],[], []]}
+            polyA_reads[utr_id] = {'plus_strand':  [[], [], [], []],
+                                   'minus_strand': [[], [], [], []]}
 
     return polyA_reads
 
@@ -2469,7 +2459,7 @@ def downstream_sequence(settings, polyA_clusters, feature_coords):
     for reg_id, pm_dict in polyA_clusters.iteritems():
         orient_dict = {}
 
-        for orientation, (centers, clusters, tail_info) in pm_dict.items():
+        for orientation, (centers, clusters, tail_info, seqs) in pm_dict.items():
 
             # skip the ones without sequence
             if centers == []:
@@ -2601,6 +2591,7 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, settings, annotation,
             outhandle = open(at_count_path, 'wb')
             outhandle.write('{0}\t{1}\t{2}'.format(total_reads, acount, tcount))
             outhandle.close()
+
         at_numbers, utr_polyAs = get_at_counts(polyA_bed_path, utrfile_path)
 
     # Cluster the poly(A) reads for each utr_id. If polyA is false or no polyA
@@ -2612,14 +2603,11 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, settings, annotation,
         print('Clustering poly(A) reads ...')
         polyA_clusters = cluster_polyAs(settings, utr_polyAs, utrfile_path,
                                         feature_coords, polyA)
-
-    if polyA:
         tx = time.time()
         print('Fetching the sequences downstream poly(A) sites ...')
         pA_seqs = downstream_sequence(settings, polyA_clusters, feature_coords)
         print('\tTime to get sequences: {0}\n'.format(time.time() - tx))
 
-    if polyA:
         output_path = os.path.join(output_dir, dset_id+'_polyA_statistics')
         write_polyA_stats(polyA_clusters, acount, tcount, at_numbers,
                           total_reads, feature_coords, output_path, settings)
@@ -2644,6 +2632,8 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, settings, annotation,
                       settings, total_mapped_reads, output_dir, polyA, utr_seqs)
 
     else:
+        # TODO check if you are writing $-separated sequences; if so, all good.
+        # commit that one and push!
         only_polyA_writer(dset_id, annotation, pA_seqs, polyA_clusters,
                           settings, output_dir)
 
@@ -2709,7 +2699,7 @@ def write_polyA_stats(polyA_reads, acount, tcount, at_numbers, total_nr_reads,
 
     for utr, strand_stats in polyA_reads.items():
         # Skip those without poly(A) reads
-        if strand_stats == {'plus_strand': [[], []], 'minus_strand': [[], []]}:
+        if strand_stats == {'plus_strand': [[], [], [], []], 'minus_strand': [[], [], [], []]}:
             continue
 
         clusters += len(strand_stats['minus_strand'][0])
@@ -2808,16 +2798,16 @@ def write_polyA_stats(polyA_reads, acount, tcount, at_numbers, total_nr_reads,
 
             # Add total and unique reads for the clusters
             if feature_coords[utr][3] == '+' and keyw == 'this_strand':
-                (cls_centers, cls_all_reads, info) = strand_stats['plus_strand']
+                (cls_centers, cls_all_reads, info, seqs) = strand_stats['plus_strand']
 
             if feature_coords[utr][3] == '+' and keyw == 'other_strand':
-                (cls_centers, cls_all_reads, info) = strand_stats['minus_strand']
+                (cls_centers, cls_all_reads, info, seqs) = strand_stats['minus_strand']
 
             if feature_coords[utr][3] == '-' and keyw == 'this_strand':
-                (cls_centers, cls_all_reads, info) = strand_stats['minus_strand']
+                (cls_centers, cls_all_reads, info, seqs) = strand_stats['minus_strand']
 
             if feature_coords[utr][3] == '-' and keyw == 'other_strand':
-                (cls_centers, cls_all_reads, info) = strand_stats['plus_strand']
+                (cls_centers, cls_all_reads, info, seqs) = strand_stats['plus_strand']
 
             for cls_center, cls_reads in zip(cls_centers, cls_all_reads):
                 distributions[keyw]['total_reads'].append(len(cls_reads))
@@ -2898,7 +2888,8 @@ def only_polyA_writer(dset_id, annotation, pA_seqs, polyA_reads, settings,
                     'cufflinks_support',
                     'number_supporting_reads',
                     'number_unique_supporting_reads',
-                    'unique_reads_spread']
+                    'unique_reads_spread',
+                    'seqs']
 
     # list of PAS hexamers
     PAS_sites = ['AATAAA', 'ATTAAA', 'TATAAA', 'AGTAAA', 'AAGAAA', 'AATATA',
@@ -2922,7 +2913,8 @@ def only_polyA_writer(dset_id, annotation, pA_seqs, polyA_reads, settings,
 
     for feature_id, polyA_dict in polyA_reads.iteritems():
         # Skip those that don't have any reads in them 
-        if polyA_dict == {'plus_strand': [[], []], 'minus_strand': [[], []]}:
+        if polyA_dict == {'plus_strand':  [[], [], [], []],
+                          'minus_strand': [[], [], [], []]}:
             continue
 
         (chrm, beg, end, strand) = feature_coords[feature_id]
@@ -2940,7 +2932,7 @@ def only_polyA_writer(dset_id, annotation, pA_seqs, polyA_reads, settings,
             if pm_strand == 'plus_strand':
                 pA_coord_strand = '+'
 
-            for cls_center, cls_reads, tail_info in zip(*cluster_list):
+            for cls_center, cls_reads, tail_info, seqs in zip(*cluster_list):
                 annotated_polyA_distance = annotation_dist(cls_center,
                                                            annotated_pA_sites,
                                                            strand)
@@ -2977,7 +2969,8 @@ def only_polyA_writer(dset_id, annotation, pA_seqs, polyA_reads, settings,
                            'number_unique_supporting_reads':\
                            str(number_unique_supporting_reads),
                            'unique_reads_spread':\
-                           str(unique_reads_spread) .format('.2f')}
+                           str(unique_reads_spread) .format('.2f'),
+                               'seqs': seqs}
 
                 output = [output_dict[keyw] for keyw in output_order]
 
@@ -3445,8 +3438,8 @@ def main():
     # function (called below). It also affects the 'temp' and 'output'
     # directories, respectively.
 
-    #DEBUGGING = True # warning... some stuff wasnt updated here
-    DEBUGGING = False
+    DEBUGGING = True # warning... some stuff wasnt updated here
+    #DEBUGGING = False
 
     # with this option, always remake the bedfiles
     rerun_annotation_parser = False
@@ -3547,18 +3540,17 @@ def piperunner(settings, annotation, simulate, DEBUGGING, beddir, tempdir,
                          annotation, DEBUGGING, polyA_cache, here)
 
             ###### FOR DEBUGGING ######
-            #akk = pipeline(*arguments)
+            akk = pipeline(*arguments)
             ###########################
 
-            result = my_pool.apply_async(pipeline, arguments)
-            results.append(result)
+            #result = my_pool.apply_async(pipeline, arguments)
+            #results.append(result)
 
-        #debug()
-        my_pool.close()
-        my_pool.join()
+        #my_pool.close()
+        #my_pool.join()
 
-        # we don't return anything, but get results anyway
-        [result.get() for result in results]
+        ## we don't return anything, but get results anyway
+        #[result.get() for result in results]
 
         # Print the total elapsed time
         print('Total elapsed time: {0}\n'.format(time.time()-t1))
