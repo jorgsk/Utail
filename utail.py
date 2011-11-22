@@ -2353,7 +2353,6 @@ def cluster_loop(ends):
 
         nucsum = {'G':0, 'A':0, 'T':0, 'C':0}
         # Add all nucleotides to the sum
-        # TODO check if this changes. the k is not like before. XXX
         for k in clus:
             this_nuc = k[1].split('#')[0]
             nucsum[this_nuc] += 1

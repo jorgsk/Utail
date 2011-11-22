@@ -20,8 +20,6 @@ from matplotlib import lines
 #plt.ion() # turn on the interactive mode so you can play with plots
 plt.ioff() # turn off interactive mode for working undisturbed
 
-import csv2latex
-
 from operator import attrgetter
 from operator import itemgetter
 import math
@@ -166,7 +164,7 @@ class Super(object):
 
     def __init__(self, dsets, center, covrg, tail_types, tail_infos, strand,
                  nearby_PASes, PAS_distances, annot_distances, PET_sup,
-                 cuffL_support):
+                 cuffL_support, seq):
 
         self.dsets = dsets
         self.polyA_coordinate = center
@@ -174,6 +172,8 @@ class Super(object):
         self.tail_types = tail_types
         self.tail_infos = tail_infos
         self.strand = strand
+
+        self.seqs = seq
 
         annotdist = [int(d) for d in annot_distances if d != 'NA']
 
@@ -261,7 +261,7 @@ class Only(object):
         (chrm, beg, end, utr_ID, strand, polyA_coordinate,
          polyA_coordinate_strand, tail_info, annotated_polyA_distance, nearby_PAS,
          PAS_distance, PET_support, cuff_support, number_supporting_reads,
-         nr_unique_supporting_reads, unique_reads_spread) = input_line.split('\t')
+         nr_unique_supporting_reads, unique_reads_spread, seqs) = input_line.split('\t')
 
         self.chrm = chrm
         self.beg = str_to_intfloat(beg)
@@ -288,6 +288,8 @@ class Only(object):
         self.nr_support_reads = str_to_intfloat(number_supporting_reads)
         self.nr_unique_support_reads = str_to_intfloat(nr_unique_supporting_reads)
         self.uniquet_reads_spread = str_to_intfloat(unique_reads_spread)
+
+        self.seqs = seqs.rstrip('\n')
 
 
 class Cluster(object):
@@ -953,6 +955,9 @@ def get_super_regions(dsets, settings, batch_key):
                     PAS = '--'.join(cls.nearby_PAS)
                     PAS_distance = '--'.join([str(d) for d in cls.PAS_distance])
 
+                    # with seqs, keep cell_line and comp
+                    seqs = cls.seqs + '|' + '|'.join([cell_line, comp])
+
                     name = '%'.join([fromwhere,
                                      feature_id,
                                      cls.tail_type,
@@ -961,8 +966,9 @@ def get_super_regions(dsets, settings, batch_key):
                                      PAS_distance,
                                      str(cls.annotated_polyA_distance),
                                      str(cls.PET_support),
-                                     str(cls.cuff_support)])
-                    # also add PAS_distance and PAS_type
+                                     str(cls.cuff_support),
+                                     seqs])
+
                     out_handle.write('\t'.join([cls.chrm,
                                                 str(cls.polyA_coordinate),
                                                 str(cls.polyA_coordinate+1),
@@ -1007,12 +1013,13 @@ def get_super_regions(dsets, settings, batch_key):
         annot_distances = []
         pet_sup = []
         cuf_sup = []
+        seq = []
 
         # un-split the joined names
         name_list = names.split(';')
         for names2 in name_list:
             (dset, f_id, t_type, t_info, nearby_PAS, PAS_distance,
-             annot_dist, PET_support, cufflinks_support) = names2.split('%')
+             annot_dist, PET_support, cufflinks_support, seqs) = names2.split('%')
             dsets.append(dset)
             f_ids.append(f_id)
             tail_types.append(t_type)
@@ -1022,13 +1029,14 @@ def get_super_regions(dsets, settings, batch_key):
             annot_distances.append(annot_dist)
             pet_sup.append(int(PET_support))
             cuf_sup.append(int(cufflinks_support))
+            seq.append(seqs)
 
         feature_id = set(f_ids).pop()
 
         # create cluster object
         cls = Super(dsets, center, polyA_coverage, tail_types, tail_infos,
                     strand, nearby_PASes, PAS_distances, annot_distances,
-                    pet_sup, cuf_sup)
+                    pet_sup, cuf_sup, seq)
 
         # add the cluster to super_featuress
         super_features[feature_id].super_clusters.append(cls)
@@ -1605,6 +1613,7 @@ def clusterladder(settings, speedrun):
         # sort the dsets in cell_lines by # of reads
         def mysorter(dset):
             return clustercount[dset]
+
         all_dsets = sorted(dsets, key=mysorter, reverse=True)
 
         # add more and more datasets
@@ -5487,6 +5496,81 @@ def EML(settings):
     p = Plotter()
     p.CyNucComp(data_dict, nr_comp, settings)
 
+def snp_analysis(settings):
+    """
+    For all the poly(A) sites, align the seqs for each dataset separately and
+    find either PAS or PAS_with_snips.
+    """
+
+    # Get all PAS and all the snips for thos PAS
+    pas_snips, allpas = pas_and_pas_snips()
+    #all_ds = [ds for ds in settings.datasets if ((('Cytoplasm' in ds) or
+                                                #('Whole_Cell' in ds) or
+                                                #('Nucleus' in ds)) and
+                                               #(not 'Minus' in ds))]
+    all_ds = [ds for ds in settings.datasets if (('Cytoplasm' in ds) and
+                                               (not 'Minus' in ds))]
+    #speedrun = True
+    speedrun = False
+
+    outdir = os.path.join(settings.here, 'SNP_analysis')
+
+    region = '3UTR-exonic'
+
+    subset = all_ds
+
+    batch_key = 'SNP'
+
+    # TODO for the super-cluster you must cluster the seqs + keep info about
+    # where they come from
+    dsets, super_3utr = super_falselength(settings, region, batch_key,
+                                          subset, speedrun)
+
+    for utr_name, utr in super_3utr[region].iteritems():
+
+        for cls in utr.super_clusters:
+
+            # for each dataset, align the seqs
+            # TODO you don't really know how to solve this problem
+            # you are thinking of aligning all the sequences, including the hg19
+            # sequence when there is a PAS, so you know where the PAS fits.
+            # If there is no HG19 PAS, it could be nice to align anyway to see
+            # if you can go from non-PAS to PAS.
+
+            if cls.strand == utr.strand:
+                keyw = 'same'
+            else:
+                keyw = 'opposite'
+
+            debug()
+
+def pas_and_pas_snips():
+
+    allpas = set(['AATAAA', 'ATTAAA', 'TATAAA', 'AGTAAA', 'AAGAAA', 'AATATA',
+                 'AATACA', 'CATAAA', 'GATAAA', 'AATGAA', 'TTTAAA', 'ACTAAA',
+                 'AATAGA'])
+
+    nucs = set('GATC')
+
+    # make a list of all the snips for each PAS
+    pas_snips = {}
+    for pas in allpas:
+
+        this_pas_snps = []
+
+        for nuc_index in range(6):
+            for nuc in nucs:
+
+                # skip if same nucleotide
+                if nuc == pas[nuc_index]:
+                    continue
+
+                this_pas_snps.append( pas[:nuc_index] + nuc + pas[nuc_index+1:])
+
+        pas_snips[pas] = this_pas_snps
+
+    return pas_snips, allpas
+
 
 def main():
     # The path to the directory the script is located in
@@ -5499,11 +5583,14 @@ def main():
     settings = Settings(os.path.join(here, 'UTR_SETTINGS'), savedir, outputdir,
                         here, chr1=False)
 
+    # New analysis! 
+    snp_analysis(settings)
+
     #gencode_report(settings, speedrun=False)
 
     # simply write out all polyA sites
-    minus = True
-    write_all_pA(settings, minus)
+    #minus = True
+    #write_all_pA(settings, minus)
     # early, medium, late poly(A) in cytoplasm and nucleus
     #EML(settings)
 
