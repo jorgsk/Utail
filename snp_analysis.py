@@ -223,9 +223,6 @@ def get_all_pvalues(error_rates, hg19Seqs, settings, region, cell_lines, super_3
     # dict of list of tuples (pval, cell_line+polyAID)
     pvals = dict((cl, []) for cl in cell_lines)
 
-    # dict of # of hypothesis-tests for this cell line
-    hypNr = dict((cl, 0) for cl in cell_lines)
-
     for utr_name, utr in super_3utr[region].iteritems():
 
         for cls in utr.super_clusters:
@@ -286,9 +283,6 @@ def get_all_pvalues(error_rates, hg19Seqs, settings, region, cell_lines, super_3
                 # point in even checking
                 if written < 3:
                     continue
-
-                # you are proceeding with the tests, so add to testnr
-                hypNr[cl] += 40
 
                 outfile = os.path.join(settings.here, 'SNP_analysis',
                                          'temp_files', key + cl+'.aln')
@@ -355,18 +349,18 @@ def get_all_pvalues(error_rates, hg19Seqs, settings, region, cell_lines, super_3
                         pval = stats.binom_test(col[max_nt], max_len,
                                                 probSeqErr)
 
-                        print pval
-                        print ''
-                        print rnaseq_align[:, col_nr-3:col_nr+4]
-                        print ''
-                        print aln_hg19seq[col_nr-3:col_nr+4]
+                        #print pval
+                        #print ''
+                        #print rnaseq_align[:, col_nr-3:col_nr+4]
+                        #print ''
+                        #print aln_hg19seq[col_nr-3:col_nr+4]
 
                         if aln_hg19seq[col_nr] == '-':
                             pvals[cl].append((pval, key, 'insertion'))
                         else:
                             pvals[cl].append((pval, key, 'substitution'))
 
-    return pvals, hypNr
+    return pvals
 
 
 def get_hg19_seqs(settings, super_3utr, region):
@@ -397,25 +391,36 @@ def correct_pvalues(p_values, cell_lines, settings, super_3utr, region):
     For each cell line, sort the p-values in increasing order (low->high).
     Compare these p-values to the modified alpha: (k/n)*alpha where k is the
     rank of the pvalue and n is the total number of tests (total number of
-    nucleotide positions tested. n is equal to $cls for the cell line * 40
+    nucleotide positions tested. n is equal to the number of tries you did.
+
+    Note, there is a problem here. You only do tests when the max_nt is
+    different from the hg19 -> this leaves you with very few tests for the n.
+    However, if you had tested all of them, n would be a lot lot bigger.
     """
 
-    # First get the n-values for each cell line
-    cls_hypNr = dict((cl, 0) for cl in cell_lines)
+    alpha = 0.05
 
-    # For each cluster, if a cell line is there it gets 49
-    for utr_name, utr in super_3utr[region].iteritems():
+    cor_pval = dict((cl, []) for cl in cell_lines)
 
-        for cls in utr.super_clusters:
+    for cl, pvals in p_values.items():
+        n = len(pvals)
+        for rank_nr, (pval, key, mutation_type) in enumerate(sorted(pvals)):
+            q = ((rank_nr+1)/n)*alpha
+            if pval < q:
+                cor_pval[cl].append((pval, key, mutation_type, rank_nr+1, 'significant'))
 
-            # include only those with > 5 supported reads
-            if cls.nr_support_reads < 5:
-                continue
+            print mutation_type
+            print 'pval', pval
+            print 'qval', q
+            if pval < q:
+                print 'significant!'
+            else:
+                print 'insignificant ...'
 
-            # add the seqs for the different cell lines to dict
-            cl_here = set([mset.split('|')[1] for mset in cls.seqs])
-            for cl in cl_here:
-                cls_hypNr[cl] += 40
+            print '-----------------------------------------------'
+
+    debug()
+
 
 
 def snp_analysis(settings):
@@ -471,13 +476,14 @@ def snp_analysis(settings):
     hg19Seqs = get_hg19_seqs(settings, super_3utr, region)
 
     # Get the pvalues for every nucleotide with poly(A) reads
-    p_values, hypNr = get_all_pvalues(error_rates, hg19Seqs,settings,
+    p_values = get_all_pvalues(error_rates, hg19Seqs,settings,
                                       region, cell_lines, super_3utr)
 
     # Get the corrected p-values
+    corr_pval = correct_pvalues(p_values, cell_lines, settings,
+                                super_3utr, region)
+    
     debug()
-    corr_pval = correct_pvalues(p_values, cell_lines, settings, super_3utr,
-                                region)
 
     # Check for PAS in both rna-seq consensus and hg19; when found, compare with
     # the other for mismatch; and if it exists, report a pval for the
