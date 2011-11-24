@@ -93,7 +93,7 @@ class Settings(object):
         self.chr1 = True
         #self.chr1 = False
         #self.read_limit = False
-        #self.read_limit = 1000000 # less than 10000 no reads map
+        #self.read_limit = 10000000 # less than 10000 no reads map
         self.read_limit = 10000 # less than 10000 no reads map
         self.max_cores = 2
         self.get_length = False
@@ -2631,8 +2631,6 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, settings, annotation,
                       settings, total_mapped_reads, output_dir, polyA, utr_seqs)
 
     else:
-        # TODO check if you are writing $-separated sequences; if so, all good.
-        # commit that one and push!
         only_polyA_writer(dset_id, annotation, pA_seqs, polyA_clusters,
                           settings, output_dir)
 

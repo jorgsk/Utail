@@ -468,6 +468,7 @@ tuning = false
 
 # Depending on the plot, combine datasets with everythign or 
 # datasets = %(first_datasets)s:%(same_nr)s
-datasets = %(first_datasets)s:%(same_nr)s:%(not_equal)s
+# datasets = %(first_datasets)s:%(same_nr)s:%(not_equal)s
 
 datasets = GM12878_Cytoplasm:GM12878_CytoplasmReplicate:K562_Cytoplasm:K562_CytoplasmReplicate
+datasets = K562_CytoplasmReplicate

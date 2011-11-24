@@ -33,24 +33,13 @@ import cPickle as pickle
 
 # For making nice tables
 #from TableFactory import *
+import annotation_parser as genome
+import utail
 
-########################################
-# only get the debug function if run from Ipython #
-def run_from_ipython():
-    try:
-        __IPYTHON__
-        return True
-    except NameError:
-        return False
+# For sequence alignment
+from Bio.Align import AlignInfo
+from Bio import AlignIO
 
-if run_from_ipython():
-    from IPython.Debugger import Tracer
-    debug = Tracer()
-else:
-    def debug():
-        print ('Warning: debugging mark present.')
-        pass
-########################################
 
 # Horrible, global variables
 
@@ -371,16 +360,17 @@ class Settings(object):
         # A bit ad-hoc: dicrectory of polyA read files
         self.polyAread_dir = os.path.join(here, 'polyA_files')
 
-        # The hg19 genome
+        # The hg19 chromosome sizes
         self.hg19_path = os.path.join(self.here, 'ext_files', 'hg19')
+
+        # The hg19 fasta sequences
+        self.hg19_fasta = conf.get('HG_FASTA', 'hg_fasta')
 
     def get_annot_polyas(self):
         """
         Simply return the annotated poly(A) sites
         """
         beddir = os.path.join(self.here, 'source_bedfiles')
-
-        import utail as utail
 
         utail_settings = utail.Settings\
                 (*utail.read_settings(self.settings_file))
@@ -1202,17 +1192,15 @@ def pipeline_utrpath(settings, chr1=False):
 pipeline
     """
 
-    import utail as finder
-
-    finder_settings = finder.Settings\
-            (*finder.read_settings(settings.settings_file))
+    utail_settings = utail.Settings\
+            (*utail.read_settings(settings.settings_file))
 
     if chr1:
-        finder_settings.chr1 = True
+        utail_settings.chr1 = True
 
     beddir = os.path.join(settings.here, 'source_bedfiles')
 
-    return finder.get_utr_path(finder_settings, beddir, False)
+    return utail.get_utr_path(utail_settings, beddir, False)
 
 def get_region_sizes():
     region_dir =\
@@ -2105,7 +2093,6 @@ def apa_dict(settings):
     The method will force 3UTRs from annotation, so this path must be provided
     in the UTR_SETTINGS file
     """
-    import utail as utail
 
     utail_settings = utail.Settings(*utail.read_settings(settings.settings_file))
     utail_annotation = utail.Annotation(utail_settings.annotation_path,
@@ -5496,53 +5483,7 @@ def EML(settings):
     p = Plotter()
     p.CyNucComp(data_dict, nr_comp, settings)
 
-def snp_analysis(settings):
-    """
-    For all the poly(A) sites, align the seqs for each dataset separately and
-    find either PAS or PAS_with_snips.
-    """
 
-    # Get all PAS and all the snips for thos PAS
-    pas_snips, allpas = pas_and_pas_snips()
-    #all_ds = [ds for ds in settings.datasets if ((('Cytoplasm' in ds) or
-                                                #('Whole_Cell' in ds) or
-                                                #('Nucleus' in ds)) and
-                                               #(not 'Minus' in ds))]
-    all_ds = [ds for ds in settings.datasets if (('Cytoplasm' in ds) and
-                                               (not 'Minus' in ds))]
-    #speedrun = True
-    speedrun = False
-
-    outdir = os.path.join(settings.here, 'SNP_analysis')
-
-    region = '3UTR-exonic'
-
-    subset = all_ds
-
-    batch_key = 'SNP'
-
-    # TODO for the super-cluster you must cluster the seqs + keep info about
-    # where they come from
-    dsets, super_3utr = super_falselength(settings, region, batch_key,
-                                          subset, speedrun)
-
-    for utr_name, utr in super_3utr[region].iteritems():
-
-        for cls in utr.super_clusters:
-
-            # for each dataset, align the seqs
-            # TODO you don't really know how to solve this problem
-            # you are thinking of aligning all the sequences, including the hg19
-            # sequence when there is a PAS, so you know where the PAS fits.
-            # If there is no HG19 PAS, it could be nice to align anyway to see
-            # if you can go from non-PAS to PAS.
-
-            if cls.strand == utr.strand:
-                keyw = 'same'
-            else:
-                keyw = 'opposite'
-
-            debug()
 
 def pas_and_pas_snips():
 
@@ -5582,9 +5523,6 @@ def main():
     # Keep houskeeping information in a settings object
     settings = Settings(os.path.join(here, 'UTR_SETTINGS'), savedir, outputdir,
                         here, chr1=False)
-
-    # New analysis! 
-    snp_analysis(settings)
 
     #gencode_report(settings, speedrun=False)
 

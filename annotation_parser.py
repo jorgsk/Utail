@@ -32,7 +32,6 @@ from pyfasta import FastaRecord
 from pyfasta import Fasta
 import math
 
-
 class Region(object):
 
     def __init__(self, name):
@@ -1520,7 +1519,11 @@ def get_seqs(utr_dict, hgfasta):
     Use the *pyfasta* module to get sequences quickly from an indexed version
     of the human genome fasta file.
 
-    :returns: *utr_dict*, a region -> sequence dictionary
+    utr_dict should be on the form [reg_id] = (chrm, beg, end, strand)
+
+    hgfasta is the path to the fasta file of the human genome
+
+    :returns: *seq_dict*, a region -> sequence dictionary
     """
     f = Fasta(hgfasta, record_class=FastaRecord)
     #f = Fasta(hgfasta)
