@@ -39,7 +39,109 @@ else:
         pass
 ########################################
 
-def get_sequencing_error_rate(settings, region, cell_lines, super_3utr):
+def seq_getter(cls):
+    """
+    Get sequences for the different cell lines for this cls.seqs object. Return
+    seqs as a set to remove duplicates.
+    """
+    cl_seqs = {}
+
+    # add the seqs for the different cell lines to dict
+    for metaseqs in cls.seqs:
+        (seqs, cellL, comp) = metaseqs.split('|')
+
+        # error source: a-reads in a t-group?
+
+        for seq in seqs.split('$'):
+
+            # reverse complement if of 't' type
+            if cls.tail_type == 'T':
+                seq = utail.reverseComplement(seq)
+
+            # add sequences as a set; this removes any duplicates and thus
+            # minimizes errors based on pcr amplification
+            if cellL in cl_seqs:
+                cl_seqs[cellL].add(seq)
+            else:
+                cl_seqs[cellL] = set([seq])
+
+    return cl_seqs
+
+def get_matchmismatches(columns, count_matrix, max_len):
+    """
+    Helper function to reduce code in the big one ...
+
+    Count the number of matches and mismatches in the alignment of the RNA-seq
+    data. This will later be used to infer the sequencing error rate.
+    """
+    mismatches = 0
+    matches = 0
+
+    # idea: #of mismatches = #seqs - max_count of any nt
+    for col_nr in range(columns):
+        local_max = max(count_matrix[col_nr].values())
+
+        # don't count -s in the alignment; make a new local max
+        if '-' in count_matrix[col_nr]:
+            misses = count_matrix[col_nr]['-']
+
+            # if more misses than any other, see if any other has
+            # more than 1 seq; otherwise skip this
+            if misses == local_max:
+                local_max = max([v for l, v in
+                                 count_matrix[col_nr].items() if l
+                                 != '-'])
+            if local_max < 2:
+                continue
+            newmax = max_len - misses
+
+            mismatches += newmax - local_max
+            matches += newmax
+        else:
+            mismatches += max_len - local_max
+            matches += max_len
+
+    return matches, mismatches
+
+def get_alignment(cl, key, seqs, hg19seq, settings):
+    """
+    Write seqs to file and run clustalW on them and return a biopython align
+    object
+    """
+
+    infile = os.path.join(settings.here, 'SNP_analysis',
+                             'temp_files', key + cl+'error_rate.fasta')
+    handle = open(infile, 'wb')
+
+    # NOTE: only accept sequences longer than 40 nt. Shorter
+    # sequences will give you alignment problems.
+    written = 0
+    for seqnr, seq in enumerate(seqs):
+        if len(seq) > 40:
+            handle.write('>someseq{0}\n{1}\n'.format(seqnr, seq))
+            written += 1
+
+    handle.write('>hg19\n{0}\n'.format(hg19seq))
+    handle.close()
+
+    # skip if 0 or 1 seq written
+    if written < 3:
+        return False
+
+    outfile = os.path.join(settings.here, 'SNP_analysis',
+                             'temp_files', key + cl+'.aln')
+
+    # call clustalw and get consensus with score
+    cmd = 'clustalw -infile={0} -outfile={1} -quiet'.format(infile,
+                                                           outfile)
+    # run clustalw and send stdout (messages) to devnull
+    Popen(cmd, shell=True, stdout=open(os.devnull, 'w')).wait()
+
+    alignment = AlignIO.read(outfile, "clustal")
+
+    return alignment
+
+def get_sequencing_error_rate(settings, region, cell_lines, super_3utr, hg19Seqs):
     """
     For each cell line:
         for each poly(A) site with > 5 reads:
@@ -50,123 +152,117 @@ def get_sequencing_error_rate(settings, region, cell_lines, super_3utr):
 
     Average the error rate distribution; hopefully it's gaussian; if not there
     are some outliers that should be taken care of.
+
+    For saving the snp-info, when you find AAAAAA (6) in RNA-seq and a non-A in
+    hg19, test for stats.binom_test(6,6, P(sequencing_error)). So you must save
+    the 6-A and 6max info. The P(seq_err) will come later.
+
+    What to do with AAATTT (g) ? Then both seem likely
+    What about AAAATT (G) ? Check if either or just one is different from (G)
+    and give p-values to both? This could be the result of sampling the same
+    piece twice, which is not good behind the assumption of independent draws
+    (the draws are the sequences themselves)
+
+    Beware when the hg19 has an '-'. This means an insertion into the rnaseq
+    dataset (or very unlikely a deletion missed in hg19).
     """
 
-    # simply count # of matches and mismatches and make it into an error
-    # rate at the end
-    # it's not straight forward. If you have an alignment :GGGAGT
-    # is this 4 matches and 2 mismatches, or 2 out of 6 non-conforming?
-    # the latter will lend more power; the first is more conservative.
-    # Try both. To get strict, subtract mismatches from matches_nonstrict.
-
-    match_counter = dict((cl, {'matches_non_strict':0,
+    # for the error rates
+    matchCounter = dict((cl, {'matches_non_strict':0,
                              'mismatches': 0}) for cl in cell_lines)
 
-    for utr_name, utr in super_3utr[region].iteritems():
+    # for future p-value calculations
+    snp_site_counter = dict((cl, {}) for cl in cell_lines)
 
+    # for PAS change info
+    # you must store the position information relative to hg19 too
+    # TODO
+    pas_changes = {}
+
+    for utr_name, utr in super_3utr[region].iteritems():
         for cls in utr.super_clusters:
 
-            # include only those with > 5 supported reads
+            # skip those with < 5 supported reads
             if cls.nr_support_reads < 5:
                 continue
 
+            # an ID for this polyA coordinate
             key = '_'.join([utr.chrm, str(cls.polyA_coordinate), cls.strand])
 
-            # Separate the rna-seqs from the different cell_lines
+            # the sequence for hg19
+            hg19seq = hg19Seqs[key]
 
-            cl_seqs = {}
+            # the seqs for the different cell lines at this poly(A) site
+            for cl, seqs in seq_getter(cls).items():
 
-            # add the seqs for the different cell lines to dict
-            for metaseqs in cls.seqs:
-                (seqs, cellL, comp) = metaseqs.split('|')
+                # get a biopython alignment object for these sequences + hg19
+                alignment = get_alignment(cl, key, seqs, hg19seq, settings)
 
-                # Note; I see a clear source of errors here; in 5 T-seqs there
-                # can be one A that is (probably) false. This will lead to an
-                # exorbitantly high number of errors. You'll need to see a feq
-                # examples of this before you know what to do with them.
-
-                for seq in seqs.split('$'):
-
-                    # reverse complement if of 't' type
-                    if cls.tail_type == 'T':
-                        seq = utail.reverseComplement(seq)
-
-                    # add sequences as a set; this removes any duplicates and thus
-                    # minimizes errors based on pcr amplification
-                    if cellL in cl_seqs:
-                        cl_seqs[cellL].add(seq)
-                    else:
-                        cl_seqs[cellL] = set([seq])
-
-            # write the seqs to a fasta file and align
-            for cl, seqs in cl_seqs.items():
-                infile = os.path.join(settings.here, 'SNP_analysis',
-                                         'temp_files', key + cl+'error_rate.fasta')
-                handle = open(infile, 'wb')
-
-                # NOTE: only accept sequences longer than 40 nt. Shorter
-                # sequences will give you alignment problems.
-                written = 0
-                for seqnr, seq in enumerate(seqs):
-                    if len(seq) > 40:
-                        handle.write('>someseq{0}\n{1}\n'.format(seqnr, seq))
-                        written += 1
-
-                handle.close()
-
-                # skip if 0 or 1 seq written
-                if written < 2:
+                # if the alignment cound not be made (too few secs), abort
+                if not alignment:
                     continue
 
-                outfile = os.path.join(settings.here, 'SNP_analysis',
-                                         'temp_files', key + cl+'.aln')
+                # Get the start and end coordinates of the alignment according
+                # to the hg19 sequence
+                start, stop, hg19row = get_startstop(alignment)
 
-                # call clustalw and get consensus with score
-                cmd = 'clustalw -infile={0} -outfile={1} -quiet'.format(infile,
-                                                                       outfile)
-                # run clustalw and send stdout (messages) to devnull
-                Popen(cmd, shell=True, stdout=open(os.devnull, 'w')).wait()
+                ## crop the alignment according to the hg19 sequence
+                crop_alignment = alignment[:, start:stop]
 
-                # read the alignment
-                # XXX
-                #outfile = '/home/jorgsk/code_testing/myfile.aln'
-                alignment = AlignIO.read(outfile, "clustal")
+                # Get the aligned hg19 sequence (may contain gaps, which the
+                # hg19seq doesn't)
+                aln_hg19seq = crop_alignment[hg19row].seq.tostring()
 
-                # they have already put the values into a dict
-                count_matrix = AlignInfo.SummaryInfo(alignment).pos_specific_score_matrix()
+                # remove the hg19 sequence from the alignment
+                rnaseq_align = MultSeqAlign([a for a in crop_alignment if a.id != 'hg19'])
 
-                max_len = len(alignment[:,0])
+                # get the count_matrix for the rna-seq reads only
+                count_matrix = AlignInfo.SummaryInfo(rnaseq_align).pos_specific_score_matrix()
 
-                columns = alignment.get_alignment_length()
+                max_len = len(rnaseq_align[:,0])
 
-                # idea: #of mismatches = #seqs - max_count of any nt
-                for col_nr in range(columns):
-                    local_max = max(count_matrix[col_nr].values())
+                nr_columns = stop - start
 
+                ##### 1) Get the # of mismatches/matches_non_strict
+                non_str_matches, mismatches = get_matchmismatches(nr_columns,
+                                                                  count_matrix,
+                                                                 max_len)
+                matchCounter[cl]['matches_non_strict'] += non_str_matches
+                matchCounter[cl]['mismatches'] += mismatches
+
+                ##### 2) Get the stats for the places with hg19 mismatch
+                for col_nr in range(nr_columns):
+                    col = count_matrix[col_nr]
                     # don't count -s in the alignment; make a new local max
-                    if '-' in count_matrix[col_nr]:
-                        misses = count_matrix[col_nr]['-']
+                    max_nt, max_count = sorted(col.items(), key=itemgetter(1))[-1]
 
-                        # if more misses than any other, see if any other has
-                        # more than 1 seq; otherwise skip this
-                        if misses == local_max:
-                            local_max = max([v for l, v in
-                                             count_matrix[col_nr].items() if l
-                                             != '-'])
-                        if local_max < 2:
-                            continue
+                    # if by some obscure reason - is the max, take the second
+                    # highest
+                    if max_nt == '-':
+                        max_nt, max_count = sorted(col.items(), key=itemgetter(1))[-2]
 
-                        newmax = max_len - misses
+                    if max_nt != aln_hg19seq[col_nr]:
+                        col_key = key + '_col_nr'
 
-                        match_counter[cl]['mismatches'] += newmax - local_max
-                        match_counter[cl]['matches_non_strict'] += newmax
-                    else:
-                        match_counter[cl]['mismatches'] += max_len - local_max
-                        match_counter[cl]['matches_non_strict'] += max_len
+                        if aln_hg19seq[col_nr] == '-':
+                            snp_site_counter[cl][col_key] = (col[max_nt],
+                                                             max_len,
+                                                             'insertion')
+                        else:
+                            snp_site_counter[cl][col_key] = (col[max_nt],
+                                                             max_len,
+                                                             'substitution')
+    # convert matches/mismatches into error rates
+    error_rates = make_error_rates(matchCounter)
 
-    # convert your matches/mismatches into error rates
+    return error_rates, snp_site_counter, pas_changes
+
+def make_error_rates(matchCounter):
+    """
+    Convert matches/mismataches into an error rates
+    """
     error_rates = {}
-    for cl, matchdict in match_counter.items():
+    for cl, matchdict in matchCounter.items():
         nsmatch = matchdict['matches_non_strict']
         mismatch = matchdict['mismatches']
 
@@ -177,6 +273,7 @@ def get_sequencing_error_rate(settings, region, cell_lines, super_3utr):
                            'non_strict': mismatch/(nsmatch)}
 
     return error_rates
+
 
 def get_startstop(alignment):
     """
@@ -293,7 +390,6 @@ def get_all_pvalues(error_rates, hg19Seqs, settings, region, cell_lines, super_3
                 # run clustalw and send stdout (messages) to devnull
                 Popen(cmd, shell=True, stdout=open(os.devnull, 'w')).wait()
 
-                #outfile = '/home/jorgsk/code_testing/myfile.aln'
                 alignment = AlignIO.read(outfile, "clustal")
 
                 # Get the start and end coordinates of the alignment according
@@ -419,9 +515,49 @@ def correct_pvalues(p_values, cell_lines, settings, super_3utr, region):
 
             print '-----------------------------------------------'
 
-    debug()
+    return cor_pval
 
+def get_snps_corrected(snp_stats, error_rates, cell_lines):
+    """
+    Calculate pvalues for all the snp sites; then order then and re-calculate
+    their significance using the Benjamini-Hochman FDR
+    """
+    alpha = 0.05
 
+    cor_snp = dict((cl, []) for cl in cell_lines)
+
+    for cl, sstats in snp_stats.items():
+        # skip empty ones
+        if sstats == {}:
+            continue
+        n = len(sstats)
+        probErr = error_rates[cl]['strict']
+
+        # get the pvals
+        pvals = []
+        for rank_nr, (key, (max_count, N, mutation_type))\
+                in enumerate(sorted(sstats.items())):
+
+            pval = stats.binom_test(max_count, N, probErr)
+            pvals.append((pval, key, mutation_type))
+
+        # sort pvals and calculate q-s
+        for rank_nr, (pval, key, mutation_type) in enumerate(sorted(pvals)):
+
+            q = ((rank_nr+1)/n)*alpha
+
+            if pval < q:
+                cor_snp[cl].append((pval, key, mutation_type, rank_nr+1, 'significant'))
+
+            print mutation_type
+            print 'pval', pval
+            print 'qval', q
+            if pval < q:
+                print 'significant!'
+            else:
+                print 'insignificant ...'
+
+    return cor_snp
 
 def snp_analysis(settings):
     """
@@ -452,46 +588,45 @@ def snp_analysis(settings):
 
     batch_key = 'SNP'
 
-    # TODO for the super-cluster you must cluster the seqs + keep info about
-    # where they come from
+    # Get the clustered poly(A) sites
     dsets, super_3utr = results.super_falselength(settings, region, batch_key,
                                           subset, speedrun)
-
-    # get the sequencing error rates for each cell line
-    # TODO put this in an external file? Then you can calculate the rates once
-    # and for all + make a plot of how it changes with more datasets
-    # Then you can also read this file and never have to re-calculate it again.
-    # Do it after you have created a working model for the rest.
-
-    # Remember to delete the pickle file when you update your work
-    error_pick = os.path.join(outdir, 'error_rates')
-
-    if os.path.isfile(error_pick):
-        error_rates = pickle.load(open(error_pick, 'rb'))
-    else:
-        error_rates = get_sequencing_error_rate(settings, region, cell_lines, super_3utr)
-        pickle.dump(error_rates, open(error_pick, 'wb'))
 
     # Get hg19 sequences 50bp downstream all polyA sites
     hg19Seqs = get_hg19_seqs(settings, super_3utr, region)
 
+    # 1 round of clustalw, 3 important pieces of information
+    error_rates, snp_stats, PAS_mutants = get_sequencing_error_rate(settings, region,
+                                                                    cell_lines,
+                                                                    super_3utr,
+                                                                   hg19Seqs)
+
+    # use the error rates to calculate P-values for the mutation sites using
+    # snp_stats; simultaneously correct for multiple testing using
+    # Benjamini-Hochberg's method
+    corr_snps = get_snps_corrected(snp_stats, error_rates, cell_lines)
+
+    # check the PAS-changes for snps; if they exist, way to go.
+    # TODO
+
     # Get the pvalues for every nucleotide with poly(A) reads
-    p_values = get_all_pvalues(error_rates, hg19Seqs,settings,
+    # At the same time, to save speed, get the PAS_mutant list
+    p_values, pas_mutants = get_all_pvalues(error_rates, hg19Seqs,settings,
                                       region, cell_lines, super_3utr)
 
     # Get the corrected p-values
     corr_pval = correct_pvalues(p_values, cell_lines, settings,
                                 super_3utr, region)
-    
-    debug()
+
+    # go over the PAS_mutant list with the corrected p values
 
     # Check for PAS in both rna-seq consensus and hg19; when found, compare with
     # the other for mismatch; and if it exists, report a pval for the
     # mismatch and what type of mismatch it is (there are 6 different)
 
+    #pas_mutatns = get_PAS_mutatns(corr_pval)
+
     debug()
-
-
 
     for utr_name, utr in super_3utr[region].iteritems():
 
