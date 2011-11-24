@@ -12,10 +12,14 @@ import cPickle as pickle
 import annotation_parser as genome
 import utail
 import results
+from operator import itemgetter
 
 # For sequence alignment
 from Bio.Align import AlignInfo
+from Bio.Align import MultipleSeqAlignment as MultSeqAlign
 from Bio import AlignIO
+
+from scipy import stats
 
 ########################################
 # only get the debug function if run from Ipython #
@@ -174,6 +178,214 @@ def get_sequencing_error_rate(settings, region, cell_lines, super_3utr):
 
     return error_rates
 
+def get_startstop(alignment):
+    """
+    Given a sequence aligment, find where the hg19 element start and stops
+    """
+
+    for rownr, seqr in enumerate(list(alignment)):
+        if seqr.description == 'hg19':
+            hg19gapseq = seqr.seq.tostring()
+
+            # get the start
+            start = 0
+            for pos in hg19gapseq:
+                if pos == '-':
+                    start += 1
+                else:
+                    break
+
+            # get the stop
+            stop = len(hg19gapseq)
+            for pos in reversed(hg19gapseq):
+                if pos == '-':
+                    stop -= 1
+                else:
+                    break
+
+            return start, stop, rownr
+
+def get_all_pvalues(error_rates, hg19Seqs, settings, region, cell_lines, super_3utr):
+    """
+    Re-align all sequences and use the sequencing error rates to give p-values
+    to each nucleotide that is different in the rna-seq set compared to hg19
+
+    When you find AAAAAA (6) in RNA-seq and a non-A in hg19, test for
+    stats.binom_test(6,6, P(sequencing_error) = 0.0036)
+
+    What to do with AAATTT (g) ? Then both seem likely
+    What about AAAATT (G) ? Check if either or just one is different from (G)
+    and give p-values to both? This could be the result of sampling the same
+    piece twice, which is not good behind the assumption of independent draws
+    (the draws are the sequences themselves)
+    """
+
+    # list of tuples (pval, cell_line+polyAID)
+    pvals = dict((cl, []) for cl in cell_lines)
+
+    for utr_name, utr in super_3utr[region].iteritems():
+
+        for cls in utr.super_clusters:
+
+            # include only those with > 5 supported reads
+            if cls.nr_support_reads < 5:
+                continue
+
+            key = '_'.join([utr.chrm, str(cls.polyA_coordinate), cls.strand])
+
+            hg19seq = hg19Seqs[key]
+
+            # for saving sequences for writing to file
+            cl_seqs = {}
+
+            # add the seqs for the different cell lines to dict
+            for metaseqs in cls.seqs:
+                (seqs, cellL, comp) = metaseqs.split('|')
+
+                for seq in seqs.split('$'):
+
+                    # reverse complement if of 't' type
+                    if cls.tail_type == 'T':
+                        seq = utail.reverseComplement(seq)
+
+                    # add sequences as a set; this removes any duplicates and thus
+                    # minimizes errors based on pcr amplification
+                    if cellL in cl_seqs:
+                        cl_seqs[cellL].add(seq)
+                    else:
+                        cl_seqs[cellL] = set([seq])
+
+            # write the seqs to a fasta file and align
+            for cl, seqs in cl_seqs.items():
+
+                # get the probability of sequence error for this cell line
+
+                probSeqErr = error_rates[cl]['strict']
+
+
+                infile = os.path.join(settings.here, 'SNP_analysis',
+                                         'temp_files', key + cl+'pvalue.fasta')
+                handle = open(infile, 'wb')
+
+                # NOTE: only accept sequences longer than 40 nt. Shorter
+                # sequences will give you alignment problems.
+                written = 0
+                for seqnr, seq in enumerate(seqs):
+                    if len(seq) > 40:
+                        handle.write('>someseq{0}\n{1}\n'.format(seqnr, seq))
+                        written += 1
+
+                # finally write hg19
+                handle.write('>hg19\n{0}\n'.format(hg19seq))
+                handle.close()
+
+                # skip if less than 4 written; we will have poor p-values; no
+                # point in even checking
+                if written < 3:
+                    continue
+
+                outfile = os.path.join(settings.here, 'SNP_analysis',
+                                         'temp_files', key + cl+'.aln')
+
+                # call clustalw and get consensus with score
+                cmd = 'clustalw -infile={0} -outfile={1} -quiet'.format(infile,
+                                                                       outfile)
+                # run clustalw and send stdout (messages) to devnull
+                Popen(cmd, shell=True, stdout=open(os.devnull, 'w')).wait()
+
+                #outfile = '/home/jorgsk/code_testing/myfile.aln'
+                alignment = AlignIO.read(outfile, "clustal")
+
+                # Get the start and end coordinates of the alignment according
+                # to the hg19 sequence; restrict yourself to the alignment
+                # matrix within the 40 hg19.
+
+                start, stop, hg19row = get_startstop(alignment)
+
+                ## crop the alignment according to the hg19 sequence
+                crop_alignment = alignment[:, start:stop]
+
+                # Get the aligned hg19 sequence (may contain gaps, which the
+                # hg19seq doesn't)
+
+                aln_hg19seq = crop_alignment[hg19row].seq.tostring()
+
+                # remove the hg19 sequence from the alignment
+                rnaseq_align = MultSeqAlign([a for a in crop_alignment if a.id != 'hg19'])
+
+                # get the count_matrix for the rna-seq reads only
+                count_matrix = AlignInfo.SummaryInfo(rnaseq_align).pos_specific_score_matrix()
+
+                # You now have your alingment in the coordinates of the hg19
+                # sequence; compare each column; if 
+
+                max_len = len(rnaseq_align[:,0])
+
+                nr_columns = stop - start
+
+                # for each column, check if the max-count is different from
+                # hg19; if it is, compare the p-value for its difference
+
+                for col_nr in range(nr_columns):
+                    col = count_matrix[col_nr]
+                    # don't count -s in the alignment; make a new local max
+                    max_nt, max_count = sorted(col.items(), key=itemgetter(1))[-1]
+
+                    # if by some obscure reason this is the max, take the second
+                    # highest
+                    if max_nt == '-':
+                        max_nt, max_count = sorted(col.items(), key=itemgetter(1))[-2]
+
+                    #if '-' in col:
+                        #misses = col['-']
+
+                    # if you have a mismatch with the human genome
+                    # hi-ho! This becomes a problem when there's a gap in the
+                    # alignement -- you cannot anymore compare to the human
+                    # genome, you must compare with the aligned version which
+                    # contains the gap. But how to deal with the gap???
+
+                    if max_nt != aln_hg19seq[col_nr]:
+                        pval = stats.binom_test(col[max_nt], max_len,
+                                                probSeqErr)
+
+                        print pval
+                        print ''
+                        print rnaseq_align[:, col_nr-3:col_nr+4]
+                        print ''
+                        print aln_hg19seq[col_nr-3:col_nr+4]
+
+                        if aln_hg19seq[col_nr] == '-':
+                            pvals[cl].append((pval, key, 'insertion'))
+                        else:
+                            pvals[cl].append((pval, key, 'substitution'))
+
+                        debug()
+                    #else:
+                        #pass
+
+
+def get_hg19_seqs(settings, super_3utr, region):
+
+    hg19input = {}
+    for utr_name, utr in super_3utr[region].iteritems():
+        for cls in utr.super_clusters:
+
+            if cls.strand == '+':
+                end = cls.polyA_coordinate
+                beg = end - 50
+            elif cls.strand == '-':
+                beg = cls.polyA_coordinate
+                end = beg + 50
+
+            key = '_'.join([utr.chrm, str(cls.polyA_coordinate), cls.strand])
+
+            hg19input[key] = (utr.chrm, beg, end, cls.strand)
+
+    hg19Seqs = genome.get_seqs(hg19input, settings.hg19_fasta)
+
+    return hg19Seqs
+
 def snp_analysis(settings):
     """
     For all the poly(A) sites, align the seqs for each dataset separately and
@@ -213,29 +425,29 @@ def snp_analysis(settings):
     # and for all + make a plot of how it changes with more datasets
     # Then you can also read this file and never have to re-calculate it again.
     # Do it after you have created a working model for the rest.
-    error_rates = get_sequencing_error_rate(settings, region, cell_lines, super_3utr)
-    debug()
 
-    p_values = get_all_pvalues()
+    # Remember to delete the pickle file when you update your work
+    error_pick = os.path.join(outdir, 'error_rates')
+
+    if os.path.isfile(error_pick):
+        error_rates = pickle.load(open(error_pick, 'rb'))
+    else:
+        error_rates = get_sequencing_error_rate(settings, region, cell_lines, super_3utr)
+        pickle.dump(error_rates, open(error_pick, 'wb'))
 
     # Get hg19 sequences 50bp downstream all polyA sites
-    hg19input = {}
+    hg19Seqs = get_hg19_seqs(settings, super_3utr, region)
 
-    for utr_name, utr in super_3utr[region].iteritems():
-        for cls in utr.super_clusters:
+    # Get the pvalues for every nucleotide with poly(A) reads
+    p_values = get_all_pvalues(error_rates, hg19Seqs,settings, region, cell_lines, super_3utr)
 
-            if cls.strand == '+':
-                end = cls.polyA_coordinate
-                beg = end - 50
-            elif cls.strand == '-':
-                beg = cls.polyA_coordinate
-                end = beg + 50
+    # Check for PAS in both rna-seq consensus and hg19; when found, compare with
+    # the other for mismatch; and if it exists, report a pval for the
+    # mismatch and what type of mismatch it is (there are 6 different)
 
-            key = '_'.join([utr.chrm, str(cls.polyA_coordinate), cls.strand])
+    debug()
 
-            hg19input[key] = (utr.chrm, beg, end, cls.strand)
 
-    hg19Seqs = genome.get_seqs(hg19input, settings.hg19_fasta)
 
     for utr_name, utr in super_3utr[region].iteritems():
 
