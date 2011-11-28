@@ -94,7 +94,8 @@ class Settings(object):
         #self.chr1 = False
         #self.read_limit = False
         #self.read_limit = 10000000 # less than 10000 no reads map
-        self.read_limit = 10000 # less than 10000 no reads map
+        #self.read_limit = 10000 # less than 10000 no reads map
+        self.read_limit = False
         self.max_cores = 2
         self.get_length = False
         #self.get_length = True

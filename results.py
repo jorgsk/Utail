@@ -3503,7 +3503,8 @@ def intergenic_finder(settings):
             # for 5k+, report those that do not overlap with -v
             if dist == '5k+':
                 interExtension = os.path.join(Fdir, 'trimmed_extended_3UTRs_5000')
-                cmd = ['intersectBed', '-v', '-wa', '-wb', '-a', interPApath, '-b', interExtension]
+                cmd = ['intersectBed', '-v', '-wa', '-wb', '-a', interPApath, '-b',
+                       interExtension]
 
             p = Popen(cmd, stdout=PIPE)
 
