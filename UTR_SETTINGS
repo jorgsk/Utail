@@ -204,8 +204,16 @@ NHEK_Whole_Cell = %(carrie)s/007WC/genome/LID16631_FC61TTKAAXX_2_1.gem.map.gz:%(
 
 NHEK_Whole_CellReplicate = %(carrie)s/008WC/genome/LID16632_FC61TTKAAXX_5_1.gem.map.gz:%(carrie)s/008WC/genome/LID16632_FC61TTKAAXX_5_2.gem.map.gz:%(carrie)s/008WC/genome/LID16632_FC61TTKAAXX_6_1.gem.map.gz:%(carrie)s/008WC/genome/LID16632_FC61TTKAAXX_6_2.gem.map.gz:%(carrie)s/008WC/genome/LID16632_FC61TTKAAXX_7_1.gem.map.gz:%(carrie)s/008WC/genome/LID16632_FC61TTKAAXX_7_2.gem.map.gz
 
-NHEK_Nucleus = %(carrie)s/028N/genome/LID8798_FC61JMYAAXX_2_1.gem.map.gz:%(carrie)s/028N/genome/LID8798_FC61JMYAAXX_2_2.gem.map.gz:%(carrie)s/028N/genome/LID8798_FC61JMYAAXX_3_1.gem.map.gz:%(carrie)s/028N/genome/LID8798_FC61JMYAAXX_3_2.gem.map.gz:%(carrie)s/028N/genome/LID8798_FC61JMYAAXX_4_1.gem.map.gz:%(carrie)s/028N/genome/LID8798_FC61JMYAAXX_4_2.gem.map.gz
+genc7 = /users/rg/projects/NGS/Projects/ENCODE/hg19main/gencode7/CSHL_longRNAseq/PolyA/parts
 
+# ### NHEK UPDATE: NHEK actually has got repliactes
+NHEK_Nucleus = %(genc7)s/CSHL027NPlus/genome/wgEncodeCshlLongRnaSeqNhekNucleusPapFastqRd1Rep3.gem.map.gz:%(genc7)s/CSHL027NPlus/genome/wgEncodeCshlLongRnaSeqNhekNucleusPapFastqRd2Rep3.gem.map.gz
+
+NHEK_NucleusReplicate = %(genc7)s/CSHL028NPlus/genome/wgEncodeCshlLongRnaSeqNhekNucleusPapFastqRd1Rep4.gem.map.gz:%(genc7)s/CSHL028NPlus/genome/wgEncodeCshlLongRnaSeqNhekNucleusPapFastqRd2Rep4.gem.map.gz
+
+NHEK_Cytoplasm = %(genc7)s/CSHL027CPlus/genome/wgEncodeCshlLongRnaSeqNhekCytosolPapFastqRd1Rep3.gem.map.gz:%(genc7)s/CSHL027CPlus/genome/wgEncodeCshlLongRnaSeqNhekCytosolPapFastqRd2Rep3.gem.map.gz
+
+NHEK_CytoplasmReplicate = %(genc7)s/CSHL028CPlus/genome/wgEncodeCshlLongRnaSeqNhekCytosolPapFastqRd1Rep4.gem.map.gz:%(genc7)s/CSHL028CPlus/genome/wgEncodeCshlLongRnaSeqNhekCytosolPapFastqRd2Rep4.gem.map.gz
 # ### NHEK minus
 
 NHEK_Whole_CellMinus = %(carrie)s/007WCMinus/genome/LID8665_FC61FGUAAXX_7_1.gem.map.gz:%(carrie)s/007WCMinus/genome/LID8665_FC61FGUAAXX_7_2.gem.map.gz:%(carrie)s/007WCMinus/genome/LID8665_FC61FKBAAXX_7_1.gem.map.gz:%(carrie)s/007WCMinus/genome/LID8665_FC61FKBAAXX_7_2.gem.map.gz:%(carrie)s/007WCMinus/genome/LID8665_FC61FM9AAXX_7_1.gem.map.gz:%(carrie)s/007WCMinus/genome/LID8665_FC61FM9AAXX_7_2.gem.map.gz
