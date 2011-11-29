@@ -90,13 +90,12 @@ class Settings(object):
         debugging!
         """
 
-        self.chr1 = True
-        #self.chr1 = False
+        #self.chr1 = True
+        self.chr1 = False
         #self.read_limit = False
-        #self.read_limit = 10000000 # less than 10000 no reads map
-        #self.read_limit = 10000 # less than 10000 no reads map
-        self.read_limit = False
-        self.max_cores = 2
+        self.read_limit = 1000000 # less than 10000 no reads map
+        #self.read_limit = False
+        self.max_cores = 3
         self.get_length = False
         #self.get_length = True
         self.extendby = 10
@@ -1030,12 +1029,6 @@ def zcat_wrapper(dset_id, bed_reads, read_limit, out_path, polyA, polyA_path,
     acount = 0
     tcount = 0
 
-    # TODO If the out_path exists, print to screen that you're using the version in
-    # the temp-dir. Continue with the get_length flag as false. Note: this will
-    # disable speed-runs, where you want to do something quick. Why did I want
-    # to do it again? I don't remember.
-    #debug()
-
     # if get_length is false AND! polyA is given, return nothing
     if not get_length and polyA != True:
         return total_mapped_reads, total_reads, acount, tcount
@@ -1952,7 +1945,7 @@ def map_reads(processed_reads, avrg_read_len, settings):
     """
 
     # File path of the mapped reads
-    mapped_reads = os.path.splitext(processed_reads)[0]+'_mapped'
+    mapped_reads = os.path.splitext(processed_reads)[0] + '_mapped'
 
     # Naming the final output
     polybed_path = os.path.splitext(processed_reads)[0] + '_mapped.bed'
@@ -1967,14 +1960,18 @@ def map_reads(processed_reads, avrg_read_len, settings):
 
     ### mapping trimmed reads
     command = "gem-mapper -I {0} -i {1} -o {2} -q ignore -m {3}"\
-            .format(settings.gem_index, processed_reads, mapped_reads, mismatch_nr)
+            .format(settings.gem_index, processed_reads, mapped_reads,
+                    mismatch_nr)
 
-    # XX REMOVE ME!!! JUST TO SKIP THE MAPPING DEBUG!! XXX 
-    if not os.path.isfile(mapped_reads + '.0.map'):
-        p = Popen(command.split())
-        p.wait()
-    else:
-        pass
+    p = Popen(command.split())
+    p.wait()
+
+    ## XX REMOVE ME!!! JUST TO SKIP THE MAPPING DEBUG!! XXX 
+    #if not os.path.isfile(mapped_reads + '.0.map'):
+        #p = Popen(command.split())
+        #p.wait()
+    #else:
+        #pass
 
     # Accept mismatches according to average read length
     acceptables = {1: set(('1:0', '0:1')), 2: set(('1:0:0', '0:1:0', '0:0:1')),
@@ -3436,8 +3433,8 @@ def main():
     # function (called below). It also affects the 'temp' and 'output'
     # directories, respectively.
 
-    DEBUGGING = True # warning... some stuff wasnt updated here
-    #DEBUGGING = False
+    #DEBUGGING = True # warning... some stuff wasnt updated here
+    DEBUGGING = False
 
     # with this option, always remake the bedfiles
     rerun_annotation_parser = False
@@ -3504,8 +3501,6 @@ def piperunner(settings, annotation, simulate, DEBUGGING, beddir, tempdir,
     # :/ more AD HOC! This time cufflinks
     annotation.cufflinksDict = annotation.get_cuff_dict()
 
-    # make a similar dictionary but for pet-reads
-
     # If this is true, the poly(A) reads will be saved after getting them. That
     # will save all that reading. They will only be saved if you run with no
     # restriction in reads.
@@ -3538,17 +3533,17 @@ def piperunner(settings, annotation, simulate, DEBUGGING, beddir, tempdir,
                          annotation, DEBUGGING, polyA_cache, here)
 
             ###### FOR DEBUGGING ######
-            akk = pipeline(*arguments)
+            #akk = pipeline(*arguments)
             ###########################
 
-            #result = my_pool.apply_async(pipeline, arguments)
-            #results.append(result)
+            result = my_pool.apply_async(pipeline, arguments)
+            results.append(result)
 
-        #my_pool.close()
-        #my_pool.join()
+        my_pool.close()
+        my_pool.join()
 
-        ## we don't return anything, but get results anyway
-        #[result.get() for result in results]
+        # we don't return anything, but get results anyway
+        [result.get() for result in results]
 
         # Print the total elapsed time
         print('Total elapsed time: {0}\n'.format(time.time()-t1))
