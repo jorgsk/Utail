@@ -39,6 +39,20 @@ else:
         pass
 ########################################
 
+class Mutant(object):
+    """
+    A simple class to describe a mutant PAS site for hg19 or rna-seq sequences
+    """
+
+    def __init__(global_coord, my_PAS, other_PAS, hg19_coord,
+                 mutant_type, identifier):
+        self.global_coord = global_coord
+        self.my_PAS = my_PAS
+        self.other_PAS = other_PAS
+        self.hg19_coord = hg19_coord
+        self.mytant_type = mutant_type
+        self.identifier = identifier
+
 def seq_getter(cls):
     """
     Get sequences for the different cell lines for this cls.seqs object. Return
@@ -124,8 +138,8 @@ def get_alignment(cl, key, seqs, hg19seq, settings):
     handle.write('>hg19\n{0}\n'.format(hg19seq))
     handle.close()
 
-    # skip if 0 or 1 seq written
-    if written < 3:
+    # skip if less than 5 written
+    if written < 5:
         return False
 
     outfile = os.path.join(settings.here, 'SNP_analysis',
@@ -284,6 +298,66 @@ def get_binom_stats(key, nr_columns, count_matrix, aln_hg19seq, max_len):
 
     return outp
 
+def compare_PAS(seqsource, this_pas, other_hex, pos, high, low, other_seq):
+    """
+    Compare the PAS/hexamer. Comparing hg19 -> rna-seq or rna-seq -> hg19
+    matters in only 1 case: if a '-' is found, it's always either an insertion
+    or deletion in rna-seq. We assume that hg19 is the gold standard.
+    """
+    # check for high/low for your PAS
+    if this_pas in high:
+        this_pasType = 'high'
+    elif this_pas in low:
+        this_pasType = 'low'
+
+    if '-' in other_hex:
+        # 
+        # if there is a '-' in hg19, it's actually an insertion in rna-seq
+        if seqsource == 'rnaseq':
+            other_mutType = 'neutral'
+            this_mutType = 'insertion'
+
+        # if there is a '-' in rna-seq, it's actually a deletion rna-seq
+        if seqsource == 'hg19':
+            other_mutType = 'deletion'
+            this_mutType = 'neutral'
+
+        # try to recover the PAS in hg19
+        var1 = ''.join(other_seq[pos-1:pos+6].split('-'))
+        var2 = ''.join(other_seq[pos:pos+7].split('-'))
+
+        # if the recovered PAS is the same as the rna-seq pas, this
+        # means that the insertion didn't actually change the PAS
+        if var1 == this_pas or var2 == this_pas:
+            return False, False
+        else:
+            # if the hg19 PAS is high or low, label it like that. it
+            # means that the insertion changed the rna-seq PAS from
+            # one type to another.
+            if var1 in high or var2 in high:
+                other_pasType = 'high'
+            elif var1 in low or var2 in low:
+                other_pasType = 'low'
+            else:
+                other_pasType = 'NaP' #Not a PAS ...
+
+    # if there is no '-' in hg19, the comparison is easy
+    else:
+        other_mutType = 'neutral'
+        this_mutType = 'neutral'
+
+        if other_hex in high:
+            other_pasType = 'high'
+        elif other_hex in low:
+            other_pasType = 'low'
+        else:
+            other_pasType = 'NaP'
+
+    mut_switch = '_'.join([this_mutType, 'to', other_mutType])
+    pas_switch = '_'.join([this_pasType, 'to', other_pasType])
+
+    return mut_switch, pas_switch
+
 def get_pasmutants(rnaseq_align, aln_hg19seq, pas_patterns, high, low):
     """
     Return a dict [hg19/rnaseq] = (this_motif, coord, other_motif, type of
@@ -298,11 +372,17 @@ def get_pasmutants(rnaseq_align, aln_hg19seq, pas_patterns, high, low):
         broken_to_high
         broken_to_low
 
+        + you must look for insertions/deletions
+
+    if you ever want to count the # of cases you have, this can be a good place
+
     """
     muts = {'hg19': [], 'rnaseq': []}
     # Get the consensus sequence at 51% (you're using 'max' (>50) to determine snp)
+    # NOTE changed from dumb to gap-consensus
+    # NOTE you will reduce the errors if you increase treshold 
     consensus = AlignInfo.SummaryInfo(rnaseq_align).\
-            dumb_consensus(threshold=0.51).tostring()
+            gap_consensus(threshold=0.91).tostring()
 
     for seqsource in ['rnaseq', 'hg19']:
         if seqsource == 'rnaseq':
@@ -327,25 +407,73 @@ def get_pasmutants(rnaseq_align, aln_hg19seq, pas_patterns, high, low):
 
             other_hex = other_seq[pos:pos+6]
 
+            # don't include PAS too close to the 3' end
+            if pos > 36:
+                continue
+
+            # do some checks on other_hex
+            if 'X' in other_hex:
+                continue
+
+            # ignore if 3 or more gaps
+            # TODO, try to reconciliate 2 gaps
+            if other_hex.count('-') > 2:
+                continue
+
             # don't do anything if the PAS is the same...
             if this_pas == other_hex:
                 continue
+
             # ... but if it's different, you struck gold!
-            else:
-                if this_pas in high:
-                    thistype = 'high'
-                else:
-                    thistype = 'low'
+            # test both cases; hg19 is this_seq, or hg19 is other_seq
+            # you need to test if hexamer is high, low, insertion, or deletion.
+            # the last two depends on where the '-' is. If it's in hg19, then
+            # there as an insertion in rnas-seq. if it's in rnaseq, there was a
+            # deletion in rnaseq.
+            mut_switch, pas_switch = compare_PAS(seqsource, this_pas,
+                                                  other_hex, pos, high, low,
+                                                  other_seq)
+            print seqsource
+            print seqsource +': ' + this_pas
 
-                if other_hex in high:
-                    othertype = 'high'
-                else:
-                    othertype = 'low'
+            try:
+                print other_seq[pos-1]+'|'+other_hex+'|'+other_seq[pos+7]
+            except IndexError:
+                print '|'+other_hex+'|'
 
-                switch = '_'.join([thistype, 'to', othertype])
-                debug()
+            print mut_switch
+            print pas_switch
+            debug()
+            #if mut_switch:
+                #mutobj = Mutation()
 
-                muts['hg19'].append(this_pas, (pos,pos+6), other_hex, switch)
+            # oops: in 1 dataset you seem to have 2 candidates. Does this mean
+            # you will have only 20 in total? Is this a lot or very little? Who
+            # knows? I was hoping to see new polyA sites in known 3UTRs, maybe
+            # to shorten them? solution: add more datasets?
+
+            # XXX you don't capture when there has been 2 indels. either you
+            # must ignore it or you must treat it.
+
+            # XXX you occasionally have totally different rna-seq reads aligned
+            # for a polyA site. A subsection aligns well with hg19, while the
+            # others could be wrongly reverse-transcribed or result from another
+            # error. If the 'wrong' sites domeniate, you'll have a PAS -> NaP
+            # mutation which is wrong. These cases are rare, so maybe you want
+            # to ignore them? However, it's not clear how you can detect them.
+            # Maybe with some of the bio python tools.
+
+            # occasionally the 'wrong' sequence dominates 20 times over the
+            # 'right' as compared with hg19.
+
+            # XXX not a problem, but whenever you have a high->low, high->high,
+            # or low->low, you will have the same site repeated for both rna-seq
+            # and hg19s point of view
+
+            # TODO make a mutation object from the mutswitchpasswitch
+            #mut_obj = 
+
+            #muts[seqsource].append(this_pas, (pos,pos+6), other_hex, switch)
 
     # Only return dict if you've added something
     if muts != {'hg19': [], 'rnaseq': []}:
@@ -572,6 +700,7 @@ def snp_analysis(settings):
     batch_key = 'SNP'
 
     # Get the clustered poly(A) sites
+    #speedrun = True
     dsets, super_3utr = results.super_falselength(settings, region, batch_key,
                                           subset, speedrun)
 
@@ -603,8 +732,8 @@ def main():
     (savedir, outputdir) = [os.path.join(here, d) for d in ('figures', 'output')]
 
     # Keep houskeeping information in a settings object
-    settings = results.Settings(os.path.join(here, 'UTR_SETTINGS'), savedir, outputdir,
-                        here, chr1=False)
+    settings = results.Settings(os.path.join(here, 'UTR_SETTINGS'), savedir,
+                                outputdir, here, chr1=False)
 
     snp_analysis(settings)
 
