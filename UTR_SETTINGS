@@ -470,5 +470,7 @@ tuning = false
 # datasets = %(first_datasets)s:%(same_nr)s
 # datasets = %(first_datasets)s:%(same_nr)s:%(not_equal)s
 
-datasets = GM12878_Cytoplasm:GM12878_CytoplasmReplicate:K562_Cytoplasm:K562_CytoplasmReplicate
-datasets = K562_CytoplasmReplicate
+# datasets = GM12878_Cytoplasm:GM12878_CytoplasmReplicate:K562_Cytoplasm:K562_CytoplasmReplicate
+# datasets = K562_CytoplasmReplicate:K562_Cytoplasm:K562_Whole_CellReplicate:K562_Whole_Cell
+# datasets = K562_CytoplasmReplicate
+datasets = GM12878_Cytoplasm:GM12878_CytoplasmReplicate:GM12878_Whole_Cell:GM12878_Whole_CellReplicate:GM12878_Nucleus:GM12878_NucleusReplicate:K562_Cytoplasm:K562_CytoplasmReplicate:K562_Whole_Cell:K562_Whole_CellReplicate:K562_Nucleus:K562_NucleusReplicate:HeLa-S3_Cytoplasm:HeLa-S3_CytoplasmReplicate:HeLa-S3_Whole_Cell:HeLa-S3_Whole_CellReplicate:HeLa-S3_Nucleus:HeLa-S3_NucleusReplicate

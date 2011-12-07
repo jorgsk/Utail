@@ -2013,6 +2013,9 @@ def map_reads(processed_reads, avrg_read_len, settings):
                 realStrand = '+'
                 cleaveSite = str(int(beg)+len(seq))
 
+            # if it had a T-tail, reverse-transcribe it to have all sequences in
+            # the 5' -> 3' direction
+
             ## Don't write if this was a noisy read
             if read_is_noise(chrom, realStrand, int(cleaveSite), seq, at, tail,
                              settings):
