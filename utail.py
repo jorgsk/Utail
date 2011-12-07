@@ -93,9 +93,9 @@ class Settings(object):
         #self.chr1 = True
         self.chr1 = False
         #self.read_limit = False
-        self.read_limit = 1000000 # less than 10000 no reads map
+        self.read_limit = 10000000 # less than 10000 no reads map
         #self.read_limit = False
-        self.max_cores = 3
+        self.max_cores = 4
         self.get_length = False
         #self.get_length = True
         self.extendby = 10
@@ -965,7 +965,7 @@ def get_pas_and_distance(pas_patterns, sequence):
     """
     Go through the -40 from the polya read average. Collect PAS and distance
     as you find them. Must supply poly(A) sites relative to UTR-beg. The
-    sequence must also be relative to UTR-beg (3->5 direction)
+    sequence must also be relative to UTR-beg (5->3 direction)
     """
 
     pases = []
@@ -1966,13 +1966,6 @@ def map_reads(processed_reads, avrg_read_len, settings):
     p = Popen(command.split())
     p.wait()
 
-    ## XX REMOVE ME!!! JUST TO SKIP THE MAPPING DEBUG!! XXX 
-    #if not os.path.isfile(mapped_reads + '.0.map'):
-        #p = Popen(command.split())
-        #p.wait()
-    #else:
-        #pass
-
     # Accept mismatches according to average read length
     acceptables = {1: set(('1:0', '0:1')), 2: set(('1:0:0', '0:1:0', '0:0:1')),
                    3: set(('1:0:0:0', '0:1:0:0', '0:0:1:0', '0:0:0:1'))}
@@ -2009,6 +2002,14 @@ def map_reads(processed_reads, avrg_read_len, settings):
             if (at == 'T' and strand == '-') or (at == 'A' and strand == '+'):
                 realStrand = '+'
                 cleaveSite = str(int(beg)+len(seq))
+
+            # get all sequences in the 5->3 direction
+            if at == 'T':
+                seq = reverseComplement(seq)
+
+            # experimental! only keep the T-mapping ones ...
+            if at == 'A':
+                continue
 
             ## Don't write if this was a noisy read
             if read_is_noise(chrom, realStrand, int(cleaveSite), seq, at, tail,
@@ -2609,6 +2610,8 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, settings, annotation,
         write_polyA_stats(polyA_clusters, acount, tcount, at_numbers,
                           total_reads, feature_coords, output_path, settings)
 
+    # XXX This pathway is deprecated. The PAS-getting methods won't work any
+    # more. 
     if get_length:
         # Get the sequences of the genomic regions in question; you'll be
         # looking for poly(A) sites in them
@@ -3433,8 +3436,8 @@ def main():
     # function (called below). It also affects the 'temp' and 'output'
     # directories, respectively.
 
-    #DEBUGGING = True # warning... some stuff wasnt updated here
-    DEBUGGING = False
+    DEBUGGING = True # 
+    #DEBUGGING = False
 
     # with this option, always remake the bedfiles
     rerun_annotation_parser = False
