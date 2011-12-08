@@ -8,12 +8,11 @@ import time
 
 import cPickle as pickle
 
-from subprocess import Popen
+from subprocess import Popen, PIPE
 import multiprocessing
 
 import annotation_parser as genome
-import utail
-import results
+from results import Settings, super_falselength
 from operator import itemgetter
 
 # For sequence alignment
@@ -75,10 +74,6 @@ def seq_getter(cls):
 
         # error source: a-reads in a t-group?
         for seq in seqs.split('$'):
-
-            # reverse complement if of 't' type
-            if cls.tail_type == 'T':
-                seq = utail.reverseComplement(seq)
 
             # add sequences + compartment as a set; this removes any duplicates
             # and thus minimizes errors based on pcr amplification
@@ -274,6 +269,12 @@ def core_clustalw(super_3utr, region, hg19Seqs, settings, speedrun,
                 # cleavage site will make artificial gaps
                 if consensus_hg19_mismatch(consensus, aln_hg19seq, no_cons,
                                            aln_nr, pr=True, thresh=0.6):
+                    if pr:
+                        print rnaseq_align
+                        print('*')
+                        print consensus
+                        print('*')
+                        print aln_hg19seq
                     no_cons += 1
                     continue
 
@@ -557,7 +558,7 @@ def get_pasmutants(rnaseq_align, aln_hg19seq, consensus, pas_patterns, high,
             other_hex = other_seq[pos:pos+6]
 
             # don't include PAS too close to the 3' end
-            if pos > 36:
+            if pos > 41:
                 if pr:
                     print 'Too close'
                 continue
@@ -848,7 +849,7 @@ def get_snps_corrected(snp_stats, error_rates, cell_lines, pr):
 
     return cor_snp
 
-def snp_analysis(settings):
+def snp_analysis(settings, region):
     """
     For all the poly(A) sites, align the seqs for each dataset separately and
     find either PAS or PAS_with_snips.
@@ -876,8 +877,6 @@ def snp_analysis(settings):
     # where stuff should be saved
     outdir = os.path.join(settings.here, 'SNP_analysis')
 
-    region = '3UTR-exonic'
-
     subset = all_ds
 
     batch_key = 'SNP'
@@ -887,6 +886,7 @@ def snp_analysis(settings):
 
     # print output?
     pr = False
+    #pr = True
 
     # override loading of file?
     override = True
@@ -908,7 +908,7 @@ def snp_analysis(settings):
         t1 = time.time()
 
         # Get the clustered poly(A) sites
-        dsets, super_3utr = results.super_falselength(settings, region, batch_key,
+        dsets, super_3utr = super_falselength(settings, region, batch_key,
                                               subset, speedrun)
 
         # Get hg19 sequences 50bp downstream all polyA sites
@@ -956,6 +956,44 @@ def snp_analysis(settings):
         # * Mutation distribution around real PAS sites
         # * For each mutation, che
 
+def get_non_pA_reads(bed_file, settings, region, speedrun):
+    """
+    Do gem -> bed for all reads that land around the pA sites
+    """
+    raw_datasets = settings.datasets_reads
+
+    outp_folder = os.path.dirname(bed_file)
+
+    parser = 'python smallGem2bed.py'
+
+    file_reg = {}
+
+    for dset, paths in raw_datasets.items():
+        out_file = os.path.join(outp_folder, dset+'_'+region+'.bed')
+
+        file_reg[dset] = out_file
+
+        handle = open(out_file, 'wb')
+
+        # zcat all the flow_cells, parse with gem2bed, and intersect with the
+        # bedfile of the polyA sites
+        cmd = 'zcat {0} | {1} | intersectBed -a stdin -b {2}'.\
+                format(' '.join(paths), parser, bed_file)
+
+        # just take first 10k lines if on speedrun
+        if speedrun:
+            cmd = 'zcat {0} | head -10000 | {1} | intersectBed -a stdin -b {2}'.\
+                    format(' '.join(paths), parser, bed_file)
+
+        p = Popen(cmd, stdout=PIPE)
+
+        for line in p.stdout:
+            handle.write(line)
+
+        handle.close()
+
+    return outp_folder, file_reg
+
 def main():
     # The path to the directory the script is located in
     here = os.path.dirname(os.path.realpath(__file__))
@@ -963,10 +1001,23 @@ def main():
     (savedir, outputdir) = [os.path.join(here, d) for d in ('figures', 'output')]
 
     # Keep houskeeping information in a settings object
-    settings = results.Settings(os.path.join(here, 'UTR_SETTINGS'), savedir,
+    settings = Settings(os.path.join(here, 'UTR_SETTINGS'), savedir,
                                 outputdir, here, chr1=False)
 
-    snp_analysis(settings)
+    # TODO get the other reads that map to -40 of PAS but don't have poly(A).
+    # This is in a cell_line specific file file, with information about dataset
+    # (and flow cell)
+    import get_all_polyAsites
+    region = '3UTR-exonic'
+
+    bed_file = get_all_polyAsites.get_pA_surroundingBed(region)
+    # Send the directory to snp_analysis below, and for each cell line I will
+    # add those sequences to the analysis; they will lend extra strength!
+    speedrun = True
+    non_pA_reads_folder, files = get_non_pA_reads(bed_file, settings, region)
+    debug()
+
+    snp_analysis(settings, region)
 
 if __name__ == '__main__':
     main()

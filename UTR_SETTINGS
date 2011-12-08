@@ -299,14 +299,14 @@ HUVEC_NucleusReplicate = %(carrie)s/030N/genome/LID8691_FC61FLKAAXX_1_1.gem.map.
 
 # annotation_path = false
 # annotation_path = /users/rg/jskancke/phdproject/3UTR/gencode5/gencode5_annotation.gtf
-annotation_path = /users/rg/jskancke/phdproject/3UTR/gencode7/gencode7_annotation.gtf
-# annotation_path = /home/jorgsk/phdproject/3UTR/annotations/gencode.v7.annotation.gtf
+# annotation_path = /users/rg/jskancke/phdproject/3UTR/gencode7/gencode7_annotation.gtf
+annotation_path = /home/jorgsk/phdproject/3UTR/annotations/gencode.v7.annotation.gtf
 annotation_format = GENCODE
 # annotation_format = ENSEMBL
 # annotation_path = /users/rg/jskancke/phdproject/3UTR/Annotations/Mus_musculus.NCBIM37.62.gtf 
 #
-annotated_polyA_files = /users/rg/jskancke/phdproject/3UTR/the_project/source_bedfiles/polyAdb_gencode_merged.bed
-# annotated_polyA_files = /home/jorgsk/phdproject/3UTR/the_project/source_bedfiles/polyAdb_gencode_merged.bed
+# annotated_polyA_files = /users/rg/jskancke/phdproject/3UTR/the_project/source_bedfiles/polyAdb_gencode_merged.bed
+annotated_polyA_files = /home/jorgsk/phdproject/3UTR/the_project/source_bedfiles/polyAdb_gencode_merged.bed
 
 [SUPPLIED_3UTR_BEDFILE]
 # If you supply more than one bedfile, the pipeline will be run for
@@ -320,8 +320,8 @@ annotated_polyA_files = /users/rg/jskancke/phdproject/3UTR/the_project/source_be
 # CUFFLINKS MODEL
 # utr_bed_path =/users/rg/jskancke/phdproject/3UTR/CUFF_LINKS/cufflinks_exons.bed
 
-regdir = /users/rg/jskancke/phdproject/3UTR/the_project/genomic_regions_hg19
-# regdir = /home/jorgsk/phdproject/3UTR/the_project/genomic_regions_hg19
+# regdir = /users/rg/jskancke/phdproject/3UTR/the_project/genomic_regions_hg19
+regdir = /home/jorgsk/phdproject/3UTR/the_project/genomic_regions_hg19
 ## NON STRANDED
 # utr_bed_path = %(regdir)s/3UTR-exonic_non_stranded.bed:%(regdir)s/3UTR-intronic_non_stranded.bed:%(regdir)s/5UTR-exonic_non_stranded.bed:%(regdir)s/5UTR-intronic_non_stranded.bed:%(regdir)s/CDS-exonic_non_stranded.bed:%(regdir)s/CDS-intronic_non_stranded.bed:%(regdir)s/Intergenic_non_stranded.bed:%(regdir)s/Nocoding-exonic_non_stranded.bed:%(regdir)s/Noncoding-intronic_non_stranded.bed:%(regdir)s/anti-3UTR-exonic_non_stranded.bed:%(regdir)s/whole_genome.bed
 utr_bed_path = %(regdir)s/3UTR-exonic_non_stranded.bed
@@ -379,8 +379,8 @@ polya = true
 #
 # If you set polya = true, supply the path to the gem-mapper index file
 # NOTE: leve out the suffix of the index file!!
-gem_mapper_index = /users/rg/atanzer/DATA/GEM_indices/Genomes/H.sapiens.genome.hg19.main
-# gem_mapper_index = /home/jorgsk/phdproject/3UTR/mapping_files/gem/H.sapiens.genome.hg19.main
+# gem_mapper_index = /users/rg/atanzer/DATA/GEM_indices/Genomes/H.sapiens.genome.hg19.main
+gem_mapper_index = /home/jorgsk/phdproject/3UTR/mapping_files/gem/H.sapiens.genome.hg19.main
 
 [CPU_CORES]
 # Set how many cores you wish to use. default uses system_max minus 1. For
@@ -403,8 +403,8 @@ extend_by = 20
 # fasta file should be one chromosome. The genome version in the fasta file
 # must be the same as all the genome versions to which the RNA-seq reads were
 # mapped.
-hg_fasta = /users/rg/jskancke/phdproject/3UTR/hg19fasta/hg19.fa
-# hg_fasta = /home/jorgsk/phdproject/3UTR/mapping_files/hg19/hg19.fa
+# hg_fasta = /users/rg/jskancke/phdproject/3UTR/hg19fasta/hg19.fa
+hg_fasta = /home/jorgsk/phdproject/3UTR/mapping_files/hg19/hg19.fa
 
 [BIGWIG]
 # The pipeline can turn the read-coverage (both ordinary reads and poly(A)

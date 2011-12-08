@@ -341,6 +341,15 @@ class Settings(object):
         conf.read(settings_file)
 
         self.datasets = conf.get('PLOTTING', 'datasets').split(':')
+        self.datasets_reads = dict((dset, files.split(':')) for dset,
+                        files in conf.items('DATASETS'))
+
+        # Go through all the items in 'datsets'. Pop the directories from the list.
+        # They are likely to be shortcuts.
+        for (dset, dpaths) in self.datasets_reads.items():
+            for pa in dpaths:
+                if os.path.isdir(pa):
+                    self.datasets_reads.pop(dset)
 
         self.savedir = savedir
         self.outputdir = outputdir
