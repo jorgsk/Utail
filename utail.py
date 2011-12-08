@@ -1118,9 +1118,12 @@ def zcat_wrapper(dset_id, bed_reads, read_limit, out_path, polyA, polyA_path,
                     striplen = len(t_strip)
 
                     if striplen > 25:
+                        flowcell = ID.split(':')[1]
                         seqlen = len(seq)
                         tail = seq[:seqlen-striplen]
-                        name = '#'.join([t_strip, tail, 'T'])
+                        trim_qual = quality[seqlen-striplen:]
+
+                        name = '#'.join([t_strip, tail, 'T', flowcell, trim_qual])
 
                         polyA_file.write(name + '\n')
                         tcount +=1
@@ -1135,10 +1138,15 @@ def zcat_wrapper(dset_id, bed_reads, read_limit, out_path, polyA, polyA_path,
                     striplen = len(a_strip)
 
                     if striplen > 25:
+                        flowcell = ID.split(':')[1]
                         seqlen = len(seq)
                         tail = seq[-(seqlen-striplen):]
 
-                        name = '#'.join([a_strip, tail, 'A'])
+                        # strip the quality score with the equivalent of the
+                        # polyA read
+                        trim_qual = quality[:striplen]
+
+                        name = '#'.join([a_strip, tail, 'A', flowcell, trim_qual])
 
                         polyA_file.write(name + '\n')
                         acount += 1
@@ -1895,11 +1903,15 @@ def get_rpkm(reads, utrfile_path, total_reads, utrs, extendby, dset_id):
 
     return rpkm
 
-def process_reads(pA_reads_path):
+def process_reads(pA_reads_path, use_qualscores):
     """
     Remove reads that are too short or have a poor nucleotide composition.
     """
-    processed_reads = os.path.splitext(pA_reads_path)[0]+'_processed.fas'
+    if use_qualscores:
+        processed_reads = os.path.splitext(pA_reads_path)[0]+'_processed.fastq'
+    else:
+        processed_reads = os.path.splitext(pA_reads_path)[0]+'_processed.fas'
+
     outfile = open(processed_reads, 'wb')
 
     # Go through the file two lines at a time. If the next line does not begin
@@ -1910,8 +1922,8 @@ def process_reads(pA_reads_path):
 
     for line in open(pA_reads_path, 'rb'):
         # add lines until there are 2 entries in linepair
-        (seq, tail, at) = line.split('#')
-        at = at.strip('\n') # remove linebreak
+        (seq, tail, at, flowcell, quality) = line.split('#')
+        quality = quality.strip('\n') # remove linebreak
 
         seqlen = len(seq)
         if seqlen > 25:
@@ -1921,8 +1933,13 @@ def process_reads(pA_reads_path):
             if (As/seqlen < 0.70) and (Ts/seqlen < 0.70):
                 length_sum += seqlen
                 tot_reads += 1
-                # write to fasta format
-                outfile.write('>{0}\t{1}\n'.format(at, tail)+seq+'\n')
+                if use_qualscores:
+                    outfile.write('@{0}:{1}:{2}\n{3}\n+\n{4}\n'.format(at, flowcell,
+                                                                  tail, seq,
+                                                                   quality))
+                else:
+                    # write to fasta format
+                    outfile.write('>{0}:{1}:{2}\n'.format(at, flowcell, tail)+seq+'\n')
 
     if tot_reads > 0:
         avrg_len = length_sum/float(tot_reads)
@@ -1933,7 +1950,7 @@ def process_reads(pA_reads_path):
 
     return processed_reads, avrg_len
 
-def map_reads(processed_reads, avrg_read_len, settings):
+def map_reads(processed_reads, avrg_read_len, settings, use_qualscores):
     """
     Map the processed reads using gem-mapper. Use the average read length to
     determine the number of mismatches for the mapper according to the following
@@ -1959,9 +1976,14 @@ def map_reads(processed_reads, avrg_read_len, settings):
         mismatch_nr = 3
 
     ### mapping trimmed reads
-    command = "gem-mapper -I {0} -i {1} -o {2} -q ignore -m {3}"\
-            .format(settings.gem_index, processed_reads, mapped_reads,
-                    mismatch_nr)
+    if use_qualscores:
+        command = "gem-mapper -I {0} -i {1} -o {2} -q solexa -m {3}"\
+                .format(settings.gem_index, processed_reads, mapped_reads,
+                        mismatch_nr)
+    else:
+        command = "gem-mapper -I {0} -i {1} -o {2} -q ignore -m {3}"\
+                .format(settings.gem_index, processed_reads, mapped_reads,
+                        mismatch_nr)
 
     p = Popen(command.split())
     p.wait()
@@ -1981,7 +2003,12 @@ def map_reads(processed_reads, avrg_read_len, settings):
     allcount = 0
 
     for line in open(mapped_reads + '.0.map', 'rb'):
-        (at, tail, seq, mapinfo, position) = line.split('\t')
+        if use_qualscores:
+            (name, seq, quality, mapinfo, position) = line.split('\t')
+        else:
+            (name, seq, mapinfo, position) = line.split('\t')
+
+        (at, flowcell, tail) = name.split(':')
 
         # Acceptable reads and poly(A) reads are mutually exclusive.
         if mapinfo in acceptable:
@@ -2021,7 +2048,7 @@ def map_reads(processed_reads, avrg_read_len, settings):
             # downstream code.
 
             # Write to file in .bed format
-            name = '#'.join([at, tail, seq])
+            name = '#'.join([at, tail, seq, flowcell])
             end = str(int(cleaveSite) + 1)
 
             reads_file.write('\t'.join([chrom, cleaveSite, end, name,
@@ -2308,24 +2335,32 @@ def cluster_loop(ends):
     if ends == []:
         return [[], [], [], []]
 
-    clustsum = 0
-    clustcount = 0
-    this_cluster = []
     clusters = []
-    for indx, (val, name) in enumerate(ends):
+
+    # setting initial conditions
+    start_val, start_name = ends[0]
+
+    start_val = int(start_val)
+    clustsum = start_val
+    mean = start_val
+    clustcount = 1
+    this_cluster = [(start_val, start_name)]
+
+    for (val, name) in ends[1:]:
         ival = int(val)
 
-        clustsum = clustsum + ival
-        clustcount += 1
-        mean = clustsum/clustcount
-
-        # If dist between new entry and cluster mean is < 20, keep in cluster
-        if abs(ival - mean) < 20:
+        # If dist between new entry and cluster mean is < 24, keep in cluster
+        if abs(ival - mean) < 24:
             this_cluster.append((ival, name))
+
+            clustsum = clustsum + ival
+            clustcount += 1
+            mean = clustsum/clustcount
 
         else: # If not, start a new cluster, and save the old one
             clusters.append(this_cluster)
             clustsum = ival
+            mean = ival
             clustcount = 1
             this_cluster = [(ival, name)]
 
@@ -2364,7 +2399,9 @@ def cluster_loop(ends):
 
         nucsums.append(nucsum_avrg)
 
-        (at, tail_info, seq) = name.split('#')
+        # XXX for now you are leaving behind the flowcell number here; later you
+        # may attach this information onto the seq + that A/T too if you like,
+        #(at, tail_info, seq, flowcell) = name.split('#')
         cluster_seqs =  [k[1].split('#')[2] for k in clus]
 
         # store the seqs as a $-separated string
@@ -2566,18 +2603,24 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, settings, annotation,
         # Get numbers of As and Ts for a log file
         at_numbers, utr_polyAs = get_at_counts(polyA_bed_path, utrfile_path)
 
+
     # If polyA is True, trim the extracted polyA reads, remap them, and save the
     # uniquely mapping ones to bed format
     elif polyA == True:
+        # XXX for testing if qualscores make a difference
+        use_qualscores = True
+        #use_qualscores = False
+        # XXX
         # PolyA pipeline: remove low-quality reads, remap, and -> .bed-format:
 
         # 1) Process reads by removing those with low-quality, and removing the
         #    leading Ts and/OR trailing As.
-        processed_reads, avrg_read_len = process_reads(p_polyA_bed)
+        processed_reads, avrg_read_len = process_reads(p_polyA_bed, use_qualscores)
 
         # 2) Map the surviving reads to the genome and return unique ones
         print('Remapping poly(A)-reads for {0} + noise filtering...'.format(dset_id))
-        polyA_bed_path = map_reads(processed_reads, avrg_read_len, settings)
+        polyA_bed_path = map_reads(processed_reads, avrg_read_len, settings,
+                                   use_qualscores)
 
         # 3) If caching is on, save the polyA_bed_path to the cache dir
         if polyA_cache and read_limit == False:
@@ -3536,16 +3579,17 @@ def piperunner(settings, annotation, simulate, DEBUGGING, beddir, tempdir,
                          annotation, DEBUGGING, polyA_cache, here)
 
             ###### FOR DEBUGGING ######
-            #akk = pipeline(*arguments)
+            akk = pipeline(*arguments)
             ###########################
 
-            result = my_pool.apply_async(pipeline, arguments)
-            results.append(result)
+            #result = my_pool.apply_async(pipeline, arguments)
+            #results.append(result)
+            debug()
 
         my_pool.close()
         my_pool.join()
 
-        # we don't return anything, but get results anyway
+         #we don't return anything, but get results anyway
         [result.get() for result in results]
 
         # Print the total elapsed time

@@ -85,10 +85,10 @@ K562_Nucleus = %(carrie)s/001N/genome/LID8556_FC62067AAXX_1_2.gem.map.gz:%(carri
 
 K562_NucleusReplicate = %(carrie)s/002N/genome/LID8557_FC62067AAXX_4_1.gem.map.gz:%(carrie)s/002N/genome/LID8557_FC62067AAXX_4_2.gem.map.gz:%(carrie)s/002N/genome/LID8557_FC62067AAXX_5_1.gem.map.gz:%(carrie)s/002N/genome/LID8557_FC62067AAXX_5_2.gem.map.gz:%(carrie)s/002N/genome/LID8557_FC62067AAXX_6_1.gem.map.gz:%(carrie)s/002N/genome/LID8557_FC62067AAXX_6_2.gem.map.gz
 
-K562_Nucleoplasm = %(carrie)s/025NPtotal/genome/LID9189_FC61WW5AAXX_5_1.gem.map.gz:%(carrie)s/025NPtotal/genome/LID9189_FC61WW5AAXX_5_2.gem.map.gz:%(carrie)s/025NPtotal/genome/LID9189_FC61WW5AAXX_6_1.gem.map.gz:%(carrie)s/025NPtotal/genome/LID9189_FC61WW5AAXX_6_2.gem.map.gz:%(carrie)s/025NPtotal/genome/LID9189_FC61WW5AAXX_7_1.gem.map.gz:%(carrie)s/025NPtotal/genome/LID9189_FC61WW5AAXX_7_2.gem.map.gz
+# K562_Nucleoplasm = %(carrie)s/025NPtotal/genome/LID9189_FC61WW5AAXX_5_1.gem.map.gz:%(carrie)s/025NPtotal/genome/LID9189_FC61WW5AAXX_5_2.gem.map.gz:%(carrie)s/025NPtotal/genome/LID9189_FC61WW5AAXX_6_1.gem.map.gz:%(carrie)s/025NPtotal/genome/LID9189_FC61WW5AAXX_6_2.gem.map.gz:%(carrie)s/025NPtotal/genome/LID9189_FC61WW5AAXX_7_1.gem.map.gz:%(carrie)s/025NPtotal/genome/LID9189_FC61WW5AAXX_7_2.gem.map.gz
 
-knplm2 = %(carrie)s/026NPtotal/genome
-K562_NucleoplasmReplicate = %(knplm2)s/LID9190_FC61WU1AAXX_1_1.gem.map.gz:%(knplm2)s/LID9190_FC61WU1AAXX_1_2.gem.map.gz:%(knplm2)s/LID9190_FC61WU1AAXX_2_1.gem.map.gz:%(knplm2)s/LID9190_FC61WU1AAXX_2_2.gem.map.gz:%(knplm2)s/LID9190_FC61WW5AAXX_8_1.gem.map.gz:%(knplm2)s/LID9190_FC61WW5AAXX_8_2.gem.map.gz
+# knplm2 = %(carrie)s/026NPtotal/genome
+# K562_NucleoplasmReplicate = %(knplm2)s/LID9190_FC61WU1AAXX_1_1.gem.map.gz:%(knplm2)s/LID9190_FC61WU1AAXX_1_2.gem.map.gz:%(knplm2)s/LID9190_FC61WU1AAXX_2_1.gem.map.gz:%(knplm2)s/LID9190_FC61WU1AAXX_2_2.gem.map.gz:%(knplm2)s/LID9190_FC61WW5AAXX_8_1.gem.map.gz:%(knplm2)s/LID9190_FC61WW5AAXX_8_2.gem.map.gz
 
 # K562_Chromatin = %(carrie)s/025CH/genome/LID9185_FC61RV8AAXX_1_1.gem.map.gz:%(carrie)s/025CH/genome/LID9185_FC61RV8AAXX_1_2.gem.map.gz:%(carrie)s/025CH/genome/LID9185_FC61RV8AAXX_2_1.gem.map.gz:%(carrie)s/025CH/genome/LID9185_FC61RV8AAXX_2_2.gem.map.gz:%(carrie)s/025CH/genome/LID9185_FC61RV8AAXX_3_1.gem.map.gz:%(carrie)s/025CH/genome/LID9185_FC61RV8AAXX_3_2.gem.map.gz
 
@@ -167,27 +167,27 @@ HUVEC_NucleusReplicate = %(carrie)s/030N/genome/LID8691_FC61FLKAAXX_1_1.gem.map.
 # HEPG2_NucleusMinusReplicate=%(carrie)s/014NMinus/genome/LID9203_FC626J7AAXX_6_1.gem.map.gz:%(carrie)s/014NMinus/genome/LID9203_FC626J7AAXX_6_2.gem.map.gz:%(carrie)s/014NMinus/genome/LID9203_FC626J7AAXX_7_1.gem.map.gz:%(carrie)s/014NMinus/genome/LID9203_FC626J7AAXX_7_2.gem.map.gz:%(carrie)s/014NMinus/genome/LID9203_FC626J7AAXX_8_1.gem.map.gz:%(carrie)s/014NMinus/genome/LID9203_FC626J7AAXX_8_2.gem.map.gz
 
 # ############# HEPG2
-# HEPG2_Whole_Cell = %(carrie)s/013WC/genome/LID16635_FC61TTFAAXX_3_1.gem.map.gz:%(carrie)s/013WC/genome/LID16635_FC61TTFAAXX_3_2.gem.map.gz:%(carrie)s/013WC/genome/LID16635_FC61TTFAAXX_4_1.gem.map.gz:%(carrie)s/013WC/genome/LID16635_FC61TTFAAXX_4_2.gem.map.gz:%(carrie)s/013WC/genome/LID16635_FC61TTFAAXX_5_1.gem.map.gz:%(carrie)s/013WC/genome/LID16635_FC61TTFAAXX_5_2.gem.map.gz
+HEPG2_Whole_Cell = %(carrie)s/013WC/genome/LID16635_FC61TTFAAXX_3_1.gem.map.gz:%(carrie)s/013WC/genome/LID16635_FC61TTFAAXX_3_2.gem.map.gz:%(carrie)s/013WC/genome/LID16635_FC61TTFAAXX_4_1.gem.map.gz:%(carrie)s/013WC/genome/LID16635_FC61TTFAAXX_4_2.gem.map.gz:%(carrie)s/013WC/genome/LID16635_FC61TTFAAXX_5_1.gem.map.gz:%(carrie)s/013WC/genome/LID16635_FC61TTFAAXX_5_2.gem.map.gz
 
-# HEPG2_Whole_CellReplicate = %(carrie)s/014WC/genome/LID16636_FC61TTFAAXX_6_1.gem.map.gz:%(carrie)s/014WC/genome/LID16636_FC61TTFAAXX_6_2.gem.map.gz:%(carrie)s/014WC/genome/LID16636_FC61TTFAAXX_7_1.gem.map.gz:%(carrie)s/014WC/genome/LID16636_FC61TTFAAXX_7_2.gem.map.gz:%(carrie)s/014WC/genome/LID16636_FC61TTFAAXX_8_1.gem.map.gz:%(carrie)s/014WC/genome/LID16636_FC61TTFAAXX_8_2.gem.map.gz
+HEPG2_Whole_CellReplicate = %(carrie)s/014WC/genome/LID16636_FC61TTFAAXX_6_1.gem.map.gz:%(carrie)s/014WC/genome/LID16636_FC61TTFAAXX_6_2.gem.map.gz:%(carrie)s/014WC/genome/LID16636_FC61TTFAAXX_7_1.gem.map.gz:%(carrie)s/014WC/genome/LID16636_FC61TTFAAXX_7_2.gem.map.gz:%(carrie)s/014WC/genome/LID16636_FC61TTFAAXX_8_1.gem.map.gz:%(carrie)s/014WC/genome/LID16636_FC61TTFAAXX_8_2.gem.map.gz
 
-# HEPG2_Cytoplasm = %(carrie)s/013C/genome/LID8471_FC61AHAAAXX_7_1.gem.map.gz:%(carrie)s/013C/genome/LID8471_FC61AHAAAXX_7_2.gem.map.gz:%(carrie)s/013C/genome/LID8471_FC61AHAAAXX_8_1.gem.map.gz:%(carrie)s/013C/genome/LID8471_FC61AHAAAXX_8_2.gem.map.gz:%(carrie)s/013C/genome/LID8471_FC61U1EAAXX_1_1.gem.map.gz:%(carrie)s/013C/genome/LID8471_FC61U1EAAXX_1_2.gem.map.gz
+HEPG2_Cytoplasm = %(carrie)s/013C/genome/LID8471_FC61AHAAAXX_7_1.gem.map.gz:%(carrie)s/013C/genome/LID8471_FC61AHAAAXX_7_2.gem.map.gz:%(carrie)s/013C/genome/LID8471_FC61AHAAAXX_8_1.gem.map.gz:%(carrie)s/013C/genome/LID8471_FC61AHAAAXX_8_2.gem.map.gz:%(carrie)s/013C/genome/LID8471_FC61U1EAAXX_1_1.gem.map.gz:%(carrie)s/013C/genome/LID8471_FC61U1EAAXX_1_2.gem.map.gz
 
-# HEPG2_CytoplasmReplicate = %(carrie)s/014C/genome/LID8472_FC61U1EAAXX_2_1.gem.map.gz:%(carrie)s/014C/genome/LID8472_FC61U1EAAXX_2_2.gem.map.gz:%(carrie)s/014C/genome/LID8472_FC61U1EAAXX_3_1.gem.map.gz:%(carrie)s/014C/genome/LID8472_FC61U1EAAXX_3_2.gem.map.gz:%(carrie)s/014C/genome/LID8472_FC61U1EAAXX_4_1.gem.map.gz:%(carrie)s/014C/genome/LID8472_FC61U1EAAXX_4_2.gem.map.gz
+HEPG2_CytoplasmReplicate = %(carrie)s/014C/genome/LID8472_FC61U1EAAXX_2_1.gem.map.gz:%(carrie)s/014C/genome/LID8472_FC61U1EAAXX_2_2.gem.map.gz:%(carrie)s/014C/genome/LID8472_FC61U1EAAXX_3_1.gem.map.gz:%(carrie)s/014C/genome/LID8472_FC61U1EAAXX_3_2.gem.map.gz:%(carrie)s/014C/genome/LID8472_FC61U1EAAXX_4_1.gem.map.gz:%(carrie)s/014C/genome/LID8472_FC61U1EAAXX_4_2.gem.map.gz
 
-# HEPG2_Nucleus = %(carrie)s/013N/genome/LID8534_FC61B6KAAXX_7_1.gem.map.gz:%(carrie)s/013N/genome/LID8534_FC61B6KAAXX_7_2.gem.map.gz:%(carrie)s/013N/genome/LID8534_FC61B6KAAXX_8_1.gem.map.gz:%(carrie)s/013N/genome/LID8534_FC61B6KAAXX_8_2.gem.map.gz:%(carrie)s/013N/genome/LID8534_FC61R7VAAXX_1_1.gem.map.gz:%(carrie)s/013N/genome/LID8534_FC61R7VAAXX_1_2.gem.map.gz
+HEPG2_Nucleus = %(carrie)s/013N/genome/LID8534_FC61B6KAAXX_7_1.gem.map.gz:%(carrie)s/013N/genome/LID8534_FC61B6KAAXX_7_2.gem.map.gz:%(carrie)s/013N/genome/LID8534_FC61B6KAAXX_8_1.gem.map.gz:%(carrie)s/013N/genome/LID8534_FC61B6KAAXX_8_2.gem.map.gz:%(carrie)s/013N/genome/LID8534_FC61R7VAAXX_1_1.gem.map.gz:%(carrie)s/013N/genome/LID8534_FC61R7VAAXX_1_2.gem.map.gz
 
-# HEPG2_NucleusReplicate = %(carrie)s/014N/genome/LID8535_FC61R7VAAXX_2_1.gem.map.gz:%(carrie)s/014N/genome/LID8535_FC61R7VAAXX_2_2.gem.map.gz:%(carrie)s/014N/genome/LID8535_FC61R7VAAXX_3_1.gem.map.gz:%(carrie)s/014N/genome/LID8535_FC61R7VAAXX_3_2.gem.map.gz:%(carrie)s/014N/genome/LID8535_FC61R7VAAXX_4_1.gem.map.gz:%(carrie)s/014N/genome/LID8535_FC61R7VAAXX_4_2.gem.map.gz
+HEPG2_NucleusReplicate = %(carrie)s/014N/genome/LID8535_FC61R7VAAXX_2_1.gem.map.gz:%(carrie)s/014N/genome/LID8535_FC61R7VAAXX_2_2.gem.map.gz:%(carrie)s/014N/genome/LID8535_FC61R7VAAXX_3_1.gem.map.gz:%(carrie)s/014N/genome/LID8535_FC61R7VAAXX_3_2.gem.map.gz:%(carrie)s/014N/genome/LID8535_FC61R7VAAXX_4_1.gem.map.gz:%(carrie)s/014N/genome/LID8535_FC61R7VAAXX_4_2.gem.map.gz
 
 # # ### A new era: the non-well-replicated-compartmentalized 
 # # ### H1HESC
-# H1HESC_Whole_Cell = %(carrie)s/005WC/genome/LID8461_FC61DL3AAXX_1_1.gem.map.gz:%(carrie)s/005WC/genome/LID8461_FC61DL3AAXX_1_2.gem.map.gz:%(carrie)s/005WC/genome/LID8461_FC61DL3AAXX_2_1.gem.map.gz:%(carrie)s/005WC/genome/LID8461_FC61DL3AAXX_2_2.gem.map.gz:%(carrie)s/005WC/genome/LID8461_FC61DL3AAXX_3_1.gem.map.gz:%(carrie)s/005WC/genome/LID8461_FC61DL3AAXX_3_2.gem.map.gz
+H1HESC_Whole_Cell = %(carrie)s/005WC/genome/LID8461_FC61DL3AAXX_1_1.gem.map.gz:%(carrie)s/005WC/genome/LID8461_FC61DL3AAXX_1_2.gem.map.gz:%(carrie)s/005WC/genome/LID8461_FC61DL3AAXX_2_1.gem.map.gz:%(carrie)s/005WC/genome/LID8461_FC61DL3AAXX_2_2.gem.map.gz:%(carrie)s/005WC/genome/LID8461_FC61DL3AAXX_3_1.gem.map.gz:%(carrie)s/005WC/genome/LID8461_FC61DL3AAXX_3_2.gem.map.gz
 
-# H1HESC_Whole_CellReplicate = %(carrie)s/006WC/genome/LID8462_FC61DL3AAXX_4_1.gem.map.gz:%(carrie)s/006WC/genome/LID8462_FC61DL3AAXX_4_2.gem.map.gz:%(carrie)s/006WC/genome/LID8462_FC61DL3AAXX_5_1.gem.map.gz:%(carrie)s/006WC/genome/LID8462_FC61DL3AAXX_5_2.gem.map.gz:%(carrie)s/006WC/genome/LID8462_FC61DL3AAXX_6_1.gem.map.gz:%(carrie)s/006WC/genome/LID8462_FC61DL3AAXX_6_2.gem.map.gz
+H1HESC_Whole_CellReplicate = %(carrie)s/006WC/genome/LID8462_FC61DL3AAXX_4_1.gem.map.gz:%(carrie)s/006WC/genome/LID8462_FC61DL3AAXX_4_2.gem.map.gz:%(carrie)s/006WC/genome/LID8462_FC61DL3AAXX_5_1.gem.map.gz:%(carrie)s/006WC/genome/LID8462_FC61DL3AAXX_5_2.gem.map.gz:%(carrie)s/006WC/genome/LID8462_FC61DL3AAXX_6_1.gem.map.gz:%(carrie)s/006WC/genome/LID8462_FC61DL3AAXX_6_2.gem.map.gz
 
-# H1HESC_Cytoplasm = %(carrie)s/006C/genome/LID8536_FC61R7VAAXX_5_1.gem.map.gz:%(carrie)s/006C/genome/LID8536_FC61R7VAAXX_5_2.gem.map.gz:%(carrie)s/006C/genome/LID8536_FC61R7VAAXX_6_1.gem.map.gz:%(carrie)s/006C/genome/LID8536_FC61R7VAAXX_6_2.gem.map.gz:%(carrie)s/006C/genome/LID8536_FC61R7VAAXX_7_1.gem.map.gz:%(carrie)s/006C/genome/LID8536_FC61R7VAAXX_7_2.gem.map.gz
+H1HESC_Cytoplasm = %(carrie)s/006C/genome/LID8536_FC61R7VAAXX_5_1.gem.map.gz:%(carrie)s/006C/genome/LID8536_FC61R7VAAXX_5_2.gem.map.gz:%(carrie)s/006C/genome/LID8536_FC61R7VAAXX_6_1.gem.map.gz:%(carrie)s/006C/genome/LID8536_FC61R7VAAXX_6_2.gem.map.gz:%(carrie)s/006C/genome/LID8536_FC61R7VAAXX_7_1.gem.map.gz:%(carrie)s/006C/genome/LID8536_FC61R7VAAXX_7_2.gem.map.gz
 
-# H1HESC_Nucleus = %(carrie)s/006N/genome/LID8558_FC62067AAXX_7_1.gem.map.gz:%(carrie)s/006N/genome/LID8558_FC62067AAXX_7_2.gem.map.gz:%(carrie)s/006N/genome/LID8558_FC62067AAXX_8_1.gem.map.gz:%(carrie)s/006N/genome/LID8558_FC62067AAXX_8_2.gem.map.gz:%(carrie)s/006N/genome/LID8558_FC6207CAAXX_1_1.gem.map.gz:%(carrie)s/006N/genome/LID8558_FC6207CAAXX_1_2.gem.map.gz
+H1HESC_Nucleus = %(carrie)s/006N/genome/LID8558_FC62067AAXX_7_1.gem.map.gz:%(carrie)s/006N/genome/LID8558_FC62067AAXX_7_2.gem.map.gz:%(carrie)s/006N/genome/LID8558_FC62067AAXX_8_1.gem.map.gz:%(carrie)s/006N/genome/LID8558_FC62067AAXX_8_2.gem.map.gz:%(carrie)s/006N/genome/LID8558_FC6207CAAXX_1_1.gem.map.gz:%(carrie)s/006N/genome/LID8558_FC6207CAAXX_1_2.gem.map.gz
 
 # # ### H1HESC poly(A) minus
 
@@ -200,20 +200,20 @@ HUVEC_NucleusReplicate = %(carrie)s/030N/genome/LID8691_FC61FLKAAXX_1_1.gem.map.
 # H1HESC_NucleusMinus = %(carrie)s/006NMinus/genome/LID9199_FC625U2AAXX_3_1.gem.map.gz:%(carrie)s/006NMinus/genome/LID9199_FC625U2AAXX_3_2.gem.map.gz:%(carrie)s/006NMinus/genome/LID9199_FC625U2AAXX_5_1.gem.map.gz:%(carrie)s/006NMinus/genome/LID9199_FC625U2AAXX_5_2.gem.map.gz:%(carrie)s/006NMinus/genome/LID9199_FC625U2AAXX_6_1.gem.map.gz:%(carrie)s/006NMinus/genome/LID9199_FC625U2AAXX_6_2.gem.map.gz
 
 # # ### NHEK UPDATE: NHEK actually has got repliactes
-# NHEK_Whole_Cell = %(carrie)s/007WC/genome/LID16631_FC61TTKAAXX_2_1.gem.map.gz:%(carrie)s/007WC/genome/LID16631_FC61TTKAAXX_2_2.gem.map.gz:%(carrie)s/007WC/genome/LID16631_FC61TTKAAXX_3_1.gem.map.gz:%(carrie)s/007WC/genome/LID16631_FC61TTKAAXX_3_2.gem.map.gz:%(carrie)s/007WC/genome/LID16631_FC61TTKAAXX_4_1.gem.map.gz:%(carrie)s/007WC/genome/LID16631_FC61TTKAAXX_4_2.gem.map.gz
+NHEK_Whole_Cell = %(carrie)s/007WC/genome/LID16631_FC61TTKAAXX_2_1.gem.map.gz:%(carrie)s/007WC/genome/LID16631_FC61TTKAAXX_2_2.gem.map.gz:%(carrie)s/007WC/genome/LID16631_FC61TTKAAXX_3_1.gem.map.gz:%(carrie)s/007WC/genome/LID16631_FC61TTKAAXX_3_2.gem.map.gz:%(carrie)s/007WC/genome/LID16631_FC61TTKAAXX_4_1.gem.map.gz:%(carrie)s/007WC/genome/LID16631_FC61TTKAAXX_4_2.gem.map.gz
 
-# NHEK_Whole_CellReplicate = %(carrie)s/008WC/genome/LID16632_FC61TTKAAXX_5_1.gem.map.gz:%(carrie)s/008WC/genome/LID16632_FC61TTKAAXX_5_2.gem.map.gz:%(carrie)s/008WC/genome/LID16632_FC61TTKAAXX_6_1.gem.map.gz:%(carrie)s/008WC/genome/LID16632_FC61TTKAAXX_6_2.gem.map.gz:%(carrie)s/008WC/genome/LID16632_FC61TTKAAXX_7_1.gem.map.gz:%(carrie)s/008WC/genome/LID16632_FC61TTKAAXX_7_2.gem.map.gz
+NHEK_Whole_CellReplicate = %(carrie)s/008WC/genome/LID16632_FC61TTKAAXX_5_1.gem.map.gz:%(carrie)s/008WC/genome/LID16632_FC61TTKAAXX_5_2.gem.map.gz:%(carrie)s/008WC/genome/LID16632_FC61TTKAAXX_6_1.gem.map.gz:%(carrie)s/008WC/genome/LID16632_FC61TTKAAXX_6_2.gem.map.gz:%(carrie)s/008WC/genome/LID16632_FC61TTKAAXX_7_1.gem.map.gz:%(carrie)s/008WC/genome/LID16632_FC61TTKAAXX_7_2.gem.map.gz
 
-# genc7 = /users/rg/projects/NGS/Projects/ENCODE/hg19main/gencode7/CSHL_longRNAseq/PolyA/parts
 
+genc7 = /users/rg/projects/NGS/Projects/ENCODE/hg19main/gencode7/CSHL_longRNAseq/PolyA/parts
 # # ### NHEK UPDATE: NHEK actually has got repliactes
-# NHEK_Nucleus = %(genc7)s/CSHL027NPlus/genome/wgEncodeCshlLongRnaSeqNhekNucleusPapFastqRd1Rep3.gem.map.gz:%(genc7)s/CSHL027NPlus/genome/wgEncodeCshlLongRnaSeqNhekNucleusPapFastqRd2Rep3.gem.map.gz
+NHEK_Nucleus = %(genc7)s/CSHL027NPlus/genome/wgEncodeCshlLongRnaSeqNhekNucleusPapFastqRd1Rep3.gem.map.gz:%(genc7)s/CSHL027NPlus/genome/wgEncodeCshlLongRnaSeqNhekNucleusPapFastqRd2Rep3.gem.map.gz
 
-# NHEK_NucleusReplicate = %(genc7)s/CSHL028NPlus/genome/wgEncodeCshlLongRnaSeqNhekNucleusPapFastqRd1Rep4.gem.map.gz:%(genc7)s/CSHL028NPlus/genome/wgEncodeCshlLongRnaSeqNhekNucleusPapFastqRd2Rep4.gem.map.gz
+NHEK_NucleusReplicate = %(genc7)s/CSHL028NPlus/genome/wgEncodeCshlLongRnaSeqNhekNucleusPapFastqRd1Rep4.gem.map.gz:%(genc7)s/CSHL028NPlus/genome/wgEncodeCshlLongRnaSeqNhekNucleusPapFastqRd2Rep4.gem.map.gz
 
-# NHEK_Cytoplasm = %(genc7)s/CSHL027CPlus/genome/wgEncodeCshlLongRnaSeqNhekCytosolPapFastqRd1Rep3.gem.map.gz:%(genc7)s/CSHL027CPlus/genome/wgEncodeCshlLongRnaSeqNhekCytosolPapFastqRd2Rep3.gem.map.gz
+NHEK_Cytoplasm = %(genc7)s/CSHL027CPlus/genome/wgEncodeCshlLongRnaSeqNhekCytosolPapFastqRd1Rep3.gem.map.gz:%(genc7)s/CSHL027CPlus/genome/wgEncodeCshlLongRnaSeqNhekCytosolPapFastqRd2Rep3.gem.map.gz
 
-# NHEK_CytoplasmReplicate = %(genc7)s/CSHL028CPlus/genome/wgEncodeCshlLongRnaSeqNhekCytosolPapFastqRd1Rep4.gem.map.gz:%(genc7)s/CSHL028CPlus/genome/wgEncodeCshlLongRnaSeqNhekCytosolPapFastqRd2Rep4.gem.map.gz
+NHEK_CytoplasmReplicate = %(genc7)s/CSHL028CPlus/genome/wgEncodeCshlLongRnaSeqNhekCytosolPapFastqRd1Rep4.gem.map.gz:%(genc7)s/CSHL028CPlus/genome/wgEncodeCshlLongRnaSeqNhekCytosolPapFastqRd2Rep4.gem.map.gz
 # # ### NHEK minus
 
 # NHEK_Whole_CellMinus = %(carrie)s/007WCMinus/genome/LID8665_FC61FGUAAXX_7_1.gem.map.gz:%(carrie)s/007WCMinus/genome/LID8665_FC61FGUAAXX_7_2.gem.map.gz:%(carrie)s/007WCMinus/genome/LID8665_FC61FKBAAXX_7_1.gem.map.gz:%(carrie)s/007WCMinus/genome/LID8665_FC61FKBAAXX_7_2.gem.map.gz:%(carrie)s/007WCMinus/genome/LID8665_FC61FM9AAXX_7_1.gem.map.gz:%(carrie)s/007WCMinus/genome/LID8665_FC61FM9AAXX_7_2.gem.map.gz
