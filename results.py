@@ -11,8 +11,6 @@ from copy import deepcopy
 
 from subprocess import Popen, PIPE
 
-import matplotlib
-matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 #import matplotlib.cm as cm
 from matplotlib import lines
@@ -343,6 +341,15 @@ class Settings(object):
         conf.read(settings_file)
 
         self.datasets = conf.get('PLOTTING', 'datasets').split(':')
+        self.datasets_reads = dict((dset, files.split(':')) for dset,
+                        files in conf.items('DATASETS'))
+
+        # Go through all the items in 'datsets'. Pop the directories from the list.
+        # They are likely to be shortcuts.
+        for (dset, dpaths) in self.datasets_reads.items():
+            for pa in dpaths:
+                if os.path.isdir(pa):
+                    self.datasets_reads.pop(dset)
 
         self.savedir = savedir
         self.outputdir = outputdir
@@ -847,7 +854,8 @@ def super_falselength(settings, region, batch_key, subset=[], speedrun=False):
 
         # limit the nr of reads from each dset if you want to be fast
         if speedrun:
-            maxlines = 100
+            maxlines = 2000
+            #maxlines = 1000
 
         linenr = 0
 
@@ -978,7 +986,10 @@ def get_super_regions(dsets, settings, batch_key):
     p1.wait()
 
     # ii) expand the entries
-    cmd = ['slopBed', '-i', temp_cluster_file, '-g', settings.hg19_path, '-b', '15']
+    # expansion parameter varies depending on your need
+    # for the snp data you want to be conservative and set it to 9
+    cmd = ['slopBed', '-i', temp_cluster_file, '-g', settings.hg19_path, '-b',
+           '9']
     p2 = Popen(cmd, stdout=open(cluster_file, 'wb'))
     p2.wait()
 
