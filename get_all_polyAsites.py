@@ -56,10 +56,11 @@ def get_pA_centers(region, settings):
         for chrm, pA_sites in chrm_dict.items():
             pA_sites.sort(key=int)
 
-            # we're using chr1 in the beginning
-            if chrm != 'chr1':
+            # skip if for some reason there are 0 hits
+            if pA_sites == []:
+                print('No pA sites in {0} in {1} {2}'.format(region, chrm,
+                                                             strand))
                 continue
-
             # all clusters
             clusters = []
 
@@ -157,7 +158,7 @@ def get_pA_surroundingBed(region):
     # where you will save a bedfile with all the reads that map close to any of your polyA sites
     snp_dir = os.path.join(here, 'SNP_analysis', 'non_polyA_PAS_reads')
     if not os.path.isdir(snp_dir):
-        os.mkdir(snp_dir)
+        os.makedirs(snp_dir)
 
     out_bed = os.path.join(snp_dir, 'surrounding_pA_{0}.bed'.format(region))
     handle = open(out_bed, 'wb')
@@ -176,7 +177,7 @@ def get_pA_surroundingBed(region):
 def main():
     region = '3UTR-exonic'
     bedfile = get_pA_surroundingBed(region)
-    seqs = get_pA_surroundingSeq(region)
+    #seqs = get_pA_surroundingSeq(region)
 
     debug()
 

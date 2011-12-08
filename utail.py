@@ -93,8 +93,8 @@ class Settings(object):
         #self.chr1 = True
         self.chr1 = False
         #self.read_limit = False
-        self.read_limit = 10000000 # less than 10000 no reads map
-        #self.read_limit = False
+        #self.read_limit = 100000000 # less than 10000 no reads map
+        self.read_limit = False
         self.max_cores = 4
         self.get_length = False
         #self.get_length = True
@@ -3477,8 +3477,8 @@ def main():
     # function (called below). It also affects the 'temp' and 'output'
     # directories, respectively.
 
-    DEBUGGING = True # 
-    #DEBUGGING = False
+    #DEBUGGING = True # 
+    DEBUGGING = False
 
     # with this option, always remake the bedfiles
     rerun_annotation_parser = False
@@ -3577,12 +3577,12 @@ def piperunner(settings, annotation, simulate, DEBUGGING, beddir, tempdir,
                          annotation, DEBUGGING, polyA_cache, here)
 
             ###### FOR DEBUGGING ######
-            akk = pipeline(*arguments)
+            #akk = pipeline(*arguments)
             ###########################
 
-            #result = my_pool.apply_async(pipeline, arguments)
-            #results.append(result)
-            debug()
+            result = my_pool.apply_async(pipeline, arguments)
+            results.append(result)
+            #debug()
 
         my_pool.close()
         my_pool.join()

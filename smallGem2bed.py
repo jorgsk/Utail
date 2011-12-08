@@ -4,7 +4,7 @@ Read gem-mapped reads and output to bed with
 chrm beg end flow_cell seq strand
 """
 
-from sys import stdin
+from sys import stdin, stdout
 from re import compile as recompile
 
 # Accept up to two mismatches. Make as set for speedup.
@@ -32,4 +32,5 @@ for line in stdin:
         flowcell = ID.split(':')[1]
 
         # Write to file
-        print '\t'.join([chrm, beg, str(int(beg)+len(seq)), flowcell, seq, strand])
+        stdout.write('\t'.join([chrm, beg, str(int(beg)+len(seq)), flowcell,
+                                seq, strand]) + '\n')

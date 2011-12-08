@@ -313,7 +313,7 @@ def core_clustalw(super_3utr, region, hg19Seqs, settings, speedrun,
     return matchCounter_i, snp_site_counter_i, pas_changes_i
 
 def align_seqs(settings, region, cell_lines, super_3utr, hg19Seqs, speedrun,
-               multicore, pr):
+               multicore, pr, non_pA_files):
     """
     For each cell line:
         for each poly(A) site with > 5 reads:
@@ -337,7 +337,12 @@ def align_seqs(settings, region, cell_lines, super_3utr, hg19Seqs, speedrun,
 
     Beware when the hg19 has an '-'. This means an insertion into the rnaseq
     dataset (or very unlikely a deletion missed in hg19).
+
+    Now, what to do about the non-tail associated reads?
     """
+
+    # XXX YOU ARE HERE!
+    # What todo about the non tail reads?
 
     # list of PAS hexamers -- needed for downstream code
     high = ['AATAAA', 'ATTAAA']
@@ -849,7 +854,7 @@ def get_snps_corrected(snp_stats, error_rates, cell_lines, pr):
 
     return cor_snp
 
-def snp_analysis(settings, region):
+def snp_analysis(settings, region, non_pA_files):
     """
     For all the poly(A) sites, align the seqs for each dataset separately and
     find either PAS or PAS_with_snips.
@@ -858,6 +863,7 @@ def snp_analysis(settings, region):
     #cell_lines = ['K562', 'GM12878', 'HUVEC', 'HeLa-S3', 'HEPG2','H1HESC',
                   #'NHEK', 'NHLF', 'HSMM', 'MCF7', 'AG04450']
     cell_lines = ['K562', 'GM12878', 'HeLa-S3']
+    cell_lines = ['GM12878', 'HeLa-S3']
     #cell_lines = ['K562']
 
     #XXX the more datasts you include the more similarity errors do you get:
@@ -918,7 +924,8 @@ def snp_analysis(settings, region):
         matchCounter, snp_stats, PAS_mutants = align_seqs(settings, region,
                                                          cell_lines, super_3utr,
                                                          hg19Seqs, speedrun,
-                                                         multicore, pr)
+                                                         multicore, pr,
+                                                          non_pA_files)
 
         # convert counts of matches/mismatches into error rates
         error_rates = make_error_rates(matchCounter)
@@ -956,10 +963,33 @@ def snp_analysis(settings, region):
         # * Mutation distribution around real PAS sites
         # * For each mutation, che
 
-def get_non_pA_reads(bed_file, settings, region, speedrun):
+def parser_core(out_file, paths, parser, bed_file, speedrun):
+    """
+    The core of the get-non-pA-reads for multiprocessing
+    """
+    handle = open(out_file, 'wb')
+
+    # zcat all the flow_cells, parse with gem2bed, and intersect with the
+    # bedfile of the polyA sites
+    cmd = 'zcat {0} | {1} | intersectBed -a stdin -b {2}'.\
+            format(' '.join(paths), parser, bed_file)
+
+    # just take first 10k lines if on speedrun
+    if speedrun:
+        cmd = 'zcat {0} | head -1000000 | {1} | intersectBed -a stdin -b {2}'.\
+                format(' '.join(paths), parser, bed_file)
+
+    p = Popen(cmd, stdout=handle, shell=True)
+
+    p.wait()
+
+    handle.close()
+
+def get_non_pA_reads(bed_file, settings, region, speedrun, multicore):
     """
     Do gem -> bed for all reads that land around the pA sites
     """
+
     raw_datasets = settings.datasets_reads
 
     outp_folder = os.path.dirname(bed_file)
@@ -968,35 +998,38 @@ def get_non_pA_reads(bed_file, settings, region, speedrun):
 
     file_reg = {}
 
+    if multicore:
+        my_pool = multiprocessing.Pool(processes = multicore)
+
     for dset, paths in raw_datasets.items():
         out_file = os.path.join(outp_folder, dset+'_'+region+'.bed')
+        if speedrun:
+            out_file += '_speedrun'
 
         file_reg[dset] = out_file
 
-        handle = open(out_file, 'wb')
+        # check if file already exists
+        if not speedrun and os.path.isfile(outfile):
+            continue
 
-        # zcat all the flow_cells, parse with gem2bed, and intersect with the
-        # bedfile of the polyA sites
-        cmd = 'zcat {0} | {1} | intersectBed -a stdin -b {2}'.\
-                format(' '.join(paths), parser, bed_file)
+        arguments = (out_file, paths, parser, bed_file, speedrun)
 
-        # just take first 10k lines if on speedrun
-        if speedrun:
-            cmd = 'zcat {0} | head -10000 | {1} | intersectBed -a stdin -b {2}'.\
-                    format(' '.join(paths), parser, bed_file)
+        if multicore:
+            my_pool.apply_async(parser_core, arguments)
+        else:
+            parser_core(*arguments)
 
-        p = Popen(cmd, stdout=PIPE)
-
-        for line in p.stdout:
-            handle.write(line)
-
-        handle.close()
+    # if running multicore, close your processes
+    if multicore:
+        my_pool.close()
+        my_pool.join()
 
     return outp_folder, file_reg
 
 def main():
     # The path to the directory the script is located in
     here = os.path.dirname(os.path.realpath(__file__))
+    speedrun = True
 
     (savedir, outputdir) = [os.path.join(here, d) for d in ('figures', 'output')]
 
@@ -1004,20 +1037,24 @@ def main():
     settings = Settings(os.path.join(here, 'UTR_SETTINGS'), savedir,
                                 outputdir, here, chr1=False)
 
-    # TODO get the other reads that map to -40 of PAS but don't have poly(A).
-    # This is in a cell_line specific file file, with information about dataset
-    # (and flow cell)
     import get_all_polyAsites
     region = '3UTR-exonic'
 
+    # onlt get sites with 5 or more in cover
     bed_file = get_all_polyAsites.get_pA_surroundingBed(region)
+
+    multicore = 4
+    #multicore = False
+
     # Send the directory to snp_analysis below, and for each cell line I will
     # add those sequences to the analysis; they will lend extra strength!
-    speedrun = True
-    non_pA_reads_folder, files = get_non_pA_reads(bed_file, settings, region)
+    t1 = time.time()
+    non_pA_reads_folder, non_pA_files = get_non_pA_reads(bed_file, settings, region,
+                                                  speedrun, multicore)
+    print time.time() -t1
     debug()
 
-    snp_analysis(settings, region)
+    snp_analysis(settings, region, non_pA_files)
 
 if __name__ == '__main__':
     main()
