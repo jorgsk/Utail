@@ -2340,14 +2340,13 @@ def cluster_loop(ends):
     # setting initial conditions
     start_val, start_name = ends[0]
 
-    start_val = int(start_val)
+    start_val = start_val
     clustsum = start_val
     mean = start_val
     clustcount = 1
     this_cluster = [(start_val, start_name)]
 
-    for (val, name) in ends[1:]:
-        ival = int(val)
+    for (ival, name) in ends[1:]:
 
         # If dist between new entry and cluster mean is < 24, keep in cluster
         if abs(ival - mean) < 24:
@@ -2431,7 +2430,6 @@ def cluster_polyAs(settings, utr_polyAs, utrfile_path, utrs, polyA):
     tuples. The second piece of information in the tuple is the tail-info. This
     information must be stacked. Should you keep all the information or just the
     average number of nucleotides in the tails? Maybe average is enough.
-
     """
 
     # If there are no polyA reads or polyA is false: return empty lists 
@@ -2458,11 +2456,11 @@ def cluster_polyAs(settings, utr_polyAs, utrfile_path, utrs, polyA):
 
             # it came from the - strand
             if  realStrand == '-':
-                minus_sites.append((beg, name))
+                minus_sites.append((int(beg), name))
 
             # it came from the + strand
             if  realStrand == '+':
-                plus_sites.append((beg, name))
+                plus_sites.append((int(beg), name))
 
         polyA_reads[utr_id] = {'plus_strand': cluster_loop(sorted(plus_sites)),
                                'minus_strand': cluster_loop(sorted(minus_sites))}
