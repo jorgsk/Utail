@@ -403,8 +403,8 @@ extend_by = 20
 # fasta file should be one chromosome. The genome version in the fasta file
 # must be the same as all the genome versions to which the RNA-seq reads were
 # mapped.
-hg_fasta = /users/rg/jskancke/phdproject/3UTR/hg19fasta/hg19.fa
-# hg_fasta = /home/jorgsk/phdproject/3UTR/mapping_files/hg19/hg19.fa
+# hg_fasta = /users/rg/jskancke/phdproject/3UTR/hg19fasta/hg19.fa
+hg_fasta = /home/jorgsk/phdproject/3UTR/mapping_files/hg19/hg19.fa
 
 [BIGWIG]
 # The pipeline can turn the read-coverage (both ordinary reads and poly(A)

@@ -5,6 +5,8 @@ from __future__ import division
 import os
 import re
 import time
+import tempfile
+from operator import itemgetter
 
 import cPickle as pickle
 
@@ -13,12 +15,13 @@ import multiprocessing
 
 import annotation_parser as genome
 from results import Settings, super_falselength
-from operator import itemgetter
+from utail import reverseComplement
 
 # For sequence alignment
 from Bio.Align import AlignInfo
 from Bio.Align import MultipleSeqAlignment as MultSeqAlign
 from Bio import AlignIO
+import pybedtools
 
 from scipy import stats
 
@@ -59,7 +62,7 @@ class Mutant(object):
         self.consensus = consensus
         self.rnaseq_alignment = rnaseq_alignment
 
-def seq_getter(cls):
+def seq_getter(cls, cellLine):
     """
     Get sequences for the different cell lines for this cls.seqs object. Return
     seqs as a set to remove duplicates. The set makes exceptions for reads from
@@ -83,7 +86,10 @@ def seq_getter(cls):
             else:
                 cl_seqs[cellL] = set([seq+'%'+comp])
 
-    return cl_seqs
+    if cellLine in cl_seqs:
+        return cl_seqs[cellLine]
+    else:
+        return False
 
 def get_matchmismatches(columns, count_matrix, max_len):
     """
@@ -121,7 +127,7 @@ def get_matchmismatches(columns, count_matrix, max_len):
 
     return matches, mismatches
 
-def get_alignment(cl, key, seqs, hg19seq, settings, speedrun):
+def get_alignment(cl, key, seqs, hg19seq, settings, speedrun, non_pA_support):
     """
     Write seqs to file and run clustalW on them and return a biopython align
     object
@@ -133,6 +139,8 @@ def get_alignment(cl, key, seqs, hg19seq, settings, speedrun):
                              'temp_files', key + cl+'error_rate.fasta')
     handle = open(infile, 'wb')
 
+    # add the non_pA seqs to seqs
+    seqs = seqs.union(non_pA_support)
     # if you use speedrun and have more than 100 seqs, pick 100 random seqs
     # random.sample samples without replacement :)
     # otherwise, only do this if you have more than 300 sequences.
@@ -172,8 +180,163 @@ def get_alignment(cl, key, seqs, hg19seq, settings, speedrun):
 
     return alignment
 
+def get_non_pA_support(utr, cls, hg19seq, this_nonpA, settings, key, cellLine):
+    """
+    Intersect this region with all the bedfiles to find reads supporting it.
+    Save the result to a storage file so that you don't have to redo this step
+    (will take quite some time)
+    """
+
+    support = set([])
+
+    if cls.strand == '+':
+        beg = str(cls.polyA_coordinate - 45)
+        end = str(cls.polyA_coordinate)
+    elif cls.strand == '-':
+        beg = str(cls.polyA_coordinate)
+        end = str(cls.polyA_coordinate + 45)
+
+    # test: write all this to a bedfile
+    tempfile = 'temp_test'
+    handle = open(tempfile, 'ab')
+
+    args = [utr.chrm, beg, end, '0', '0', cls.strand]
+    bedstr = ' '.join(args)
+
+    handle.write('\t'.join(args) + '\n')
+
+    #1) Write the cls to a temporary file
+    minus_40 = pybedtools.BedTool(bedstr, from_string=True)
+
+    compatible_reads = {}
+
+    # extract the sequence, beg, and end
+    hg19seq, hg19Beg, hg19End = hg19seq
+
+    #2) Intersect the cls with the those_nonPA reads
+    for dset, path in this_nonpA.items():
+        af = pybedtools.BedTool(path)
+
+        #t1 = time.time()
+        cf = af.intersect(minus_40, wa=True)
+        #print time.time() - t1
+
+        # save the bedTools object
+        if cf.count() > 0:
+            compatible_reads[dset] = cf
+
+    #t1 = time.time()
+    for dset, bedobj in compatible_reads.items():
+        for entry in bedobj.features():
+            orig_seq = entry.score
+            #rev_seq = reverseComplement(orig_seq)
+
+            beg = int(beg)
+            end = int(end)
+            x1 = int(entry.start)
+            x2 = int(entry.end)
+            #print ''
+
+            # we need both reverse and original because we don't know the strand
+            # or the reverse-complement state of the mapped read
+
+            rev_seq = reverseComplement(orig_seq)
+
+            #print orig_seq, 'orig_full'
+            #print rev_seq, 'orig_full'
+
+            if x1 < beg and x2 < end:
+                cut_orig_seq = orig_seq[beg-x1:]
+                cut_rev_seq = rev_seq[beg-x1:]
+            elif beg < x1 and end < x2:
+                cut_orig_seq = orig_seq[:-(x2-end)]
+                cut_rev_seq = rev_seq[:-(x2-end)]
+            elif x1 < beg and end < x2:
+                cut_orig_seq = orig_seq[beg-x1:-(x2-end)]
+                cut_rev_seq = rev_seq[beg-x1:-(x2-end)]
+
+            # skip those with small overlaps
+            if len(cut_orig_seq) < 40:
+                continue
+
+            # To align it with hg19, check both directions of both the cut
+            # sequences -- this is simply to ensure the directionality
+
+            storage = []
+
+            # use only the highest matchin one
+            for tag, seq in [('orig_cut', cut_orig_seq), ('rev_cut',
+                                                          cut_rev_seq)]:
+                rev2 = reverseComplement(seq)
+                orig_score = twoSeq_align(seq, hg19seq, settings, key,
+                                          cellLine, 'ori2')
+                rev_score = twoSeq_align(rev2, hg19seq, settings, key,
+                                         cellLine, 'rev2')
+
+                storage.append((orig_score, 'ori2_'+tag, seq))
+                storage.append((rev_score, 'rev2_'+tag, rev2))
+
+
+            bestseq = sorted(storage, reverse=True)[0][2]
+
+            for dd in sorted(storage, reverse=True):
+                print dd
+
+            comp = '_'.join(dset.split('_')[1:])+'non_pA'
+            support.add('%'.join([bestseq, comp]))
+    #print time.time() - t1
+
+    return support
+
+def twoSeq_align(seq1, hg19seq, settings, key, cellLine, tag):
+    """
+    Return the alignment score between two sequences
+
+    Problem: the large gap between the sequences gives you false negatives. A
+    possible solution is to output only the part of the non-pA read that
+    overlaps the hg19 sequence --> the problem is that the hg19 sequence can
+    vary each time, which will make it impossible to rerun this program fast.
+    """
+
+    infilepath = os.path.join(settings.here, 'temp_files', cellLine+key+tag+'in')
+    infile = open(infilepath, 'wb')
+    infile.write('>s1\n{0}\n>s2\n{1}\n'.format(seq1, hg19seq))
+    infile.close()
+
+    # 1) write to a temporary fasta file
+    outfile = os.path.join(settings.here, 'temp_files', cellLine+key+tag+'out')
+
+    # call clustalw and get consensus with score
+    cmd = 'clustalw -infile={0} -outfile={1} -quiet'.\
+            format(infilepath, outfile)
+
+    # run clustalw and send stdout (messages) to devnull
+    Popen(cmd, shell=True, stdout=open(os.devnull, 'w')).wait()
+
+    alignment = AlignIO.read(outfile, "clustal")
+
+    equal = 0
+    seqs = alignment.get_all_seqs()
+
+    s1 = seqs[0].seq.tostring()
+    hg19 = seqs[1].seq.tostring()
+
+    for s,h in zip(s1, hg19):
+        if s == h:
+            equal += 1
+
+    # return the fraction of seq1 that matches hg19
+
+    #print tag
+    #print alignment
+    #print equal/float(len(seq1))
+
+    return equal/float(len(seq1))
+
+    # get the alignment score as % of matching basepairs
+
 def core_clustalw(super_3utr, region, hg19Seqs, settings, speedrun,
-                  pas_patterns, high, low, cellLine, pr):
+                  pas_patterns, high, low, cellLine, pr, non_pA_files):
 
     cls_nr = 0
     aln_nr = 0
@@ -188,15 +351,11 @@ def core_clustalw(super_3utr, region, hg19Seqs, settings, speedrun,
     # for PAS change info
     pas_changes_i = {}
 
+    this_nonpA = dict((dset, path) for (dset, path) in non_pA_files.items() if cellLine
+                      in dset)
+
     for utr_name, utr in super_3utr[region].iteritems():
         for cls in utr.super_clusters:
-
-            # skip those with < 5 supported reads, since you require at least 5
-            # uniuqe reads
-            if cls.nr_support_reads < 5:
-                continue
-
-            cls_nr += 1
 
             # an ID for this polyA coordinate
             key = '_'.join([utr.chrm, str(cls.polyA_coordinate), cls.strand])
@@ -204,110 +363,129 @@ def core_clustalw(super_3utr, region, hg19Seqs, settings, speedrun,
             # the sequence for hg19
             hg19seq = hg19Seqs[key]
 
-            # the seqs for the different cell lines at this poly(A) site
-            for cl, seqs in seq_getter(cls).items():
+            # get all the reads that support this polyA site but don't have
+            # poly(T) -- for this specific cell line
+            t1 = time.time()
+            non_pA_support = get_non_pA_support(utr, cls, hg19seq, this_nonpA,
+                                                settings, key, cellLine)
+            print('Time to get non PA support: {0:2f}'.format(time.time()-t1))
 
-                # only process the cell line you have called
-                if cl != cellLine:
-                    continue
+            # skip those with < 5 supported reads, since you require at least 5
+            # uniuqe reads
+            if cls.nr_support_reads + len(non_pA_support) < 5:
+                continue
 
-                # only unique reads from each biological replicate is used for
-                # the alignment
-                alignment = get_alignment(cl, key, seqs, hg19seq, settings,
-                                          speedrun)
+            cls_nr += 1
 
-                # if the alignment cound not be made, abort
-                if not alignment:
-                    continue
+            # the this poly(A) site for this cellLine
+            seqs = seq_getter(cls, cellLine)
 
-                aln_nr += 1
+            # If you have no polyA support for the cell line, don't investigate
+            # -- you don't know if it is expressed! This can be changed later
+            # if no seqs for this cell line, continue
+            if not seqs:
+                continue
 
+            # only unique reads from each biological replicate is used for
+            # the alignment
+            t1 = time.time()
+            alignment = get_alignment(cellLine, key, seqs, hg19seq, settings,
+                                      speedrun, non_pA_support)
+            print('Time align seqs: {0:2f}'.format(time.time()-t1))
+
+            # if the alignment cound not be made, abort
+            if not alignment:
+                continue
+
+            aln_nr += 1
+
+            if pr:
+                print cellLine + ' '.join(key.split('_'))
+
+            # Get the start and end coordinates of the alignment according
+            # to the hg19 sequence
+            start, stop, hg19row = get_startstop(alignment)
+
+            ## crop the alignment according to the hg19 sequence
+            crop_alignment = alignment[:, start:stop]
+
+            # Get the aligned hg19 sequence (may contain gaps, which the
+            # hg19seq doesn't)
+            aln_hg19seq = crop_alignment[hg19row].seq.tostring()
+
+            # remove the hg19 sequence from the alignment
+            rnaseq_align = MultSeqAlign([a for a in crop_alignment if a.id != 'hg19'])
+
+            # If for some reason the consensus and the hg19 have less than
+            # 60%, skip.
+            # This is made difficult by end-gaps which confuse when there
+            # are few sequences for support. you have gotten a decent
+            # balance by selecting a relatively weak threshold for the gap
+            # consensus + only demanding 60% identity between the consensus
+            # and hg19. reducing the merge-parameter from 20 to 10 also
+            # helped.
+            # if you want to improve this further you will have to go back
+            # and associate with each read if it came from an A or a T.
+            # a good observation is that very few of the cases with 50% one
+            # direction and 50% reverse transcribed have PAS and land at
+            # annotated sites. It could be that they are other kinds of
+            # errors, because they have the same amound of A-reads as
+            # T-reads. You expect only T-reads ... maybe you should consider
+            # using only the T-mapped reads to avoid noise? :S it would be a
+            # bit hypocritical, but that's how it is. With less noise, you
+            # won't have to do so much after-work to optimize your
+            # parameters.
+
+            # another possibe todo is to compare the original reads to the
+            # alignment; if they don't match, try to reverse transcribe them
+            # and align again -- or remove them alltogether and align again.
+
+            consensus = AlignInfo.SummaryInfo(rnaseq_align).\
+                    gap_consensus(threshold=0.71).tostring()
+            # threshold of 60%, because many missing sequences around the 3'
+            # cleavage site will make artificial gaps
+
+            if consensus_hg19_mismatch(consensus, aln_hg19seq, no_cons,
+                                       aln_nr, pr=True, thresh=0.6):
                 if pr:
-                    print cl + ' '.join(key.split('_'))
+                    print rnaseq_align
+                    print('*')
+                    print consensus
+                    print('*')
+                    print aln_hg19seq
+                no_cons += 1
+                continue
 
-                # Get the start and end coordinates of the alignment according
-                # to the hg19 sequence
-                start, stop, hg19row = get_startstop(alignment)
+            # get the count_matrix for the rna-seq reads only
+            count_matrix = AlignInfo.SummaryInfo(rnaseq_align).\
+                    pos_specific_score_matrix()
 
-                ## crop the alignment according to the hg19 sequence
-                crop_alignment = alignment[:, start:stop]
+            max_len = len(rnaseq_align[:,0])
 
-                # Get the aligned hg19 sequence (may contain gaps, which the
-                # hg19seq doesn't)
-                aln_hg19seq = crop_alignment[hg19row].seq.tostring()
+            nr_columns = stop - start
 
-                # remove the hg19 sequence from the alignment
-                rnaseq_align = MultSeqAlign([a for a in crop_alignment if a.id != 'hg19'])
+            ##### 1) Get the # of mismatches/matches_non_strict
+            non_str_matches, mismatches = get_matchmismatches(nr_columns,
+                                                              count_matrix,
+                                                             max_len)
 
-                # If for some reason the consensus and the hg19 have less than
-                # 60%, skip.
-                # This is made difficult by end-gaps which confuse when there
-                # are few sequences for support. you have gotten a decent
-                # balance by selecting a relatively weak threshold for the gap
-                # consensus + only demanding 60% identity between the consensus
-                # and hg19. reducing the merge-parameter from 20 to 10 also
-                # helped.
-                # if you want to improve this further you will have to go back
-                # and associate with each read if it came from an A or a T.
-                # a good observation is that very few of the cases with 50% one
-                # direction and 50% reverse transcribed have PAS and land at
-                # annotated sites. It could be that they are other kinds of
-                # errors, because they have the same amound of A-reads as
-                # T-reads. You expect only T-reads ... maybe you should consider
-                # using only the T-mapped reads to avoid noise? :S it would be a
-                # bit hypocritical, but that's how it is. With less noise, you
-                # won't have to do so much after-work to optimize your
-                # parameters.
+            matchCounter_i['matches_non_strict'] += non_str_matches
+            matchCounter_i['mismatches'] += mismatches
 
-                # another possibe todo is to compare the original reads to the
-                # alignment; if they don't match, try to reverse transcribe them
-                # and align again -- or remove them alltogether and align again.
+            ##### 2) Get the stats for binomial testing for the places with hg19 mismatch
+            binom_stats = get_binom_stats(key, nr_columns, count_matrix,
+                                          aln_hg19seq, max_len)
 
-                consensus = AlignInfo.SummaryInfo(rnaseq_align).\
-                        gap_consensus(threshold=0.71).tostring()
-                # threshold of 60%, because many missing sequences around the 3'
-                # cleavage site will make artificial gaps
-                if consensus_hg19_mismatch(consensus, aln_hg19seq, no_cons,
-                                           aln_nr, pr=True, thresh=0.6):
-                    if pr:
-                        print rnaseq_align
-                        print('*')
-                        print consensus
-                        print('*')
-                        print aln_hg19seq
-                    no_cons += 1
-                    continue
+            for col_key, bin_stats in binom_stats:
+                snp_site_counter_i[col_key] = bin_stats
 
-                # get the count_matrix for the rna-seq reads only
-                count_matrix = AlignInfo.SummaryInfo(rnaseq_align).\
-                        pos_specific_score_matrix()
+            ##### 3) Look for PAS-mutants to and from hg19
+            pasmut = get_pasmutants(rnaseq_align, aln_hg19seq, consensus,
+                                    pas_patterns, high, low, pr)
 
-                max_len = len(rnaseq_align[:,0])
-
-                nr_columns = stop - start
-
-                ##### 1) Get the # of mismatches/matches_non_strict
-                non_str_matches, mismatches = get_matchmismatches(nr_columns,
-                                                                  count_matrix,
-                                                                 max_len)
-
-                matchCounter_i['matches_non_strict'] += non_str_matches
-                matchCounter_i['mismatches'] += mismatches
-
-                ##### 2) Get the stats for binomial testing for the places with hg19 mismatch
-                binom_stats = get_binom_stats(key, nr_columns, count_matrix,
-                                              aln_hg19seq, max_len)
-
-                for col_key, bin_stats in binom_stats:
-                    snp_site_counter_i[col_key] = bin_stats
-
-                ##### 3) Look for PAS-mutants to and from hg19
-                pasmut = get_pasmutants(rnaseq_align, aln_hg19seq, consensus,
-                                        pas_patterns, high, low, pr)
-
-                # only add if PAS mutants were found
-                if pasmut:
-                    pas_changes_i[key] = pasmut
+            # only add if PAS mutants were found
+            if pasmut:
+                pas_changes_i[key] = pasmut
 
 
     return matchCounter_i, snp_site_counter_i, pas_changes_i
@@ -342,7 +520,14 @@ def align_seqs(settings, region, cell_lines, super_3utr, hg19Seqs, speedrun,
     """
 
     # XXX YOU ARE HERE!
-    # What todo about the non tail reads?
+    # What todo about the non tail reads? Should you reverse-transcribe them
+    # all, assuming they are from the right? And then discard those that don't
+    # fit -- and transcribe again? Maybe you need to run each and every one
+    # through blast to find which way they match?
+    # However, after you've done that, then I think your situation looks better.
+    # Then, I suggest that you prepare all the stats that you want out of this,
+    # and then, depending on the situation, you can implement the flowcell
+    # information as well
 
     # list of PAS hexamers -- needed for downstream code
     high = ['AATAAA', 'ATTAAA']
@@ -369,12 +554,11 @@ def align_seqs(settings, region, cell_lines, super_3utr, hg19Seqs, speedrun,
         for cellLine in cell_lines:
 
             arguments = (super_3utr, region, hg19Seqs, settings, speedrun,
-                         pas_patterns, high, low, cellLine, pr)
+                         pas_patterns, high, low, cellLine, pr, non_pA_files)
 
             my_pool = multiprocessing.Pool(processes = multicore)
             result_reference[cellLine] = my_pool.apply_async(core_clustalw,
                                                              args=arguments)
-
         # close the pool and wait until it's finished
         my_pool.close()
         my_pool.join()
@@ -393,7 +577,7 @@ def align_seqs(settings, region, cell_lines, super_3utr, hg19Seqs, speedrun,
         for cellLine in cell_lines:
 
             arguments = (super_3utr, region, hg19Seqs, settings, speedrun,
-                         pas_patterns, high, low, cellLine, pr)
+                         pas_patterns, high, low, cellLine, pr, non_pA_files)
 
             mC, sSC, pC = core_clustalw(*arguments)
 
@@ -770,7 +954,14 @@ def get_hg19_seqs(settings, super_3utr, region):
 
     hg19Seqs = genome.get_seqs(hg19input, settings.hg19_fasta)
 
-    return hg19Seqs
+    # also add the beg/end pairs
+    hg19Return = {}
+
+    for key, seq in hg19Seqs.iteritems():
+        beg, end = hg19input[key][1:3]
+        hg19Return[key] = (seq, beg, end)
+
+    return hg19Return
 
 def correct_pvalues(p_values, cell_lines, settings, super_3utr, region, pr):
     """
@@ -862,7 +1053,7 @@ def snp_analysis(settings, region, non_pA_files):
     # work on the following cell_lines
     #cell_lines = ['K562', 'GM12878', 'HUVEC', 'HeLa-S3', 'HEPG2','H1HESC',
                   #'NHEK', 'NHLF', 'HSMM', 'MCF7', 'AG04450']
-    cell_lines = ['K562', 'GM12878', 'HeLa-S3']
+    #cell_lines = ['K562', 'GM12878', 'HeLa-S3']
     cell_lines = ['GM12878', 'HeLa-S3']
     #cell_lines = ['K562']
 
@@ -925,7 +1116,7 @@ def snp_analysis(settings, region, non_pA_files):
                                                          cell_lines, super_3utr,
                                                          hg19Seqs, speedrun,
                                                          multicore, pr,
-                                                          non_pA_files)
+                                                         non_pA_files)
 
         # convert counts of matches/mismatches into error rates
         error_rates = make_error_rates(matchCounter)
@@ -971,12 +1162,12 @@ def parser_core(out_file, paths, parser, bed_file, speedrun):
 
     # zcat all the flow_cells, parse with gem2bed, and intersect with the
     # bedfile of the polyA sites
-    cmd = 'zcat {0} | {1} | intersectBed -a stdin -b {2}'.\
+    cmd = 'zcat {0} | {1} | intersectBed -wa -a stdin -b {2}'.\
             format(' '.join(paths), parser, bed_file)
 
     # just take first 10k lines if on speedrun
     if speedrun:
-        cmd = 'zcat {0} | head -1000000 | {1} | intersectBed -a stdin -b {2}'.\
+        cmd = 'zcat {0} | head -1000000 | {1} | intersectBed -wa -a stdin -b {2}'.\
                 format(' '.join(paths), parser, bed_file)
 
     p = Popen(cmd, stdout=handle, shell=True)
@@ -1006,10 +1197,14 @@ def get_non_pA_reads(bed_file, settings, region, speedrun, multicore):
         if speedrun:
             out_file += '_speedrun'
 
+        # ugly hack to get this working on local machine
+        if dset.startswith('carri') or dset.startswith('genc'):
+            continue
+
         file_reg[dset] = out_file
 
         # check if file already exists
-        if not speedrun and os.path.isfile(outfile):
+        if not speedrun and os.path.isfile(out_file):
             continue
 
         arguments = (out_file, paths, parser, bed_file, speedrun)
@@ -1029,7 +1224,8 @@ def get_non_pA_reads(bed_file, settings, region, speedrun, multicore):
 def main():
     # The path to the directory the script is located in
     here = os.path.dirname(os.path.realpath(__file__))
-    speedrun = True
+    #speedrun = True
+    speedrun = False
 
     (savedir, outputdir) = [os.path.join(here, d) for d in ('figures', 'output')]
 
@@ -1040,19 +1236,18 @@ def main():
     import get_all_polyAsites
     region = '3UTR-exonic'
 
-    # onlt get sites with 5 or more in cover
     bed_file = get_all_polyAsites.get_pA_surroundingBed(region)
 
-    multicore = 4
-    #multicore = False
+    #multicore = 2
+    multicore = False
 
     # Send the directory to snp_analysis below, and for each cell line I will
     # add those sequences to the analysis; they will lend extra strength!
     t1 = time.time()
+    speedrun = False # if true, you will overwrite the data!
     non_pA_reads_folder, non_pA_files = get_non_pA_reads(bed_file, settings, region,
                                                   speedrun, multicore)
     print time.time() -t1
-    debug()
 
     snp_analysis(settings, region, non_pA_files)
 
