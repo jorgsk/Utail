@@ -971,12 +971,12 @@ def parser_core(out_file, paths, parser, bed_file, speedrun):
 
     # zcat all the flow_cells, parse with gem2bed, and intersect with the
     # bedfile of the polyA sites
-    cmd = 'zcat {0} | {1} | intersectBed -a stdin -b {2}'.\
+    cmd = 'zcat {0} | {1} | intersectBed -wa -a stdin -b {2}'.\
             format(' '.join(paths), parser, bed_file)
 
     # just take first 10k lines if on speedrun
     if speedrun:
-        cmd = 'zcat {0} | head -1000000 | {1} | intersectBed -a stdin -b {2}'.\
+        cmd = 'zcat {0} | head -1000000 | {1} | intersectBed -wa -a stdin -b {2}'.\
                 format(' '.join(paths), parser, bed_file)
 
     p = Popen(cmd, stdout=handle, shell=True)
@@ -984,6 +984,8 @@ def parser_core(out_file, paths, parser, bed_file, speedrun):
     p.wait()
 
     handle.close()
+
+    debug()
 
 def get_non_pA_reads(bed_file, settings, region, speedrun, multicore):
     """
@@ -1030,6 +1032,7 @@ def main():
     # The path to the directory the script is located in
     here = os.path.dirname(os.path.realpath(__file__))
     speedrun = True
+    #speedrun = False
 
     (savedir, outputdir) = [os.path.join(here, d) for d in ('figures', 'output')]
 
@@ -1040,11 +1043,10 @@ def main():
     import get_all_polyAsites
     region = '3UTR-exonic'
 
-    # onlt get sites with 5 or more in cover
     bed_file = get_all_polyAsites.get_pA_surroundingBed(region)
 
-    multicore = 4
-    #multicore = False
+    #multicore = 4
+    multicore = False
 
     # Send the directory to snp_analysis below, and for each cell line I will
     # add those sequences to the analysis; they will lend extra strength!
@@ -1054,7 +1056,7 @@ def main():
     print time.time() -t1
     debug()
 
-    snp_analysis(settings, region, non_pA_files)
+    #snp_analysis(settings, region, non_pA_files)
 
 if __name__ == '__main__':
     main()

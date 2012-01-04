@@ -38,6 +38,7 @@ import utail
 from Bio.Align import AlignInfo
 from Bio import AlignIO
 
+here_path = os.path.dirname(os.path.realpath(__file__))
 
 # Horrible, global variables
 
