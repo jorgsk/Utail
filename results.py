@@ -38,15 +38,7 @@ import utail
 from Bio.Align import AlignInfo
 from Bio import AlignIO
 
-
-# Horrible, global variables
-
-first_pas = 'AATAAA'
-second_pas = 'ATTAAA'
-top_pas = set([first_pas, second_pas])
-lower_pas = set(['AATAAA', 'ATTAAA', 'TATAAA', 'AGTAAA', 'AAGAAA', 'AATATA',
-             'AATACA', 'CATAAA', 'GATAAA', 'AATGAA', 'TTTAAA', 'ACTAAA',
-             'AATAGA'])
+here_path = os.path.dirname(os.path.realpath(__file__))
 
 class PolyaCluster(object):
     """
@@ -3607,6 +3599,55 @@ def intergenic_finder(settings):
                                        #format(same_PAS/same, '.2f'),
                                        #format(same_T/same, '.2f')]) + '\n')
     outhandle.close()
+
+def write_minus40(settings, write_dir, speedrun):
+    """
+    Write out the -40 region of all found polyA sites
+    """
+
+    co = ['Whole_Cell', 'Cytoplasm', 'Nucleus']
+
+    subset = [ds for ds in settings.datasets if (not 'Minus' in ds) and
+                       ((co[0] in ds) or (co[1] in ds) or (co[2] in ds))]
+
+    if speedrun:
+        subset = subset[:2]
+
+    batch_key = 'all_write'
+    region = 'whole'
+
+    speedrun = False
+    dsets, super_3utr = super_falselength(settings, region, batch_key,
+                                          subset, speedrun)
+
+    superbed_path = os.path.join(write_dir, 'all_pA_minus_40.bed')
+
+    handle = open(superbed_path, 'wb')
+
+    for utr_name, utr in super_3utr[region].iteritems():
+
+        for cls in utr.super_clusters:
+
+            if cls.PAS_distance[0] != 'NA':
+                pas = 1
+            else:
+                pas = 0
+
+            if cls.strand == '+':
+                end = str(cls.polyA_coordinate)
+                beg = str(cls.polyA_coordinate -40)
+            elif cls.strand == '-':
+                end = str(cls.polyA_coordinate + 40)
+                beg = str(cls.polyA_coordinate)
+
+            entry = '\t'.join([utr.chrm, beg, end, str(pas),
+                               str(cls.nr_support_reads), cls.strand])
+
+            handle.write(entry + '\n')
+
+    handle.close()
+
+    return superbed_path
 
 def write_all_pA(settings, minus):
 

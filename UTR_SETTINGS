@@ -478,10 +478,12 @@ first_datasets = GM12878_Cytoplasm:GM12878_CytoplasmReplicate:GM12878_Whole_Cell
 # not_equal = H1HESC_Whole_CellReplicate:H1HESC_Whole_CellMinusReplicate:MCF7_Whole_Cell:MCF7_Whole_CellReplicate:AG04450_Whole_Cell:AG04450_Whole_CellReplicate:A549_Whole_Cell:A549_Whole_CellReplicate:HSMM_Whole_Cell:HSMM_Whole_CellReplicate:NHLF_Whole_Cell:NHLF_Whole_CellReplicate:MCF7_Whole_CellMinus:MCF7_Whole_CellMinusReplicate:AG04450_Whole_CellMinus:AG04450_Whole_CellMinusReplicate:A549_Whole_CellMinus:A549_Whole_CellMinusReplicate:HSMM_Whole_CellMinus:HSMM_Whole_CellMinusReplicate:NHLF_Whole_CellMinus:NHLF_Whole_CellMinusReplicate
 
 # Depending on the plot, combine datasets with everythign or 
+datasets = %(first_datasets)s
 # datasets = %(first_datasets)s:%(same_nr)s
 # datasets = %(first_datasets)s:%(same_nr)s:%(not_equal)s
 
 # datasets = GM12878_Cytoplasm:GM12878_CytoplasmReplicate:K562_Cytoplasm:K562_CytoplasmReplicate
 # datasets = K562_CytoplasmReplicate:K562_Cytoplasm:K562_Whole_CellReplicate:K562_Whole_Cell
 # datasets = K562_CytoplasmReplicate
-datasets = GM12878_Cytoplasm:GM12878_CytoplasmReplicate:GM12878_Whole_Cell:GM12878_Whole_CellReplicate:GM12878_Nucleus:GM12878_NucleusReplicate:K562_Cytoplasm:K562_CytoplasmReplicate:K562_Whole_Cell:K562_Whole_CellReplicate:K562_Nucleus:K562_NucleusReplicate:HeLa-S3_Cytoplasm:HeLa-S3_CytoplasmReplicate:HeLa-S3_Whole_Cell:HeLa-S3_Whole_CellReplicate:HeLa-S3_Nucleus:HeLa-S3_NucleusReplicate
+# datasets = GM12878_Cytoplasm:GM12878_CytoplasmReplicate:GM12878_Whole_Cell:GM12878_Whole_CellReplicate:GM12878_Nucleus:GM12878_NucleusReplicate:K562_Cytoplasm:K562_CytoplasmReplicate:K562_Whole_Cell:K562_Whole_CellReplicate:K562_Nucleus:K562_NucleusReplicate:HeLa-S3_Cytoplasm:HeLa-S3_CytoplasmReplicate:HeLa-S3_Whole_Cell:HeLa-S3_Whole_CellReplicate:HeLa-S3_Nucleus:HeLa-S3_NucleusReplicate
+# datasets = first_datasets
