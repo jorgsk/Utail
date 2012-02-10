@@ -1043,20 +1043,21 @@ def main():
     import get_all_polyAsites
     region = '3UTR-exonic'
 
+    # get -60, +10 for all clustered polyA sites
     bed_file = get_all_polyAsites.get_pA_surroundingBed(region)
 
     #multicore = 4
     multicore = False
 
-    # Send the directory to snp_analysis below, and for each cell line I will
-    # add those sequences to the analysis; they will lend extra strength!
+    # extract the read that map close to polyA sites
     t1 = time.time()
     non_pA_reads_folder, non_pA_files = get_non_pA_reads(bed_file, settings, region,
                                                   speedrun, multicore)
     print time.time() -t1
     debug()
 
-    #snp_analysis(settings, region, non_pA_files)
+    # use samtools for finding genomic variants
+    snp_analysis(settings, region, non_pA_files)
 
 if __name__ == '__main__':
     main()
