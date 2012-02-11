@@ -2189,15 +2189,15 @@ def get_polyA_utr(polyAbed, utrfile_path):
     amapped_tofeature = 0
     tmapped_tofeature = 0
 
-    # Hey, we do know the strand ... but maybe we're not interested: no -s
     cmd = ['intersectBed', '-wa', '-wb', '-a', polyAbed, '-b', utrfile_path]
 
     # Run the above command -- outside the shell -- and loop through output
     f = Popen(cmd, stdout=PIPE)
     for line in f.stdout:
         # NOTE was supposed to be :7 because of tail_info -- which is gone!
-        # where is it?
-        (polyA, utr) = (line.split()[:7], line.split()[7:])
+        # where is it? UPDATE now it's :6. Whence this variation?
+        #(polyA, utr) = (line.split()[:7], line.split()[7:])
+        (polyA, utr) = (line.split()[:6], line.split()[6:])
         utr_id = utr[3]
         if not utr_id in utr_polyAs:
             utr_polyAs[utr_id] = [tuple(polyA)]
@@ -2283,17 +2283,20 @@ def cluster_loop(ends):
         cluster_avrg.append(int(math.floor(clu_sum/len(clus))))
 
         nucsum = {'G':0, 'A':0, 'T':0, 'C':0}
+        # XXX commented out this because it's not relevant any more and causing
+        # acrash between two branches and polyA cache
         # Add all nucleotides to the sum
-        nuc_dicts = [dict([b.split('=') for b in k[1].split(':')]) for k in clus]
-        for ndict in nuc_dicts:
-            for nucl, nr in ndict.items():
-                nucsum[nucl] += int(nr)
+        #nuc_dicts = [dict([b.split('=') for b in k[1].split(':')]) for k in clus]
+        #for ndict in nuc_dicts:
+            #for nucl, nr in ndict.items():
+                #nucsum[nucl] += int(nr)
 
         # Average the nucsum (first name int -> str)
-        tmp = []
-        for nuc, nr in nucsum.items():
-            tmp.append('='.join([nuc, str(nr/len(clus))]))
-        nucsum_avrg = ':'.join(tmp)
+        #tmp = []
+        #for nuc, nr in nucsum.items():
+            #tmp.append('='.join([nuc, str(nr/len(clus))]))
+        #nucsum_avrg = ':'.join(tmp)
+        nucsum_avrg = 'G=0:A=0:T=0:C=0'
 
         nucsums.append(nucsum_avrg)
 
@@ -2342,7 +2345,15 @@ def cluster_polyAs(settings, utr_polyAs, utrs, polyA):
         # map to 
         for tup in polyAs:
 
-            (chrm, beg, end, at, tail_info, val, strand) = tup
+            # NOTE you have a mixup of cached polyA reads from the polyA-reads
+            # fetching and from before that. That gives the 6/7 mix.
+            # As a hack, for not re-getting the polyAcache, remove the sequence
+            # from the tail_info here. it wasn't very useful to you anyway.
+            #(chrm, beg, end, at, tail_info, val, strand) = tup
+            # the tail_info parameter might be different between the versions,
+            # but this you'll have to deal with downstream
+            (chrm, beg, end, at_tail_info, val, strand) = tup
+            at, tail_info, read, strip_count = at_tail_info.split('#')
 
             # it came from the - strand
             if (at == 'T' and strand == '+') or (at == 'A' and strand == '-'):
@@ -3463,11 +3474,11 @@ def piperunner(settings, annotation, simulate, DEBUGGING, beddir, tempdir,
             ###### FOR DEBUGGING ######
             #akk = pipeline(*arguments)
             ###########################
+            #debug()
 
             result = my_pool.apply_async(pipeline, arguments)
             results.append(result)
 
-        #debug()
         my_pool.close()
         my_pool.join()
 
