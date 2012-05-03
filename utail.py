@@ -90,14 +90,14 @@ class Settings(object):
         debugging!
         """
 
-        self.chr1 = True
-        #self.chr1 = False
+        #self.chr1 = True
+        self.chr1 = False
         #self.read_limit = False
-        #self.read_limit = 5000000 # less than 10000 no reads map
-        self.read_limit = 5000 # less than 10000 no reads map
+        self.read_limit = 1000000 # less than 10000 no reads map
+        #self.read_limit = 5000 # less than 10000 no reads map
         self.max_cores = 2
-        self.get_length = False
-        #self.get_length = True
+        #self.get_length = False
+        self.get_length = True
         self.extendby = 10
         #self.extendby = 100
         self.polyA = True
@@ -961,7 +961,7 @@ def annotation_dist(rpoint, annotated_polyA_sites, strand):
     # If you get here, you didn't find any annotated distances
     return 'NA'
 
-def get_pas_and_distance(pas_patterns, sequence, settings, pm_strand):
+def get_pas_and_distance(pas_patterns, sequence):
     """
     Go through the -40 from the polya read average. Collect PAS and distance
     as you find them. Must supply poly(A) sites relative to UTR-beg. The
@@ -1946,6 +1946,12 @@ def map_reads(processed_reads, avrg_read_len, settings):
     Regardless, only accept uniquely mapping reads.
     """
 
+    PAS_sites = ['AATAAA', 'ATTAAA', 'TATAAA', 'AGTAAA', 'AAGAAA', 'AATATA',
+                 'AATACA', 'CATAAA', 'GATAAA', 'AATGAA', 'TTTAAA', 'ACTAAA',
+                 'AATAGA']
+
+    pas_patterns = [re.compile(pas) for pas in PAS_sites]
+
     # File path of the mapped reads
     mapped_reads = os.path.splitext(processed_reads)[0]+'_mapped'
 
@@ -1998,10 +2004,24 @@ def map_reads(processed_reads, avrg_read_len, settings):
                 noisecount += 1
                 continue
 
+            # Get the PAS and the PAS distance of this read
+            PAS, PAS_dist = get_early_PAS(seq, at, pas_patterns)
+
+            if PAS != 'NA':
+                nPAS = ':'.join(PAS)
+                nPAS_dist = ':'.join([str(d) for d in PAS_dist])
+            else:
+                nPAS = 'NA'
+                nPAS_dist = 'NA'
+
             # Write to file in .bed format
-            name = ' '.join([at, tail_info])
+            name = '#'.join([at, tail_info, nPAS, nPAS_dist])
+
             reads_file.write('\t'.join([chrom, beg, str(int(beg)+len(seq)), name,
                                       '0', strand]) + '\n')
+
+    # close file
+    reads_file.close()
 
     # Write to logfile
     if allcount > 0:
@@ -2018,6 +2038,23 @@ def map_reads(processed_reads, avrg_read_len, settings):
         noiselog.close()
 
     return polybed_path
+
+def get_early_PAS(seq, at, pas_patterns):
+    """
+    Get the PAS and the distance of the putative poly(A) read.
+    """
+
+    # if it came from a T-read, reverse-complement first
+    if at == 'T':
+        seq = reverseComplement(seq)
+
+    PAS, PAS_dist = get_pas_and_distance(pas_patterns, seq)
+    # you are looking for the distance from the end
+
+    if PAS != 'NA':
+        PAS_dist = [len(seq) - dist for dist in PAS_dist]
+
+    return PAS, tuple(PAS_dist)
 
 def read_is_noise(chrm, strand, beg, seq, at, tail_info, settings):
     """
@@ -2198,7 +2235,9 @@ def get_polyA_utr(polyAbed, utrfile_path):
         # where is it? UPDATE now it's :6. Whence this variation?
         #(polyA, utr) = (line.split()[:7], line.split()[7:])
         (polyA, utr) = (line.split()[:6], line.split()[6:])
+
         utr_id = utr[3]
+
         if not utr_id in utr_polyAs:
             utr_polyAs[utr_id] = [tuple(polyA)]
         else:
@@ -2874,9 +2913,7 @@ def only_polyA_writer(dset_id, annotation, pA_seqs, polyA_reads, settings,
                 # If not, look at the "other strand" than the poly(A) read maps to.
                 sequence = pA_seqs[feature_id][pm_strand][cls_center]
                 (nearby_PAS, PAS_distance) = get_pas_and_distance(pas_patterns,
-                                                                  sequence,
-                                                                  settings,
-                                                                 pm_strand)
+                                                                  sequence)
 
                 if nearby_PAS != 'NA':
                     nearby_PAS = '#'.join(nearby_PAS)
@@ -3370,12 +3407,12 @@ def main():
     # function (called below). It also affects the 'temp' and 'output'
     # directories, respectively.
 
-    #DEBUGGING = True # warning... some stuff wasnt updated here
-    DEBUGGING = False
+    DEBUGGING = True # warning... some stuff wasnt updated here
+    #DEBUGGING = False
 
     # with this option, always remake the bedfiles
-    #rerun_annotation_parser = False
-    rerun_annotation_parser = True
+    rerun_annotation_parser = False
+    #rerun_annotation_parser = True
 
     # The path to the directory the script is located in
     here = os.path.dirname(os.path.realpath(__file__))
@@ -3443,8 +3480,8 @@ def piperunner(settings, annotation, simulate, DEBUGGING, beddir, tempdir,
     # If this is true, the poly(A) reads will be saved after getting them. That
     # will save all that reading. They will only be saved if you run with no
     # restriction in reads.
-    polyA_cache = True
-    #polyA_cache = False
+    #polyA_cache = True
+    polyA_cache = False # XX fix this sometime
 
     # Extract the name of the bed-region you are checking for poly(A) reads
     # you might have to extract it differently, because 'intergenic' doesn't
@@ -3472,12 +3509,12 @@ def piperunner(settings, annotation, simulate, DEBUGGING, beddir, tempdir,
                          annotation, DEBUGGING, polyA_cache, here)
 
             ###### FOR DEBUGGING ######
-            #akk = pipeline(*arguments)
+            akk = pipeline(*arguments)
             ###########################
             #debug()
 
-            result = my_pool.apply_async(pipeline, arguments)
-            results.append(result)
+            #result = my_pool.apply_async(pipeline, arguments)
+            #results.append(result)
 
         my_pool.close()
         my_pool.join()
