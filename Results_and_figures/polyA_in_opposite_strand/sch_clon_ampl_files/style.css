@@ -1,0 +1,307 @@
+body{ 
+	background-color: #FFF;
+	color: #222;
+	font-family: Verdana, Helvetica, sans-serif;
+	font-size: 9pt;
+	line-height: 140%;
+	margin: 0;
+	padding: 0; /* required for Opera to have 0 margin */
+} /* фоновый рисунок и цвет */
+a:link{color:0000ff} /* окраска ссылок */
+a:visited{color:660099} /* окраска ссылок */
+a:active{color:ff9000} /* окраска ссылок */
+a:link,
+a:visited,
+a:active{
+	background: transparent;
+	color: #0000ff;
+	text-decoration:none;
+}
+
+a:visited{
+	color: #660099;
+}
+
+a:hover{
+	background: transparent;
+	color: #ff9000;
+}
+
+a:link.descr{
+	color: #505050;
+}
+
+a:visited.descr{
+	color: #505050;
+}
+
+a:hover.descr{
+	background: transparent;
+	color: #ff9000;
+}
+p{margin:margin:0.1pt;} /* убрал снос параграфа, 0.1 для NN, он 0 не воспринимает */
+li{margin-top:0.1pt; margin-bottom:2pt} /* изменил снос пункта списка, 0.1 для NN, он 0 не воспринимает */
+.h1{ font-size: 13pt; font-weight:bold; text-align:center; } /* формат заголовка первого уровня */
+.h2{padding:10pt; font-size: 11pt; font-weight:bold; text-align:center} /* формат заголовка второго уровня */
+.h3{font-size: 10pt; font-weight:bold; font-style:italic} /* формат заголовка третьего уровня */
+.h4{padding:10pt; font-style:italic; text-decoration: underline} /* формат заголовка четвёртого уровня */
+.enav{margin-left:31pt} /* формат внешней навигации */
+.inav{font-size: 8pt; padding-top:5pt; padding-bottom:5pt; margin-left:10pt; margin-right:5pt} /* формат внутренней навигации */
+.ls{margin-left:20pt} /* стандартный отступ списка */
+.ls2{margin-left:40pt} /* стандартный отступ списка */
+.epig{font-size: 8pt; font-style:italic; margin-left:10pt; margin-right:5pt} /* формат эпиграфа */
+.pn{text-indent:-25pt; font-weight:bold} /* формат одозначения пункта комментария */
+.tx{ /* формат больших кусков текста */
+	font-size: 11pt;
+	font-family: "Times New Roman", Times, serif;
+	text-indent:20pt;
+	text-align:justify;
+	padding-top:7px
+}
+.descr{ font-size: 8pt; color: #505050; line-height: 140%; }
+.small{ font-size: 7pt; color: #505050; line-height: 140%; }
+.1st{FONT-SIZE: 10pt; COLOR: #000000; LINE-HEIGHT: 120%; font-family:Verdana, Helvetica, sans-serif} /* формат главной страницы */
+.s1st{FONT-SIZE: 8pt; COLOR: #000000; LINE-HEIGHT: 120%; font-family:Verdana, Helvetica, sans-serif} /* формат главной страницы */
+.com{font-size:80%; font-family:sans-serif; font-style:italic; text-indent:-15pt} /* формат коротких замечаний прямо в тексте протокола */
+
+
+.comm_h2{padding:10pt; font-size: 11pt; font-weight:bold; text-align:center} /* формат заголовка второго уровня */
+.comm_small{ font-size: 7pt; color: #505050; line-height: 140%; }
+
+img.attach{ 
+	background: #aaaaaa url(<#IMG_DIR#>/click2enlarge.gif) no-repeat top right;
+	border: 1px solid #aaaaaa;
+	margin: 0 2PX 0 0;
+	padding: 11px 2px 2px 2px;
+}
+
+
+img.attach{ 
+	background: #aaaaaa url(<#IMG_DIR#>/click2enlarge.gif) no-repeat top right;
+	border: 1px solid #aaaaaa;
+	margin: 0 2px 0 0;
+	padding: 11px 2px 2px 2px;
+}
+
+.codetop,
+.sqltop,
+.htmltop,
+.quotetop{
+	background: #E4EAF2 url(<#IMG_DIR#>/css_img_quote.gif) no-repeat right;
+	border: 1px dotted #000;
+	border-bottom: 0;
+	color: #808080;
+	font-size: 8pt;
+	font-weight: bold;
+	margin: 8px auto 0 auto;
+	padding: 3px;
+}
+
+.codemain,
+.sqlmain,
+.htmlmain,
+.quotemain{
+	background: #FAFCFE;
+	border: 1px dotted #000;
+	border-top: 0;
+	color: #465584;
+	padding: 8px;
+	margin: 0 auto 8px auto;
+}
+
+.codetop,
+.sqltop,
+.htmltop{
+	background: #FDDBCC url(<#IMG_DIR#>/css_img_code.gif) no-repeat right;
+}
+
+input.button{
+	margin: 0;
+	width: auto;
+}
+
+.button{
+	border: 1px solid #9c9c9c;
+	color: #808080;
+	font-family: Verdana, Helvetica, sans-serif;
+	font-size: 8pt;
+	padding: 1px;
+	background: #DFE6EF;
+	cursor: hand;
+}
+
+.borderwrap { /* this will affect the outlining border of all the tables and boxes through-out the skin. */
+	background: #FFF; 
+	border: 1px solid #9c9c9c;
+	padding: 0; 
+	margin: 0; 
+}
+
+.maintitle { 
+	background: #dddddd;
+	border-bottom: 1px solid #9c9c9c;
+	font-size: 10pt;
+	font-weight: bold; 
+	letter-spacing: 1px;
+	margin: 0; 
+	padding: 5px; 
+}
+.js .hidden { Display:none; }
+img.handler {
+	cursor:pointer;
+	cursor:hand;
+	float: left;
+	margin-top: 3pt;
+	margin-left: -15px;
+	display:none;
+}
+.js .handler { display:inline; }
+div.toc_1 {
+	font-size: 12pt;
+	margin:3pt 0 0 -12pt;
+	font-weight : bold;
+}
+div.toc_2 {
+	line-height : 16pt;
+	margin-top:10pt;
+	font-weight : bold;
+}
+div.toc_3 {
+	line-height : 12pt;
+	margin:0 0 5pt 15pt;
+	font-weight : normal;
+}
+div.toc_4 {
+		margin:0 0 5pt 15pt;
+		font-weight : normal;
+	}
+div.toc_5 {
+	margin:0 0 5pt 15pt;
+	font-weight : normal;
+	font-size: 8pt;
+}
+strong.toc { line-height : 25pt; }
+strong.toc_m {
+	line-height : 25pt;
+	font-size : 120%;
+	margin-left: -5px;
+}
+.nolink { color: #bbbbbb; }
+span.authors {
+	font-style : italic;
+	font-weight : normal;
+	padding-left: 12pt;
+}
+div.prot {
+	margin:0 0 5pt 15pt;
+}
+div.pict {
+	font-size: 8pt;
+	color: #505050;
+	line-height: 140%;
+	margin:5pt 0 15pt 0;
+}
+
+#nav,
+#nav UL {
+	float:left;
+	background:#3A2521;
+	border:solid 1px #EBE9E8;
+	list-style:none;
+	line-height:1em;
+	}
+
+#nav {
+	border-width:0 0 1px 1px;
+	}
+
+#nav UL {
+	margin-left:-1px;
+	border-width:1px 0;
+	}
+
+#nav A {
+	display:block;
+	padding:0.3em .8em;
+	text-decoration:none;
+	text-align:center;
+	}
+
+#nav A.parent {
+	background:url(arrow.gif) 100% 50% no-repeat;
+	}
+
+#nav LI {
+	float:left;
+	border-right:solid 1px #EBE9E8;
+	}
+
+#nav LI:hover,
+#nav LI.sfhover {
+	background:#f8a80e;
+	color:#FFF;
+	}
+
+#nav LI UL {
+	position:absolute;
+	top:-999em;
+	height:auto;
+	width:15em;
+	background:#3A2521;
+	font-weight:normal;
+	border-width:1px;
+	}
+
+#nav LI LI {
+	padding-right:1em;
+	width:14em;
+	border:none;
+	}
+
+#nav LI UL A {
+	width:13.4em;
+	text-align:left;
+	}
+
+#nav LI A,
+#nav LI:hover LI A,
+#nav LI.sfhover LI A,
+#nav LI:hover LI:hover LI A,
+#nav LI.sfhover LI.sfhover LI A,
+#nav LI:hover LI:hover LI:hover LI A,
+#nav LI.sfhover LI.sfhover LI.sfhover LI A {
+	color:#FFF;
+	}
+
+#nav LI:hover A,
+#nav LI.sfhover A,
+#nav LI:hover LI:hover A,
+#nav LI.sfhover LI.sfhover A,
+#nav LI:hover LI:hover LI:hover A,
+#nav LI.sfhover LI.sfhover LI.sfhover A,
+#nav LI:hover LI:hover LI:hover LI:hover A,
+#nav LI.sfhover LI.sfhover LI.sfhover LI.sfhover A {
+	color:#FFF;
+	}
+
+#nav LI UL UL {
+	margin:-1.6em 0 0 15em;
+	}
+
+#nav LI:hover UL UL,
+#nav LI.sfhover UL UL,
+#nav LI:hover UL UL UL,
+#nav LI.sfhover UL UL UL {
+	top:-999em;
+	}
+
+#nav LI:hover UL,
+#nav LI.sfhover UL,
+#nav LI LI:hover UL,
+#nav LI LI.sfhover UL,
+#nav LI LI LI:hover UL,
+#nav LI LI LI.sfhover UL {
+	top:auto;
+	}
+/* .sol - растворы - пока не определён, указатель введён в текст страничек на будущее */
+/* .cmt - комментарии - пока не определён, указатель введён в текст страничек на будущее */

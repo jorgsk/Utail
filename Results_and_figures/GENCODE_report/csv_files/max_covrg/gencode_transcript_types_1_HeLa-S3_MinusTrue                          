@@ -1,0 +1,17 @@
+Type	#found	% of total	with PAS	with good PAS	mean_covr
+all	4604	0.03	0.91	0.83	5.61869883671
+protein_coding	3390	0.04	0.92	0.84	5.39320246118
+processed_transcript	488	0.01	0.86	0.79	5.44979919679
+retained_intron	450	0.03	0.91	0.79	5.48451327434
+nonsense_mediated_decay	222	0.03	0.92	0.83	7.19642857143
+non_coding	11	0.03	1.00	0.91	2.54545454545
+snoRNA	8	0.01	0.00	0.00	76.875
+ncrna_host	7	0.24	1.00	1.00	6.0
+processed_pseudogene	7	0.00	0.14	0.00	3.0
+pseudogene	6	0.01	1.00	0.67	2.83333333333
+snRNA	4	0.00	0.00	0.00	4.4
+rRNA_pseudogene	4	0.02	0.00	0.00	26.75
+TEC	2	0.06	1.00	1.00	2.5
+miRNA	2	0.00	0.00	0.00	3.0
+polymorphic_pseudogene	2	0.07	0.50	0.50	2.5
+lincRNA	1	0.00	1.00	1.00	2.0

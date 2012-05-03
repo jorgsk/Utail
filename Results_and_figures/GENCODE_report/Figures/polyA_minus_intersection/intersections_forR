@@ -1,0 +1,13 @@
+Nucleus	CDS-intronic	plus:8697	minus:12975	isect:1027	onPAS	IntersectionGoodPAS
+Whole_Cell	Intergenic	9397	1995	860	734	630
+Whole_Cell	CDS-intronic	8551	5223	426	212	137
+Whole_Cell	CDS-exonic	4192	1375	568	134	52
+Whole_Cell	3UTR-exonic	30915	6345	5513	4951	4194
+Cytoplasm	Intergenic	7908	328	247	211	186
+Cytoplasm	CDS-intronic	5683	87	47	30	20
+Cytoplasm	CDS-exonic	4553	358	225	43	19
+Cytoplasm	3UTR-exonic	27371	2120	2032	1902	1658
+Nucleus	Intergenic	7017	2979	650	501	420
+Nucleus	CDS-intronic	8697	12975	1027	319	129
+Nucleus	CDS-exonic	2560	1134	477	97	33
+Nucleus	3UTR-exonic	20390	4628	3917	3559	3076

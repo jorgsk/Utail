@@ -1,0 +1,108 @@
+########################################################
+genome
+Reads:671649 (same: 357678, opposite: 313971)
+
+### All clustes ###
+All:	173817 (1.00)	same 92529 (0.53)	opposite 81288 (0.47)
+With PAS:	83360 (0.48)	same 43996 (0.53)	opposite 39364 (0.47)
+AATAAA or ATTAAA:	50876 (0.29)	same 26702 (0.52)	opposite 24174 (0.48)
+AATAAA:	37613 (0.22)	same 19766 (0.53)	opposite 17847 (0.47)
+Annotated:	26331 (0.15)	same 13521 (0.51)	opposite 12810 (0.49)
+Annotated with PAS:	22682 (0.13)	same 11562 (0.51)	opposite 11120 (0.49)
+All
+A	same: 27680 12.09	opposite: 27542 12.39	sum: 55222 12.24
+T	same: 64849 7.48	opposite: 53746 7.43	sum: 118595 7.46
+With PAS
+A	same: 4978 12.04	opposite: 5088 12.37	sum: 10066 12.20
+T	same: 39018 7.29	opposite: 34276 7.27	sum: 73294 7.28
+AATAAA or ATTAAA
+A	same: 1084 11.38	opposite: 1101 12.81	sum: 2185 12.10
+T	same: 25618 7.14	opposite: 23073 7.12	sum: 48691 7.13
+AATAAA
+A	same: 639 11.47	opposite: 651 12.75	sum: 1290 12.12
+T	same: 19127 7.12	opposite: 17196 7.10	sum: 36323 7.11
+Annotated
+A	same: 668 11.99	opposite: 717 12.35	sum: 1385 12.17
+T	same: 12853 7.23	opposite: 12093 7.17	sum: 24946 7.20
+Annotated with PAS
+A	same: 217 10.77	opposite: 277 12.21	sum: 494 11.58
+T	same: 11345 7.16	opposite: 10843 7.13	sum: 22188 7.14
+
+### Clusters with 2 or more or annotated ###
+All:	55581 (0.32)	same 29636 (0.53)	opposite 25945 (0.47)
+With PAS:	40156 (0.72)	same 21211 (0.53)	opposite 18945 (0.47)
+AATAAA or ATTAAA:	29560 (0.53)	same 15570 (0.53)	opposite 13990 (0.47)
+AATAAA:	22464 (0.40)	same 11843 (0.53)	opposite 10621 (0.47)
+Annotated:	26331 (0.47)	same 13521 (0.51)	opposite 12810 (0.49)
+Annotated with PAS:	22682 (0.41)	same 11562 (0.51)	opposite 11120 (0.49)
+All
+A	same: 3359 8.48	opposite: 3134 8.94	sum: 6493 8.70
+T	same: 26277 7.12	opposite: 22811 7.06	sum: 49088 7.09
+With PAS
+A	same: 853 8.20	opposite: 826 9.06	sum: 1679 8.62
+T	same: 20358 7.05	opposite: 18119 7.03	sum: 38477 7.04
+AATAAA or ATTAAA
+A	same: 250 7.74	opposite: 202 8.97	sum: 452 8.29
+T	same: 15320 7.02	opposite: 13788 7.02	sum: 29108 7.02
+AATAAA
+A	same: 152 8.06	opposite: 123 9.20	sum: 275 8.57
+T	same: 11691 7.02	opposite: 10498 7.02	sum: 22189 7.02
+Annotated
+A	same: 668 11.99	opposite: 717 12.35	sum: 1385 12.17
+T	same: 12853 7.23	opposite: 12093 7.17	sum: 24946 7.20
+Annotated with PAS
+A	same: 217 10.77	opposite: 277 12.21	sum: 494 11.58
+T	same: 11345 7.16	opposite: 10843 7.13	sum: 22188 7.14
+
+### Clusters with 2 or more coverage ###
+All:	46856 (0.84)	same 25152 (0.54)	opposite 21704 (0.46)
+With PAS:	33718 (0.72)	same 17952 (0.53)	opposite 15766 (0.47)
+AATAAA or ATTAAA:	25115 (0.54)	same 13333 (0.53)	opposite 11782 (0.47)
+AATAAA:	19166 (0.41)	same 10170 (0.53)	opposite 8996 (0.47)
+Annotated:	17606 (0.38)	same 9037 (0.51)	opposite 8569 (0.49)
+Annotated with PAS:	16244 (0.35)	same 8303 (0.51)	opposite 7941 (0.49)
+All
+A	same: 2832 7.67	opposite: 2541 7.93	sum: 5373 7.79
+T	same: 22320 7.05	opposite: 19163 6.99	sum: 41483 7.02
+With PAS
+A	same: 701 7.39	opposite: 614 7.55	sum: 1315 7.46
+T	same: 17251 6.99	opposite: 15152 6.97	sum: 32403 6.98
+AATAAA or ATTAAA
+A	same: 200 7.56	opposite: 139 7.32	sum: 339 7.46
+T	same: 13133 6.97	opposite: 11643 6.97	sum: 24776 6.97
+AATAAA
+A	same: 120 8.10	opposite: 80 7.47	sum: 200 7.85
+T	same: 10050 6.96	opposite: 8916 6.98	sum: 18966 6.97
+Annotated
+A	same: 141 8.71	opposite: 124 8.11	sum: 265 8.43
+T	same: 8896 7.10	opposite: 8445 7.05	sum: 17341 7.08
+Annotated with PAS
+A	same: 65 8.02	opposite: 65 8.21	sum: 130 8.12
+T	same: 8238 7.07	opposite: 7876 7.04	sum: 16114 7.06
+
+### Clusters with only 1 coverage ###
+All:	126961 (2.71)	same 67377 (0.53)	opposite 59584 (0.47)
+With PAS:	49642 (0.39)	same 26044 (0.52)	opposite 23598 (0.48)
+AATAAA or ATTAAA:	25761 (0.20)	same 13369 (0.52)	opposite 12392 (0.48)
+AATAAA:	18447 (0.15)	same 9596 (0.52)	opposite 8851 (0.48)
+Annotated:	8725 (0.07)	same 4484 (0.51)	opposite 4241 (0.49)
+Annotated with PAS:	6438 (0.05)	same 3259 (0.51)	opposite 3179 (0.49)
+All
+A	same: 24848 12.59	opposite: 25001 12.84	sum: 49849 12.72
+T	same: 42529 7.70	opposite: 34583 7.68	sum: 77112 7.69
+With PAS
+A	same: 4277 12.80	opposite: 4474 13.03	sum: 8751 12.92
+T	same: 21767 7.53	opposite: 19124 7.51	sum: 40891 7.52
+AATAAA or ATTAAA
+A	same: 884 12.24	opposite: 962 13.61	sum: 1846 12.95
+T	same: 12485 7.33	opposite: 11430 7.26	sum: 23915 7.30
+AATAAA
+A	same: 519 12.25	opposite: 571 13.48	sum: 1090 12.90
+T	same: 9077 7.30	opposite: 8280 7.23	sum: 17357 7.27
+Annotated
+A	same: 527 12.86	opposite: 593 13.23	sum: 1120 13.06
+T	same: 3957 7.51	opposite: 3648 7.43	sum: 7605 7.47
+Annotated with PAS
+A	same: 152 11.95	opposite: 212 13.44	sum: 364 12.82
+T	same: 3107 7.39	opposite: 2967 7.37	sum: 6074 7.38
+########################################################

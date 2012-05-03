@@ -1,0 +1,512 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3c.org/TR/1999/REC-html401-19991224/loose.dtd">
+<html><head>
+<meta http-equiv="content-type" content="text/html; charset=windows-1251">
+	<title>&nbsp;&nbsp;&nbsp;Amplification | Second-generation sequencing&nbsp;&nbsp;&nbsp;</title>
+	<meta http-equiv="keywords" name="keywords" content="">
+	<meta http-equiv="description" name="description" content="">
+	<meta name="Document-State" content="Static">
+	<meta name="Robots" content="ALL">
+	<link rel="stylesheet" type="text/css" href="sch_clon_ampl_files/style.css">
+</head>
+
+<body topmargin="0" leftmargin="0" marginheight="0" marginwidth="0" bgcolor="#eeeeee">
+<a name="start"></a>
+<script language="JavaScript" src="sch_clon_ampl_files/recognition.js"></script>
+<script type="text/javascript">
+	sfHover = function()
+	{
+		var sfEls = document.getElementById('nav').getElementsByTagName('LI');
+		for (var i=0; i<sfEls.length; i++) {
+			sfEls[i].onmouseover=function() {
+				this.className+=' sfhover';
+			}
+			sfEls[i].onmouseout=function() {
+				this.className=this.className.replace(new RegExp(' sfhover\\b'),'');
+			}
+		}
+	}
+	window.onload = sfHover;
+</script>
+
+
+<table align="center" cellpadding="0" cellspacing="0" width="768px">
+<tbody><tr style="padding: 15px 0pt 2px;"><td align="left">
+	<a href="http://seq.molbiol.ru/" style="color: rgb(255, 144, 0);" title="Home"><img src="sch_clon_ampl_files/logo.gif" alt="Home" height="25" align="middle" border="0" width="25"> Second-generation sequencing</a> &gt; <strong>Amplification</strong>
+</td><td align="right"><nobr><!--rambler--><img src="sch_clon_ampl_files/top100.gif" alt="Rambler's Top100" height="1" border="0" width="1"><!--/rambler-->
+<script language="Javascript" type="text/javascript">
+<!--
+var user_cookie = getCookie('member_name');
+if(''==user_cookie || null==user_cookie || '0'==user_cookie) {
+document.writeln('[<a href="http://molbiol.ru/forums/index.php?act=Login&amp;CODE=00&amp;langid=en">Login</a>] [<a href="/forums/index.php?act=Reg&amp;CODE=00">Registration</a>]');
+} else {
+document.writeln('<strong>', user_cookie, '</strong>', ' [ <a title="Click here to logout from &quot;', user_cookie, '&quot;" href="http://molbiol.ru/forums/index.php?act=Login&amp;CODE=03&amp;langid=en">Logout</a> ]');
+}
+//-->
+</script>[<a href="http://molbiol.ru/forums/index.php?act=Login&amp;CODE=00&amp;langid=en">Login</a>] [<a href="http://seq.molbiol.ru/forums/index.php?act=Reg&amp;CODE=00">Registration</a>]
+
+</nobr></td></tr><tr style="padding: 0pt 0pt 15px;"><td colspan="2" valign="top">
+<ul id="nav" style="margin-left: 0px;">
+	<li><a href="http://seq.molbiol.ru/">Home »</a>
+		<ul>
+<!-- 			<li><a href="/comparison.html">Systems comparison</a></li> -->
+			<li><a href="http://seq.molbiol.ru/next.html">Next generation seq.</a></li>
+			<li><a href="http://seq.molbiol.ru/terms.html">Terms</a></li>
+			<li><a href="http://seq.molbiol.ru/applications.html">Applications</a></li>
+			<li><a href="http://seq.molbiol.ru/schemes.html" class="parent">Schemes »</a>
+				<ul>
+					<li><a href="http://seq.molbiol.ru/sch_lib_fr.html" class="parent">Fragment libr. prep</a></li>
+					<li><a href="http://seq.molbiol.ru/sch_lib_mp.html">Mate-Paired libr. prep</a></li>
+					<li><a href="http://seq.molbiol.ru/sch_clon_ampl.html">Clonal amplification</a></li>
+					<li><a href="http://seq.molbiol.ru/sch_seq_polymerase.html">Polymerization-based sequencing</a></li>
+					<li><a href="http://seq.molbiol.ru/sch_seq_ligase.html">Ligation-based sequencing</a></li>
+				</ul>
+			</li>
+		</ul>
+	</li>
+	<li><a href="http://seq.molbiol.ru/i_home.html">Illumina »</a>
+		<ul>
+			<li><a href="http://seq.molbiol.ru/libr.html" class="parent">Library »</a>
+				<ul>
+					<li><a href="http://seq.molbiol.ru/lib_fr.html" class="parent">Fragment</a></li>
+					<li><a href="http://seq.molbiol.ru/lib_mp.html">Mate-Paired</a></li>
+					<li><a href="http://seq.molbiol.ru/lib_mp_long.html">Mate-Paired Long</a></li>
+					<li><a href="http://seq.molbiol.ru/lib_ampl.html">Library amplification</a></li>
+<!-- 					<li><a href="/barcode.html">Barcoding</a></li> -->
+				</ul>
+			</li>
+			<li><a href="http://seq.molbiol.ru/i_clust.html" class="parent">Cluster Station »</a>
+				<ul>
+					<li><a href="http://seq.molbiol.ru/i_clust_cg.html">Cluster generation</a></li>
+					<li><a href="http://seq.molbiol.ru/i_clust_cc.html">Cluster control</a></li>
+					<li><a href="http://seq.molbiol.ru/i_clust_process.html">FlowCell processing</a></li>
+					<li><a href="http://seq.molbiol.ru/i_clust_mph.html">Multiple primer hyb.</a></li>
+					<li><a href="http://seq.molbiol.ru/i_clust_decon.html">DECON wash</a></li>
+				</ul>
+			</li>
+			<li><a href="http://seq.molbiol.ru/i_analyser.html" class="parent">2G analyzer »</a>
+				<ul>
+					<li><a href="http://seq.molbiol.ru/i_a_focus.html">Focusing</a></li>
+					<li><a href="http://seq.molbiol.ru/i_a_reagent.html">Reagents</a></li>
+					<li><a href="http://seq.molbiol.ru/i_a_seq.html">Sequencing (first read)</a></li>
+					<li><a href="http://seq.molbiol.ru/i_a_pe.html">Sequencing (PE read)</a></li>
+				</ul>
+			</li>
+			<li><a href="http://seq.molbiol.ru/i_data.html" class="parent">Data analysis</a></li>
+			<li><a href="http://seq.molbiol.ru/i_illumina.html">Illumina materials</a></li>
+		</ul>
+	</li>
+	<li class=""><a href="http://seq.molbiol.ru/s_home.html">SOLiD »</a>
+		<ul>
+			<li><a href="http://seq.molbiol.ru/libr.html?type=solid" class="parent">Library »</a>
+				<ul>
+					<li><a href="http://seq.molbiol.ru/lib_fr.html?type=solid" class="parent">Fragment</a></li>
+					<li><a href="http://seq.molbiol.ru/lib_mp.html?type=solid">Mate-Paired</a></li>
+					<li><a href="http://seq.molbiol.ru/lib_mp_long.html?type=solid">Mate-Paired Long</a></li>
+					<li><a href="http://seq.molbiol.ru/lib_ampl.html?type=solid">Library amplification</a></li>
+				</ul>
+			</li>
+			<li><a href="http://seq.molbiol.ru/s_epcr.html" class="parent">ePCR »</a>
+				<ul>
+					<li><a href="http://seq.molbiol.ru/s_epcr_pcr.html">ePCR amplification</a></li>
+					<li><a href="http://seq.molbiol.ru/s_epcr_wash.html">Bead wash</a></li>
+					<li><a href="http://seq.molbiol.ru/s_epcr_enrich.html">Bead enrichment</a></li>
+					<li><a href="http://seq.molbiol.ru/s_epcr_3mod.html">3'-end modification</a></li>
+				</ul>
+			</li>
+			<li><a href="http://seq.molbiol.ru/s_seq.html" class="parent">Sequencing »</a>
+				<ul>
+					<li><a href="http://seq.molbiol.ru/s_seq_depo.html">Bead deposition</a></li>
+					<li><a href="http://seq.molbiol.ru/s_seq_install.html">Flowcell installation</a></li>
+					<li><a href="http://seq.molbiol.ru/s_seq_qc.html">QC-run</a></li>
+					<li><a href="http://seq.molbiol.ru/s_seq_seq.html">Sequencing run</a></li>
+					<li><a href="http://seq.molbiol.ru/s_seq_plates.html">Enzyme and Primer plates</a></li>
+				</ul>
+			</li>
+			<li><a href="http://seq.molbiol.ru/s_kits.html">SOLiD Kits handling</a></li>
+			<li><a href="http://seq.molbiol.ru/s_solid.html">SOLiD materials</a></li>
+		</ul>
+	</li>
+	<li><a href="http://seq.molbiol.ru/g_home.html">General »</a>
+		<ul>
+			<li><a href="http://seq.molbiol.ru/g_solutions.html">Solutions</a></li>
+			<li><a href="http://seq.molbiol.ru/g_consum.html">Consumables</a></li>
+			<li><a href="http://seq.molbiol.ru/g_kits.html">Kits and enzymes</a></li>
+			<li><a href="http://seq.molbiol.ru/g_dna.html" class="parent">DNA »</a>
+				<ul>
+<!-- 					<li><a href="/g_dna_tissue.html">Purification from tissue</a></li>
+					<li><a href="/g_dna_cells.html">Purificatin from cell culture</a></li> -->
+					<li><a href="http://seq.molbiol.ru/g_dna_rnase.html">RNase treatment</a></li>
+					<li><a href="http://seq.molbiol.ru/g_dna_shear.html">Shearing</a></li>
+					<li><a href="http://seq.molbiol.ru/g_dna_pure.html">Purification</a></li>
+				</ul>
+			</li>
+			<li><a href="http://seq.molbiol.ru/g_rna.html" class="parent">RNA »</a>
+				<ul>
+<!-- 					<li><a href="/g_rna_tissue.html">Purification from tissue</a></li> -->
+					<li><a href="http://seq.molbiol.ru/g_rna_polya.html">mRNA purification on Dynabeads</a></li>
+					<li><a href="http://seq.molbiol.ru/g_rna_cdna.html">ds cDNA synthesis</a></li>
+				</ul>
+			</li>
+			<li><a href="http://seq.molbiol.ru/g_oligo.html">Oligonucleotides</a></li>
+			<li><a href="http://seq.molbiol.ru/g_quant.html">NA quantitation</a></li>
+			<li><a href="http://seq.molbiol.ru/g_electro.html" class="parent">NA electrophoresis</a></li>
+				<ul>
+					<li><a href="http://seq.molbiol.ru/g_electro_agarose.html">Agarose</a></li>
+					<li><a href="http://seq.molbiol.ru/g_electro_paag.html">PAAG</a></li>
+				</ul>
+			<li><a href="http://seq.molbiol.ru/g_data_analysis.html" class="parent">Data analysis »</a>
+				<ul>
+					<li><a href="http://seq.molbiol.ru/g_data_unix.html">UNIX comands</a></li>
+<!-- 					<li><a href="/g_data_sql.html">SQL comands</a></li> -->
+				</ul>
+			</li>
+		</ul>
+	</li>
+</ul>
+</td></tr></tbody></table>
+
+<table align="center" cellpadding="0" cellspacing="0" width="768px">
+<tbody><tr><td style="padding: 15px 15px 5px; border: 1px solid rgb(0, 0, 0);" align="left">
+<p class="h1">Clonal amplification</p>
+
+<table cellpadding="0px" cellspacing="10px" width="100%"><tbody><tr><td valign="top" width="300">
+
+<div class="inav">
+<a href="#i_bridge">Bridge amplification</a><br>
+<a href="#i_epcr">Emulsion PCR</a><br>
+<a href="#i_roll">Rolling circle amplification</a><br>
+<a href="#add"><img src="sch_clon_ampl_files/k.gif" alt="" height="9" border="0" width="11">&nbsp;Comments</a><br>
+</div>
+
+
+</td><td valign="top">
+<div class="epig"><font color="#800000"></font>
+</div>
+
+</td></tr></tbody></table>
+<br><br><br>
+
+<ul type="disc">
+
+All second-generation platforms (except Helicos) rely on some clonal amplification method.
+
+
+<br><br><br>
+
+
+<a name="i_bridge"></a><p class="h2">Bridge amplification (two-dimensional PCR) / Illumina</p>
+
+<p>Two-dimensional PCR performed is on Cluster station (Flowcell 
+preparation) and on Genome Analyser (regeneration of clusters for 
+Paired-end sequencing). Here is a scheme for Cluster station 
+amplification.</p>
+<br><br>
+
+
+<p class="h3">Library deposition</p>
+<img src="sch_clon_ampl_files/clust_00.gif" alt="" height="361" hspace="5 px" align="left" border="0" width="300"> Two PCR primers are attached to the surface of flowcell. One of the primers has a cleavable site (cross on red primer);
+<br clear="all"><br><br>
+
+
+<img src="sch_clon_ampl_files/clust_01.gif" alt="" height="361" hspace="5 px" align="left" border="0" width="300">
+ Preamplified library is denaturated in NaOH, then hybridization buffer 
+is added to shift pH to neutral value. Library is loaded into the 
+channel in neutral aquatious solution. DNA molecules can hybridize to 
+the PCR primers. Red primer hybridize with a library molecule on the 
+picture(complementary strand of this molecule have a chance to form a 
+hybrid with a green primer).
+<br clear="all"><br><br>
+
+<img src="sch_clon_ampl_files/clust_02.gif" alt="" height="361" hspace="5 px" align="left" border="0" width="300">
+ Elongation reaction: extension mix (buffer, dNTP's, Taq polymerase) is 
+pumped into a channel. Hybridized primer extended on library molecule.
+<br clear="all"><br><br>
+
+
+<p class="h3">Surface amplificationa</p>
+<p>Opposite to conventional PCR surface amplification is performed on 
+constant temperature (60°C). Formamide works as a denaturing agent. 
+Normally,35 cycles of pumping:
+</p><ul type="circle">
+	<li>formamide (at 60°C formamide melts DNA duplexes; equivalent to "denaturation step" in normal PCR);</li>
+	<li>extension buffer (non-denaturating conditions, equivalent to "anealing step" in normal PCR);</li>
+	<li>extension mixture (primer extension step, equivalent to "extension step" in normal PCR);</li>
+</ul><p></p>
+<p>In contrast to normal PCR all solutions are used only for one cycle 
+and then go to trash. It helps to keep low background. Othervise 
+occasionally detached DNA molecule could have a chance to hybridize in 
+another place and start a new cluster there.
+Surface PCR has lower efficiency if compare with PCR in solution. 35 
+cycles result in ~1000 copies of the original molecule (in ideal PCR 35 
+cycles should give ~10<sup>10</sup>x amplification). The possible reasons of lower efficiency:
+</p><ul type="circle">
+	<li>DNA duplex has high chances to renaturate again instead of hybridising with a new PCR primer;</li>
+	<li>cluster has no free PCR primers in the center and grows only on perifery;</li>
+</ul><p></p>
+<br>
+<img src="sch_clon_ampl_files/clust_03.gif" alt="" height="361" hspace="5 px" align="left" border="0" width="300"> <strong>Formamide</strong><br>Original library molecule is denatured and washed away.
+<br clear="all"><br><br>
+
+<img src="sch_clon_ampl_files/clust_04.gif" alt="" height="361" hspace="5 px" align="left" border="0" width="300"> <strong>Extension buffer</strong><br>
+Extended molecule bends and hybridizes to a second PCR primer (forms a bridge).
+<br clear="all"><br><br>
+
+<img src="sch_clon_ampl_files/clust_05.gif" alt="" height="361" hspace="5 px" align="left" border="0" width="300"> <strong>Extension mixture</strong><br>Extension of hybridized primer.
+<br clear="all"><br><br>
+
+<img src="sch_clon_ampl_files/clust_06.gif" alt="" height="361" hspace="5 px" align="left" border="0" width="300"> <strong>Formamide washing</strong><br>Two DNA strands are denatured.
+<br clear="all"><br><br>
+
+<img src="sch_clon_ampl_files/clust_05.gif" alt="" height="361" hspace="5 px" align="left" border="0" width="300"> <img src="sch_clon_ampl_files/clust_07.gif" alt="" height="361" border="0" width="300"><br clear="all">
+<strong>Extension buffer</strong><br>
+Extended molecules may hybridize to each other again or find other PCR primers.
+<br><br><br>
+
+<img src="sch_clon_ampl_files/clust_08.gif" alt="" height="361" hspace="5 px" align="left" border="0" width="300"> <strong>Extension mixture</strong><br>In the second case they will duplicate again.
+<br clear="all"><br><br>
+
+<img src="sch_clon_ampl_files/clust_09.gif" alt="" height="361" hspace="5 px" align="left" border="0" width="300"> <strong>Formamide washing</strong><br>DNA strands are denatured.
+<br clear="all"><br><br><br>
+
+.............................
+
+<br><br><br>
+<img src="sch_clon_ampl_files/clust_10.gif" alt="" height="361" hspace="5 px" align="left" border="0" width="300"> After 35 cycles cluster consists on a number of double-stranded bridges.
+<br clear="all"><br><br><br>
+
+<br><br>
+
+<p class="h3">Flowcell processing</p>
+<p>After clonal amplification clusters should be converted into single-stranded form and prepared for sequencing.</p>
+
+<img src="sch_clon_ampl_files/clust_11.gif" alt="" height="361" hspace="5 px" align="left" border="0" width="300"> DNA is denaturated.
+<br clear="all"><br><br><br>
+
+<img src="sch_clon_ampl_files/clust_12.gif" alt="" height="361" hspace="5 px" align="left" border="0" width="300"> One primer is cut off and washed out.
+<br clear="all"><br><br><br>
+
+<img src="sch_clon_ampl_files/clust_13.gif" alt="" height="361" hspace="5 px" align="left" border="0" width="300"> the last operations, which are done on Cluster station are:
+<ul type="circle">
+	<li>* blocking of all 3' ends (ddNTP's and terminal transferase) to prevent extension of DNA molecules on each other;</li>
+	<li>annealing of sequencing primer.</li>
+</ul>
+
+<br clear="all"><br><br><br><br><br>
+
+
+<a name="i_epcr"></a><p class="h2">Emulsion PCR (ePCR) / SOLiD, 454</p>
+
+<img src="sch_clon_ampl_files/s_01.gif" alt="" height="443" hspace="5 px" align="left" border="0" width="300"> 
+
+<p>Amplification reaction is performed in water-in-oil emulsion in the 
+presence of low concentration of library molecules and paramagnetic 
+particles coated by one PCR primer. This PCR primer is also present in 
+the solition but in low concentration: it is enough for early cycles of 
+PCR, but then primers on beads should be involved into amplification.</p>
+<p>Emulsion may be considered as a large number of independent PCR reactions.</p>
+<br clear="all"><br><br><br>
+<table border="0" cellpadding="0" cellspacing="0" width="550">
+<tbody><tr align="center" bgcolor="000000"><td>
+<table border="0" cellpadding="2px" cellspacing="1" width="100%">
+	<tbody><tr align="center" bgcolor="eeeeee"><td>drops</td><td>result</td><td>amplification</td><td>PMP-binding</td><td>description</td></tr>
+	<tr align="center" bgcolor="ffffff"><td>1, 4, 6, 9, 10, 12</td><td rowspan="3">acceptable</td><td>-</td><td>-</td><td>no
+ template: no PCR, no matter if paramagnetic bead is present or not. 
+Paramagnetic beads which do not participate in amplification may be 
+easily separated on "enrichment" step.</td></tr>
+	<tr align="center" bgcolor="ffffff"><td>5</td><td>+</td><td>-</td><td>one template molecule in the drop: clonal PCR reaction, but there is no bead in the drop</td></tr>
+	<tr align="center" bgcolor="ffffff"><td>13</td><td>+</td><td>-</td><td>P2-P2 adaptors: amplified molecules have no chance to stick to the bead</td></tr>
+	<tr align="center" bgcolor="ffffff"><td>8, 11</td><td rowspan="2">good</td><td>+</td><td>+</td><td>ideal situation: one template molecule and one bead in a drop: clonal amplification, one bead generated from each clone</td></tr>
+	<tr align="center" bgcolor="ffffff"><td>3</td><td>+</td><td>+</td><td>acceptable situation: one template and two beads. Two beads with the same template will be generated</td></tr>
+	<tr align="center" bgcolor="ffffff"><td>7</td><td rowspan="2">bad</td><td>+</td><td>+</td><td>two
+ different template molecules. Bead will be covered by a mixture of 
+different DNA molecules and will come through the enrichment procedure. 
+Sequencing will fail</td></tr>
+	<tr align="center" bgcolor="ffffff"><td>2</td><td>+</td><td>+</td><td>one
+ double-stranded DNA molecule is a heterohybrid of different clones (as a
+ result of template annealing during preamplification). Bead will be 
+covered by a mixture of different DNA molecules and will come through 
+the enrichment procedure. Sequencing will fail</td></tr>
+</tbody></table></td></tr>
+</tbody></table>
+
+
+
+
+<br clear="all"><br><br><br><br><br>
+
+
+<a name="i_roll"></a><p class="h2">Rolling circle amplification</p>
+
+<img src="sch_clon_ampl_files/roll.gif" alt="" height="444" hspace="5 px" align="left" border="0" width="300">
+
+<p>Rolling circle amplification: &#966;29 DNA polymerase is capable to make up to 10<sup>3</sup>
+ single-stranded copies of original circle molecule. The multiplication 
+number is significantly different for different templates. So, it is 
+necessary to select only large molecules for sequencing.</p>
+
+<br><br><br>
+
+
+
+
+<br><br>
+</ul>
+
+
+<br clear="all"><br><div class="descr" align="right">
+Second-generation sequencing<br>
+URL: <a href="http://seq.zbio.net/">http://seq.zbio.net</a><br>
+e-mail: <a href="mailto:soldatov@molgen.mpg.de" title="write a letter">soldatov@molgen.mpg.de</a><br>
+visits: <br>
+<b>Warning</b>:  require(/home/molbiol/data/www/vphp/include.php) [<a href="http://seq.molbiol.ru/function.require">function.require</a>]: failed to open stream: No such file or directory in <b>/usr/home/molbiol/domains/molbiol.ru/public_html/seq/ssi/counter.php</b> on line <b>6</b><br>
+<br>
+<b>Fatal error</b>:  require() [<a href="http://seq.molbiol.ru/function.require">function.require</a>]: Failed opening required '/home/molbiol/data/www/vphp/include.php' (include_path='.:/usr/local/lib/php') in <b>/usr/home/molbiol/domains/molbiol.ru/public_html/seq/ssi/counter.php</b> on line <b>6</b><br>
+
+</div>
+
+<!-- COMMS -->
+
+<a name="add"></a>
+<!-- COMMS_ADD -->
+<script type="text/javascript" src="sch_clon_ampl_files/index.html"></script><a name="add"></a><div style="padding:0 0 10pt 0; font-weight:bold; text-align:center">COMMENTS, REMARKS, QUESTIONS</div><div style="color: #036;">			<div style="background: #F9F9F9; padding: 5px;"><strong>Guest</strong> <span class="descr">/02.03.2009 01:25/</span></div>			<div style="padding: 5px; border-bottom: 1px solid #999;">Really
+ want to thank you for the hand drawings. For some reason, and even 
+though Illumina has great pictures to explain, these hand drawings 
+really break things down.<br><br><!--IBF.ATTACHMENT_857753--><br><br clear="all"></div>			<div style="background: #F9F9F9; padding: 5px;"><strong>Guest</strong> <span class="descr">/20.10.2009 09:30/</span></div>			<div style="padding: 5px; border-bottom: 1px solid #999;">Excellent
+ hand drawings, I struggled a lot to understand bridge PCR, because 
+certain steps were never shown in diagrams. Shall be highly obliged if 
+emulsion pcr is also illustrated the same way.<br><br><!--IBF.ATTACHMENT_958892--><br><br clear="all"></div>			<div style="background: #F9F9F9; padding: 5px;"><strong>Guest</strong> <span class="descr">/04.11.2009 15:33/</span></div>			<div style="padding: 5px; border-bottom: 1px solid #999;">THANK YOU SO MUCH! maybe ill make my test today thanks yo you:D<br><br><!--IBF.ATTACHMENT_965857--><br><br clear="all"></div>			<div style="background: #F9F9F9; padding: 5px;"><strong>Guest</strong> <span class="descr">/28.11.2009 07:34/</span></div>			<div style="padding: 5px; border-bottom: 1px solid #999;">Thanks
+ for the drawings.  But is it really necessary to cut one of the primers
+ to remove all the strands of one orientation?  It seems to me that if 
+all the strands remain, then all the strands will give the same sequence
+ with a particular primer, it's just that half will be sequenced from 
+the substrate-proximal side, while the other half will be sequenced from
+ the substrate-distal side.<br><br>I will probably use your drawings to show my class; I will credit them to "Soldatov" at your URL.<br><br><!--IBF.ATTACHMENT_974466--><br><br clear="all"></div>			<div style="background: #F9F9F9; padding: 5px;"><strong>Guest</strong> <span class="descr">/11.12.2009 08:30/</span></div>			<div style="padding: 5px; border-bottom: 1px solid #999;">Could
+ understand better on Illumina seq. Thanks a lot. Please keep updating 
+this site with more info on all seq applications from Illumina, solid 
+and 454<br><br><!--IBF.ATTACHMENT_979720--><br><br clear="all"></div>			<div style="background: #F9F9F9; padding: 5px;"><strong>Guest</strong> <span class="descr">/04.01.2010 12:16/</span></div>			<div style="padding: 5px; border-bottom: 1px solid #999;">Guest /28.11.2009 07:34/ -<br>The
+ technology only reads 50-100bp from the start of the strand (Illumina) 
+while the total length of the strands is much longer - you are 
+essentially envisioning paired end sequencing which utilize 2 primers to
+ differentiate which side it is reading:<br><noindex>http://www.illumina.com/technology/paired_...cing_assay.ilmn ( <a href="http://www.illumina.com/technology/paired_end_sequencing_assay.ilmn" target="_blank">http://www.illumina.com/technology/paired_end_sequencing_assay.ilmn</a> )</noindex><br><br><!--IBF.ATTACHMENT_989266--><br><br clear="all"></div>			<div style="background: #F9F9F9; padding: 5px;"><strong>Guest1</strong> <span class="descr">/06.01.2010 04:11/</span></div>			<div style="padding: 5px; border-bottom: 1px solid #999;">the topic is called - "Second-Generation"  Zumbajspil<br><br><!--IBF.ATTACHMENT_989853--><br><br clear="all"></div>			<div style="background: #F9F9F9; padding: 5px;"><strong>Guest</strong> <span class="descr">/16.09.2010 07:13/</span></div>			<div style="padding: 5px; border-bottom: 1px solid #999;">excellent!!!!!! I love it, very easy to understand<br><br><!--IBF.ATTACHMENT_1097938--><br><br clear="all"></div>			<div style="background: #F9F9F9; padding: 5px;"><strong>Guest</strong> <span class="descr">/29.03.2011 14:34/</span></div>			<div style="padding: 5px; border-bottom: 1px solid #999;">gvg<br><br><!--IBF.ATTACHMENT_1181567--><br><br clear="all"></div>			<div style="background: #F9F9F9; padding: 5px;"><strong>PCRka</strong> <span class="descr">/29.03.2011 20:08/</span></div>			<div style="padding: 5px; border-bottom: 1px solid #999;">Если кто-нибудь знает, подскажите, пожалуйста, недостатки следующих <br>ампликаторов: <br>Амплификатор Analytik Jena SpeedCycler,Германия;<br>Амплификатор C1000 Bio-Rad, США;<br>ДНК-амплификатор Mastercycler ep realplex.<br>Зарание спасибо.<br><br><!--IBF.ATTACHMENT_1181759--><br><br clear="all"></div>			<div style="background: #F9F9F9; padding: 5px;"><strong>-Ъ-</strong> <span class="descr">/29.03.2011 20:21/</span></div>			<div style="padding: 5px; border-bottom: 1px solid #999;">Нет такого научного термина в молбиоле - "ДНК амплификатор" <!--emo&:mad:--><img src="sch_clon_ampl_files/mad.gif" style="vertical-align: middle;" alt="mad.gif" border="0"><!--endemo--> <br>Во всем мире "ТЕРМОЦИКЛЕР", а в России - "амплификатор". <!--emo&:umnik:--><img src="sch_clon_ampl_files/umnik.gif" style="vertical-align: middle;" alt="umnik.gif" border="0"><!--endemo--><br><br><!--IBF.ATTACHMENT_1181766--><br><br clear="all"></div>			<div style="background: #F9F9F9; padding: 5px;"><strong>PCRka</strong> <span class="descr">/29.03.2011 21:33/</span></div>			<div style="padding: 5px; border-bottom: 1px solid #999;">Что ж, спасибо. Буду знать.<br><br><!--IBF.ATTACHMENT_1181789--><br><br clear="all"></div>			<div style="background: #F9F9F9; padding: 5px;"><strong>Guest</strong> <span class="descr">/19.04.2011 23:31/</span></div>			<div style="padding: 5px; border-bottom: 1px solid #999;">This is awesome. The best explanation I've seen of bridge amplification. Many many thanks! <br><br>~a satisfied reader<br><br><!--IBF.ATTACHMENT_1192380--><br><br clear="all"></div></div><br clear="all"><br><div align="center"><a href="http://molbiol.ru/forums/index.php?showtopic=326148" title="link to the forum topic with comments">--- forum topic with comments --</a></div><br><div style="font-size: 8pt; color: #505050; line-height: 140%;" align="center">Something,
+ that you know, is missed on the page. Your colleagues are using this 
+page. Help them, please. Use "Extended form" to attach images and files 
+to you message.<script type="text/javascript" src="sch_clon_ampl_files/comments.js"></script><form action="http://molbiol.ru/forums/index.php" method="POST" name="REPLIER"><input name="act" value="comments" type="hidden"><input name="check" value="send" type="hidden"><input name="comm_mark" value="add" type="hidden"><input name="server" value="seq.molbiol.ru" type="hidden"><input name="document_uri" value="/sch_clon_ampl.html" type="hidden"><input name="query_string" value="" type="hidden"><input name="nospam" id="nospam" value="" type="hidden"><input name="preview" value="Extended form" class="button" type="submit">&nbsp;&nbsp;&nbsp; <input name="qrc" onclick="ShowHide('qr_open','qr_closed');" value="Open/Close" class="button" type="button"><br><div id="qr_open" style="display: ; position: relative;"><br>	<textarea cols="50" rows="8" name="Post" class="textarea" tabindex="1" onmousemove="document.getElementById('nospam').value = 'jfdwiJUVGJBjjb';"></textarea><br><br>	<input name="submit" value="Send" class="button" accesskey="s" type="submit"></div></form>
+<!-- /COMMS_ADD -->
+<!-- /COMMS -->
+
+</div></td></tr></tbody></table><table align="center" cellpadding="0" cellspacing="0" width="768px">
+<tbody><tr><td style="padding: 5px 15px 0pt;" align="left">
+<div class="descr">Last modification: 12/12/08</div><br>
+<div align="center">
+<a href="http://seq.molbiol.ru/" class="descr" title="web-address">seq.zbio.net</a> &nbsp;·&nbsp; <a href="mailto:soldatov@molgen.mpg.de" class="descr">soldatov@molgen.mpg.de</a>
+</div>
+</td></tr>
+</tbody></table>
+
+<br>
+<div align="center"><!-- кнопка molbiol.ru -->
+<a href="http://molbiol.ru/" title="molbiol.ru - methods, information and programs for molecular biologists"><img src="sch_clon_ampl_files/molbiol.gif" alt="molbiol.ru - methods, information and programs for molecular biologists" height="31" border="0" width="88"></a>&nbsp;&nbsp;
+<!-- /кнопка molbiol.ru -->
+
+<!-- rambler -->
+<a href="http://counter.rambler.ru/top100/" target="_blank"><img src="sch_clon_ampl_files/rambler.gif" alt="Rambler" height="31" border="0" width="88"></a>&nbsp;&nbsp;
+<!-- /rambler -->
+
+<!-- banners_place 88x31 START -->
+
+<!--/* OpenX Javascript Tag v2.8.5 */-->
+<script type="text/javascript"><!--//<![CDATA[
+   var m3_u = (location.protocol=='https:'?'https://banners.molbiol.ru/openx/www/delivery/ajs.php':'http://banners.molbiol.ru/openx/www/delivery/ajs.php');
+   var m3_r = Math.floor(Math.random()*99999999999);
+   if (!document.MAX_used) document.MAX_used = ',';
+   document.write ("<scr"+"ipt type='text/javascript' src='"+m3_u);
+   document.write ("?zoneid=11&amp;block=1&amp;blockcampaign=1");
+   document.write ('&amp;cb=' + m3_r);
+   if (document.MAX_used != ',') document.write ("&amp;exclude=" + document.MAX_used);
+   document.write (document.charset ? '&amp;charset='+document.charset : (document.characterSet ? '&amp;charset='+document.characterSet : ''));
+   document.write ("&amp;loc=" + escape(window.location));
+   if (document.referrer) document.write ("&amp;referer=" + escape(document.referrer));
+   if (document.context) document.write ("&context=" + escape(document.context));
+   if (document.mmm_fo) document.write ("&amp;mmm_fo=1");
+   document.write ("'><\/scr"+"ipt>");
+//]]>--></script><script type="text/javascript" src="sch_clon_ampl_files/ajs.js"></script><a href="http://banners.molbiol.ru/openx/www/delivery/ck.php?oaparams=2__bannerid=17__zoneid=11__cb=04ea0c35d9__oadest=http%3A%2F%2Fcells-nnm.ru%2F" target="_blank"><img src="sch_clon_ampl_files/8df36ef7cbf93785394c6701b2e4b505.gif" alt="Cells No Name -- национальный научно-развлекательный портал о клетках" title="Cells No Name -- национальный научно-развлекательный портал о клетках" height="31" border="0" width="88"></a><div id="beacon_04ea0c35d9" style="position: absolute; left: 0px; top: 0px; visibility: hidden;"><img src="sch_clon_ampl_files/lg_005.gif" alt="" style="width: 0px; height: 0px;" height="0" width="0"></div><script type="text/javascript">document.context='YjoxNyNjOjZ8'; </script>
+<noscript><a href='http://banners.molbiol.ru/openx/www/delivery/ck.php?n=abafa997&amp;cb=11' target='_blank'><img src='http://banners.molbiol.ru/openx/www/delivery/avw.php?zoneid=11&amp;cb=11&amp;n=abafa997' border='0' alt='' /></a></noscript>
+&nbsp;&nbsp;
+
+<script type="text/javascript"><!--//<![CDATA[
+   var m3_u = (location.protocol=='https:'?'https://banners.molbiol.ru/openx/www/delivery/ajs.php':'http://banners.molbiol.ru/openx/www/delivery/ajs.php');
+   var m3_r = Math.floor(Math.random()*99999999999);
+   if (!document.MAX_used) document.MAX_used = ',';
+   document.write ("<scr"+"ipt type='text/javascript' src='"+m3_u);
+   document.write ("?zoneid=11&amp;block=1&amp;blockcampaign=1");
+   document.write ('&amp;cb=' + m3_r);
+   if (document.MAX_used != ',') document.write ("&amp;exclude=" + document.MAX_used);
+   document.write (document.charset ? '&amp;charset='+document.charset : (document.characterSet ? '&amp;charset='+document.characterSet : ''));
+   document.write ("&amp;loc=" + escape(window.location));
+   if (document.referrer) document.write ("&amp;referer=" + escape(document.referrer));
+   if (document.context) document.write ("&context=" + escape(document.context));
+   if (document.mmm_fo) document.write ("&amp;mmm_fo=1");
+   document.write ("'><\/scr"+"ipt>");
+//]]>--></script><script type="text/javascript" src="sch_clon_ampl_files/ajs_004.js"></script><a href="http://banners.molbiol.ru/openx/www/delivery/ck.php?oaparams=2__bannerid=21__zoneid=11__cb=e498bbca00__oadest=http%3A%2F%2Fherba.msu.ru%2F" target="_blank"><img src="sch_clon_ampl_files/2a7842eea92722312bac783f91f4d7b0.gif" alt="Ботанический сервер Московского Университета" title="Ботанический сервер Московского Университета" height="31" border="0" width="88"></a><div id="beacon_e498bbca00" style="position: absolute; left: 0px; top: 0px; visibility: hidden;"><img src="sch_clon_ampl_files/lg.gif" alt="" style="width: 0px; height: 0px;" height="0" width="0"></div><script type="text/javascript">document.context='YjoxNyNjOjYjYjoyMSNjOjl8'; </script>
+<noscript><a href='http://banners.molbiol.ru/openx/www/delivery/ck.php?n=abafa997&amp;cb=12' target='_blank'><img src='http://banners.molbiol.ru/openx/www/delivery/avw.php?zoneid=11&amp;cb=12&amp;n=abafa997' border='0' alt='' /></a></noscript>
+&nbsp;&nbsp;
+
+<script type="text/javascript"><!--//<![CDATA[
+   var m3_u = (location.protocol=='https:'?'https://banners.molbiol.ru/openx/www/delivery/ajs.php':'http://banners.molbiol.ru/openx/www/delivery/ajs.php');
+   var m3_r = Math.floor(Math.random()*99999999999);
+   if (!document.MAX_used) document.MAX_used = ',';
+   document.write ("<scr"+"ipt type='text/javascript' src='"+m3_u);
+   document.write ("?zoneid=11&amp;block=1&amp;blockcampaign=1");
+   document.write ('&amp;cb=' + m3_r);
+   if (document.MAX_used != ',') document.write ("&amp;exclude=" + document.MAX_used);
+   document.write (document.charset ? '&amp;charset='+document.charset : (document.characterSet ? '&amp;charset='+document.characterSet : ''));
+   document.write ("&amp;loc=" + escape(window.location));
+   if (document.referrer) document.write ("&amp;referer=" + escape(document.referrer));
+   if (document.context) document.write ("&context=" + escape(document.context));
+   if (document.mmm_fo) document.write ("&amp;mmm_fo=1");
+   document.write ("'><\/scr"+"ipt>");
+//]]>--></script><script type="text/javascript" src="sch_clon_ampl_files/ajs_003.js"></script><a href="http://banners.molbiol.ru/openx/www/delivery/ck.php?oaparams=2__bannerid=16__zoneid=11__cb=c84731613b__oadest=http%3A%2F%2Fwww.cbio.ru%2F" target="_blank"><img src="sch_clon_ampl_files/50ae01cf9a4e136da086280b566e7cc7.gif" alt="Сайт для всех, кто заинтересован в развитии российской биотехнологии: ученых, бизнесменов, произв. и продавцов оборудования и реактивов" title="Сайт для всех, кто заинтересован в развитии российской биотехнологии: ученых, бизнесменов, произв. и продавцов оборудования и реактивов" height="31" border="0" width="88"></a><div id="beacon_c84731613b" style="position: absolute; left: 0px; top: 0px; visibility: hidden;"><img src="sch_clon_ampl_files/lg_003.gif" alt="" style="width: 0px; height: 0px;" height="0" width="0"></div><script type="text/javascript">document.context='YjoxNyNjOjYjYjoyMSNjOjkjYjoxNiNjOjE1fA=='; </script>
+<noscript><a href='http://banners.molbiol.ru/openx/www/delivery/ck.php?n=abafa997&amp;cb=13' target='_blank'><img src='http://banners.molbiol.ru/openx/www/delivery/avw.php?zoneid=11&amp;cb=13&amp;n=abafa997' border='0' alt='' /></a></noscript>
+&nbsp;&nbsp;
+
+<script type="text/javascript"><!--//<![CDATA[
+   var m3_u = (location.protocol=='https:'?'https://banners.molbiol.ru/openx/www/delivery/ajs.php':'http://banners.molbiol.ru/openx/www/delivery/ajs.php');
+   var m3_r = Math.floor(Math.random()*99999999999);
+   if (!document.MAX_used) document.MAX_used = ',';
+   document.write ("<scr"+"ipt type='text/javascript' src='"+m3_u);
+   document.write ("?zoneid=11&amp;block=1&amp;blockcampaign=1");
+   document.write ('&amp;cb=' + m3_r);
+   if (document.MAX_used != ',') document.write ("&amp;exclude=" + document.MAX_used);
+   document.write (document.charset ? '&amp;charset='+document.charset : (document.characterSet ? '&amp;charset='+document.characterSet : ''));
+   document.write ("&amp;loc=" + escape(window.location));
+   if (document.referrer) document.write ("&amp;referer=" + escape(document.referrer));
+   if (document.context) document.write ("&context=" + escape(document.context));
+   if (document.mmm_fo) document.write ("&amp;mmm_fo=1");
+   document.write ("'><\/scr"+"ipt>");
+//]]>--></script><script type="text/javascript" src="sch_clon_ampl_files/ajs_005.js"></script><a href="http://banners.molbiol.ru/openx/www/delivery/ck.php?oaparams=2__bannerid=24__zoneid=11__cb=8139882144__oadest=http%3A%2F%2Fneuroscience.ru%2F" target="_blank"><img src="sch_clon_ampl_files/a56741995aa283961f49357e8ea1018f.gif" alt="Научно-образовательный сайт посвященный нейронаукам. Новости конференций и симпозиумов, описание методик экспериментов." title="Научно-образовательный сайт посвященный нейронаукам. Новости конференций и симпозиумов, описание методик экспериментов." height="31" border="0" width="88"></a><div id="beacon_8139882144" style="position: absolute; left: 0px; top: 0px; visibility: hidden;"><img src="sch_clon_ampl_files/lg_002.gif" alt="" style="width: 0px; height: 0px;" height="0" width="0"></div><script type="text/javascript">document.context='YjoxNyNjOjYjYjoyMSNjOjkjYjoxNiNjOjE1I2I6MjQjYzoxMXw='; </script>
+<noscript><a href='http://banners.molbiol.ru/openx/www/delivery/ck.php?n=abafa997&amp;cb=14' target='_blank'><img src='http://banners.molbiol.ru/openx/www/delivery/avw.php?zoneid=11&amp;cb=14&amp;n=abafa997' border='0' alt='' /></a></noscript>
+&nbsp;&nbsp;
+
+<script type="text/javascript"><!--//<![CDATA[
+   var m3_u = (location.protocol=='https:'?'https://banners.molbiol.ru/openx/www/delivery/ajs.php':'http://banners.molbiol.ru/openx/www/delivery/ajs.php');
+   var m3_r = Math.floor(Math.random()*99999999999);
+   if (!document.MAX_used) document.MAX_used = ',';
+   document.write ("<scr"+"ipt type='text/javascript' src='"+m3_u);
+   document.write ("?zoneid=11&amp;block=1&amp;blockcampaign=1");
+   document.write ('&amp;cb=' + m3_r);
+   if (document.MAX_used != ',') document.write ("&amp;exclude=" + document.MAX_used);
+   document.write (document.charset ? '&amp;charset='+document.charset : (document.characterSet ? '&amp;charset='+document.characterSet : ''));
+   document.write ("&amp;loc=" + escape(window.location));
+   if (document.referrer) document.write ("&amp;referer=" + escape(document.referrer));
+   if (document.context) document.write ("&context=" + escape(document.context));
+   if (document.mmm_fo) document.write ("&amp;mmm_fo=1");
+   document.write ("'><\/scr"+"ipt>");
+//]]>--></script><script type="text/javascript" src="sch_clon_ampl_files/ajs_002.js"></script><a href="http://banners.molbiol.ru/openx/www/delivery/ck.php?oaparams=2__bannerid=20__zoneid=11__cb=af5ecf4992__oadest=http%3A%2F%2Fentomology.ru%2F" target="_blank"><img src="sch_clon_ampl_files/2a8954769e3f9f8d16e04da4b75117fb.gif" alt="Информационно-поисковый сайт Entomology Info: сигналы насекомых России, фотографии из различных регионов, компьютерные программы" title="Информационно-поисковый сайт Entomology Info: сигналы насекомых России, фотографии из различных регионов, компьютерные программы" height="31" border="0" width="88"></a><div id="beacon_af5ecf4992" style="position: absolute; left: 0px; top: 0px; visibility: hidden;"><img src="sch_clon_ampl_files/lg_004.gif" alt="" style="width: 0px; height: 0px;" height="0" width="0"></div><script type="text/javascript">document.context='YjoxNyNjOjYjYjoyMSNjOjkjYjoxNiNjOjE1I2I6MjQjYzoxMSNiOjIwI2M6OHw='; </script>
+<noscript><a href='http://banners.molbiol.ru/openx/www/delivery/ck.php?n=abafa997&amp;cb=15' target='_blank'><img src='http://banners.molbiol.ru/openx/www/delivery/avw.php?zoneid=11&amp;cb=15&amp;n=abafa997' border='0' alt='' /></a></noscript>
+
+<!-- banners_place 88x31 END -->
+
+
+</div>
+
+<br></body></html>

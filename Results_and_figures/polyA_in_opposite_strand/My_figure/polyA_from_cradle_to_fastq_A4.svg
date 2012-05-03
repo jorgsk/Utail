@@ -1,0 +1,735 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   xmlns:dc="http://purl.org/dc/elements/1.1/"
+   xmlns:cc="http://creativecommons.org/ns#"
+   xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+   xmlns:svg="http://www.w3.org/2000/svg"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   width="1052.3622"
+   height="744.09448"
+   id="svg2816"
+   version="1.1"
+   inkscape:version="0.48.1 r9760"
+   sodipodi:docname="polyA_from_cradle_to_fastq_A4.svg">
+  <defs
+     id="defs2818">
+    <inkscape:path-effect
+       effect="spiro"
+       id="path-effect4208"
+       is_visible="true" />
+    <inkscape:perspective
+       sodipodi:type="inkscape:persp3d"
+       inkscape:vp_x="0 : 600 : 1"
+       inkscape:vp_y="0 : 1000 : 0"
+       inkscape:vp_z="1600 : 600 : 1"
+       inkscape:persp3d-origin="800 : 400 : 1"
+       id="perspective2824" />
+    <inkscape:perspective
+       id="perspective4234"
+       inkscape:persp3d-origin="0.5 : 0.33333333 : 1"
+       inkscape:vp_z="1 : 0.5 : 1"
+       inkscape:vp_y="0 : 1000 : 0"
+       inkscape:vp_x="0 : 0.5 : 1"
+       sodipodi:type="inkscape:persp3d" />
+    <inkscape:perspective
+       id="perspective4260"
+       inkscape:persp3d-origin="0.5 : 0.33333333 : 1"
+       inkscape:vp_z="1 : 0.5 : 1"
+       inkscape:vp_y="0 : 1000 : 0"
+       inkscape:vp_x="0 : 0.5 : 1"
+       sodipodi:type="inkscape:persp3d" />
+    <inkscape:perspective
+       id="perspective4289"
+       inkscape:persp3d-origin="0.5 : 0.33333333 : 1"
+       inkscape:vp_z="1 : 0.5 : 1"
+       inkscape:vp_y="0 : 1000 : 0"
+       inkscape:vp_x="0 : 0.5 : 1"
+       sodipodi:type="inkscape:persp3d" />
+    <inkscape:perspective
+       id="perspective4323"
+       inkscape:persp3d-origin="0.5 : 0.33333333 : 1"
+       inkscape:vp_z="1 : 0.5 : 1"
+       inkscape:vp_y="0 : 1000 : 0"
+       inkscape:vp_x="0 : 0.5 : 1"
+       sodipodi:type="inkscape:persp3d" />
+    <inkscape:perspective
+       id="perspective4359"
+       inkscape:persp3d-origin="0.5 : 0.33333333 : 1"
+       inkscape:vp_z="1 : 0.5 : 1"
+       inkscape:vp_y="0 : 1000 : 0"
+       inkscape:vp_x="0 : 0.5 : 1"
+       sodipodi:type="inkscape:persp3d" />
+    <inkscape:perspective
+       id="perspective4408"
+       inkscape:persp3d-origin="0.5 : 0.33333333 : 1"
+       inkscape:vp_z="1 : 0.5 : 1"
+       inkscape:vp_y="0 : 1000 : 0"
+       inkscape:vp_x="0 : 0.5 : 1"
+       sodipodi:type="inkscape:persp3d" />
+    <inkscape:perspective
+       id="perspective4449"
+       inkscape:persp3d-origin="0.5 : 0.33333333 : 1"
+       inkscape:vp_z="1 : 0.5 : 1"
+       inkscape:vp_y="0 : 1000 : 0"
+       inkscape:vp_x="0 : 0.5 : 1"
+       sodipodi:type="inkscape:persp3d" />
+    <inkscape:perspective
+       id="perspective4492"
+       inkscape:persp3d-origin="0.5 : 0.33333333 : 1"
+       inkscape:vp_z="1 : 0.5 : 1"
+       inkscape:vp_y="0 : 1000 : 0"
+       inkscape:vp_x="0 : 0.5 : 1"
+       sodipodi:type="inkscape:persp3d" />
+    <inkscape:perspective
+       id="perspective4521"
+       inkscape:persp3d-origin="0.5 : 0.33333333 : 1"
+       inkscape:vp_z="1 : 0.5 : 1"
+       inkscape:vp_y="0 : 1000 : 0"
+       inkscape:vp_x="0 : 0.5 : 1"
+       sodipodi:type="inkscape:persp3d" />
+    <inkscape:perspective
+       id="perspective4552"
+       inkscape:persp3d-origin="0.5 : 0.33333333 : 1"
+       inkscape:vp_z="1 : 0.5 : 1"
+       inkscape:vp_y="0 : 1000 : 0"
+       inkscape:vp_x="0 : 0.5 : 1"
+       sodipodi:type="inkscape:persp3d" />
+    <inkscape:perspective
+       id="perspective4601"
+       inkscape:persp3d-origin="0.5 : 0.33333333 : 1"
+       inkscape:vp_z="1 : 0.5 : 1"
+       inkscape:vp_y="0 : 1000 : 0"
+       inkscape:vp_x="0 : 0.5 : 1"
+       sodipodi:type="inkscape:persp3d" />
+    <inkscape:perspective
+       id="perspective4658"
+       inkscape:persp3d-origin="0.5 : 0.33333333 : 1"
+       inkscape:vp_z="1 : 0.5 : 1"
+       inkscape:vp_y="0 : 1000 : 0"
+       inkscape:vp_x="0 : 0.5 : 1"
+       sodipodi:type="inkscape:persp3d" />
+    <inkscape:perspective
+       id="perspective4691"
+       inkscape:persp3d-origin="0.5 : 0.33333333 : 1"
+       inkscape:vp_z="1 : 0.5 : 1"
+       inkscape:vp_y="0 : 1000 : 0"
+       inkscape:vp_x="0 : 0.5 : 1"
+       sodipodi:type="inkscape:persp3d" />
+    <inkscape:perspective
+       id="perspective4756"
+       inkscape:persp3d-origin="0.5 : 0.33333333 : 1"
+       inkscape:vp_z="1 : 0.5 : 1"
+       inkscape:vp_y="0 : 1000 : 0"
+       inkscape:vp_x="0 : 0.5 : 1"
+       sodipodi:type="inkscape:persp3d" />
+    <inkscape:perspective
+       id="perspective4845"
+       inkscape:persp3d-origin="0.5 : 0.33333333 : 1"
+       inkscape:vp_z="1 : 0.5 : 1"
+       inkscape:vp_y="0 : 1000 : 0"
+       inkscape:vp_x="0 : 0.5 : 1"
+       sodipodi:type="inkscape:persp3d" />
+    <inkscape:perspective
+       id="perspective4917"
+       inkscape:persp3d-origin="0.5 : 0.33333333 : 1"
+       inkscape:vp_z="1 : 0.5 : 1"
+       inkscape:vp_y="0 : 1000 : 0"
+       inkscape:vp_x="0 : 0.5 : 1"
+       sodipodi:type="inkscape:persp3d" />
+    <inkscape:perspective
+       id="perspective4947"
+       inkscape:persp3d-origin="0.5 : 0.33333333 : 1"
+       inkscape:vp_z="1 : 0.5 : 1"
+       inkscape:vp_y="0 : 1000 : 0"
+       inkscape:vp_x="0 : 0.5 : 1"
+       sodipodi:type="inkscape:persp3d" />
+    <inkscape:perspective
+       id="perspective4947-8"
+       inkscape:persp3d-origin="0.5 : 0.33333333 : 1"
+       inkscape:vp_z="1 : 0.5 : 1"
+       inkscape:vp_y="0 : 1000 : 0"
+       inkscape:vp_x="0 : 0.5 : 1"
+       sodipodi:type="inkscape:persp3d" />
+    <inkscape:perspective
+       id="perspective4988"
+       inkscape:persp3d-origin="0.5 : 0.33333333 : 1"
+       inkscape:vp_z="1 : 0.5 : 1"
+       inkscape:vp_y="0 : 1000 : 0"
+       inkscape:vp_x="0 : 0.5 : 1"
+       sodipodi:type="inkscape:persp3d" />
+    <inkscape:perspective
+       id="perspective5035"
+       inkscape:persp3d-origin="0.5 : 0.33333333 : 1"
+       inkscape:vp_z="1 : 0.5 : 1"
+       inkscape:vp_y="0 : 1000 : 0"
+       inkscape:vp_x="0 : 0.5 : 1"
+       sodipodi:type="inkscape:persp3d" />
+    <inkscape:perspective
+       id="perspective5073"
+       inkscape:persp3d-origin="0.5 : 0.33333333 : 1"
+       inkscape:vp_z="1 : 0.5 : 1"
+       inkscape:vp_y="0 : 1000 : 0"
+       inkscape:vp_x="0 : 0.5 : 1"
+       sodipodi:type="inkscape:persp3d" />
+  </defs>
+  <sodipodi:namedview
+     id="base"
+     pagecolor="#ffffff"
+     bordercolor="#666666"
+     borderopacity="1.0"
+     inkscape:pageopacity="0.0"
+     inkscape:pageshadow="2"
+     inkscape:zoom="1.197913"
+     inkscape:cx="437.70478"
+     inkscape:cy="489.08906"
+     inkscape:current-layer="layer1"
+     inkscape:document-units="px"
+     showgrid="false"
+     inkscape:window-width="1339"
+     inkscape:window-height="903"
+     inkscape:window-x="116"
+     inkscape:window-y="121"
+     inkscape:window-maximized="0" />
+  <metadata
+     id="metadata2821">
+    <rdf:RDF>
+      <cc:Work
+         rdf:about="">
+        <dc:format>image/svg+xml</dc:format>
+        <dc:type
+           rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
+        <dc:title />
+      </cc:Work>
+    </rdf:RDF>
+  </metadata>
+  <g
+     id="layer1"
+     inkscape:label="Layer 1"
+     inkscape:groupmode="layer"
+     transform="translate(0,-455.90551)">
+    <g
+       id="g4182"
+       transform="matrix(0.67014908,0,0,0.6699861,-18.223264,449.75243)">
+      <flowRoot
+         style="font-size:13px;font-style:normal;font-weight:normal;fill:#000000;fill-opacity:1;stroke:none;font-family:Bitstream Vera Sans"
+         id="flowRoot2826"
+         xml:space="preserve"><flowRegion
+           id="flowRegion2828"><rect
+             y="43.333332"
+             x="35"
+             height="279.58334"
+             width="518.33337"
+             id="rect2830" /></flowRegion><flowPara
+           id="flowPara2832">The steps are as follows:</flowPara><flowPara
+           id="flowPara3365">-1) PolyA+ selection (30A or more on average)</flowPara><flowPara
+           id="flowPara3367">0) RiboRNA removal</flowPara><flowPara
+           id="flowPara3369" /><flowPara
+           id="flowPara2834">1) mRNA -&gt; RNA/DNA using a poly(T) primer.</flowPara><flowPara
+           id="flowPara2838">This primer can land anywhere in the poly(A) tail, so that transcripts with short and long poly(A) tails are captured.</flowPara><flowPara
+           id="flowPara3373" /><flowPara
+           id="flowPara2840">2) RNA/DNA -&gt; DNA/DNA</flowPara><flowPara
+           id="flowPara2842" /><flowPara
+           id="flowPara2844">3) DNA/DNA + sequencing adapter (that bind) + PCR primers (that dont bind)</flowPara><flowPara
+           id="flowPara2846" /><flowPara
+           id="flowPara2848">4) PCR amplification </flowPara><flowPara
+           id="flowPara3375" /><flowPara
+           id="flowPara3377">5) Clustering on surface</flowPara><flowPara
+           id="flowPara3383" /><flowPara
+           id="flowPara3385">6) Sequencing (singe or paired ends)</flowPara><flowPara
+           id="flowPara3379" /><flowPara
+           id="flowPara3381" /></flowRoot>      <rect
+         y="39.968224"
+         x="29.968224"
+         height="289.23022"
+         width="531.73022"
+         id="rect3408"
+         style="fill:#0551ed;fill-opacity:0.09543571;stroke:#003fad;stroke-width:1.39636755;stroke-linejoin:round;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:none" />
+    </g>
+    <path
+       style="fill:none;stroke:#000000;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+       d="m 767.85379,571.21386 222.71754,0 0,0.78959 0,0 0,0 0,0"
+       id="path4224-0" />
+    <g
+       id="g4395"
+       transform="matrix(0.67014908,0,0,0.6699861,-38.750689,472.16466)">
+      <path
+         id="path4224"
+         d="m 658.15668,153.28397 332.34021,0 0,1.1785 0,0 0,0 0,0"
+         style="fill:none;stroke:#000000;stroke-width:1.49238682px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1" />
+      <text
+         id="text4248"
+         y="157.5"
+         x="991.25"
+         style="font-size:13px;font-style:normal;font-weight:normal;fill:#000000;fill-opacity:1;stroke:none;font-family:Bitstream Vera Sans"
+         xml:space="preserve"><tspan
+           y="157.5"
+           x="991.25"
+           id="tspan4250"
+           sodipodi:role="line">d(A)150</tspan></text>
+    </g>
+    <text
+       xml:space="preserve"
+       style="font-size:8.71087837px;font-style:normal;font-weight:normal;fill:#000000;fill-opacity:1;stroke:none;font-family:Bitstream Vera Sans"
+       x="992.19861"
+       y="573.51276"
+       id="text4248-7"
+       transform="scale(1.0001216,0.99987841)"><tspan
+         sodipodi:role="line"
+         id="tspan4250-2"
+         x="992.19861"
+         y="573.51276">d(A)10</tspan></text>
+    <path
+       style="fill:none;stroke:#ff0000;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+       d="m 833.56003,536.92999 c 70.0864,70.06938 70.36565,69.79021 70.36565,69.79021"
+       id="path4279" />
+    <path
+       style="fill:#ff0000;stroke:#f80202;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+       d="m 903.64636,536.37167 c -70.0864,70.06934 -69.80715,70.34853 -69.80715,70.34853"
+       id="path4279-7" />
+    <text
+       xml:space="preserve"
+       style="font-size:8.71087837px;font-style:normal;font-weight:normal;fill:#000000;fill-opacity:1;stroke:none;font-family:Bitstream Vera Sans"
+       x="909.39978"
+       y="557.6557"
+       id="text4303"
+       transform="scale(1.0001216,0.99987841)"><tspan
+         sodipodi:role="line"
+         id="tspan4305"
+         x="909.39978"
+         y="557.6557">Poly(A)- fraction</tspan></text>
+    <text
+       xml:space="preserve"
+       style="font-size:8.71087837px;font-style:normal;font-weight:normal;fill:#000000;fill-opacity:1;stroke:none;font-family:Bitstream Vera Sans"
+       x="482.23157"
+       y="555.42212"
+       id="text4307"
+       transform="scale(1.0001216,0.99987841)"><tspan
+         sodipodi:role="line"
+         id="tspan4309"
+         x="482.23157"
+         y="555.42212">RNA</tspan></text>
+    <text
+       xml:space="preserve"
+       style="font-size:8.71087837px;font-style:normal;font-weight:normal;fill:#000000;fill-opacity:1;stroke:none;font-family:Bitstream Vera Sans"
+       x="455.42886"
+       y="614.05304"
+       id="text4311"
+       transform="scale(1.0001216,0.99987841)"><tspan
+         sodipodi:role="line"
+         id="tspan4313"
+         x="455.42886"
+         y="614.05304">RNA/DNA</tspan></text>
+    <g
+       id="g4390"
+       transform="matrix(0.67014908,0,0,0.6699861,-38.750689,472.16466)">
+      <path
+         id="path4224-7"
+         d="m 658.9207,246.53218 332.34021,0 0,1.1785 0,0 0,0 0,0"
+         style="fill:none;stroke:#000000;stroke-width:1.49238682px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1" />
+      <text
+         id="text4248-4"
+         y="250.7482"
+         x="992.01404"
+         style="font-size:13px;font-style:normal;font-weight:normal;fill:#000000;fill-opacity:1;stroke:none;font-family:Bitstream Vera Sans"
+         xml:space="preserve"><tspan
+           y="250.7482"
+           x="992.01404"
+           id="tspan4250-6"
+           sodipodi:role="line"
+           style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-family:Monospace;-inkscape-font-specification:Monospace">AAAAAAA...AAAAAAA</tspan></text>
+    </g>
+    <text
+       xml:space="preserve"
+       style="font-size:8.71087837px;font-style:normal;font-weight:normal;fill:#000000;fill-opacity:1;stroke:none;font-family:Bitstream Vera Sans"
+       x="948.50439"
+       y="723.49933"
+       id="text4343"
+       transform="scale(1.0001216,0.99987841)"><tspan
+         sodipodi:role="line"
+         id="tspan4345"
+         x="948.50439"
+         y="723.49933"
+         style="font-family:Monospace;-inkscape-font-specification:Monospace">TTTTT</tspan></text>
+    <text
+       xml:space="preserve"
+       style="font-size:8.71087837px;font-style:normal;font-weight:normal;fill:#000000;fill-opacity:1;stroke:none;font-family:Bitstream Vera Sans"
+       x="668.19293"
+       y="721.26575"
+       id="text4347"
+       transform="scale(1.0001216,0.99987841)"><tspan
+         sodipodi:role="line"
+         id="tspan4349"
+         x="668.19293"
+         y="721.26575"
+         style="font-family:Monospace;-inkscape-font-specification:Monospace">TTTTT</tspan></text>
+    <g
+       id="g4385"
+       transform="matrix(0.67014908,0,0,0.6699861,69.049134,381.16016)">
+      <path
+         id="path4224-7-6"
+         d="m 969.98717,492.56327 332.34013,0 0,1.1785 0,0 0,0 0,0"
+         style="fill:none;stroke:#000000;stroke-width:1.49238682px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1" />
+      <text
+         id="text4248-4-9"
+         y="496.7793"
+         x="1303.0806"
+         style="font-size:13px;font-style:normal;font-weight:normal;fill:#000000;fill-opacity:1;stroke:none;font-family:Bitstream Vera Sans"
+         xml:space="preserve"><tspan
+           y="496.7793"
+           x="1303.0806"
+           id="tspan4250-6-4"
+           sodipodi:role="line"
+           style="font-family:Monospace;-inkscape-font-specification:Monospace">AAAAAAA...AAAAAAA</tspan></text>
+    </g>
+    <text
+       xml:space="preserve"
+       style="font-size:8.71087837px;font-style:normal;font-weight:normal;fill:#000000;fill-opacity:1;stroke:none;font-family:Bitstream Vera Sans"
+       x="432.15018"
+       y="693.758"
+       id="text4311-1-7"
+       transform="scale(1.0001216,0.99987841)"><tspan
+         sodipodi:role="line"
+         id="tspan4313-2-8"
+         x="432.15018"
+         y="693.758">RNA + dT primer 3' in poly(A) tail</tspan></text>
+    <g
+       id="g4385-3"
+       transform="matrix(0.67014908,0,0,0.6699861,-272.18597,379.20409)">
+      <path
+         id="path4224-7-6-9"
+         d="m 969.98717,492.56327 332.34013,0 0,1.1785 0,0 0,0 0,0"
+         style="fill:none;stroke:#000000;stroke-width:1.49238682px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1" />
+      <text
+         id="text4248-4-9-7"
+         y="496.7793"
+         x="1303.0806"
+         style="font-size:13px;font-style:normal;font-weight:normal;fill:#000000;fill-opacity:1;stroke:none;font-family:Bitstream Vera Sans"
+         xml:space="preserve"><tspan
+           y="496.7793"
+           x="1303.0806"
+           id="tspan4250-6-4-2"
+           sodipodi:role="line"
+           style="font-family:Monospace;-inkscape-font-specification:Monospace">AAAAAAA...AAAAAAA</tspan></text>
+    </g>
+    <text
+       xml:space="preserve"
+       style="font-size:8.71087837px;font-style:normal;font-weight:normal;fill:#000000;fill-opacity:1;stroke:none;font-family:Bitstream Vera Sans"
+       x="526.58618"
+       y="853.90613"
+       id="text4311-1-7-2"
+       transform="scale(1.0001216,0.99987841)"><tspan
+         sodipodi:role="line"
+         id="tspan4313-2-8-7"
+         x="526.58618"
+         y="853.90613">DNA/DNA with long poly(A)</tspan></text>
+    <g
+       id="g4385-3-2"
+       transform="matrix(0.67014908,0,0,0.6699861,-222.95608,539.33475)">
+      <path
+         id="path4224-7-6-9-0"
+         d="m 969.98717,492.56327 332.34013,0 0,1.1785 0,0 0,0 0,0"
+         style="fill:none;stroke:#000000;stroke-width:1.49238682px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1" />
+      <text
+         id="text4248-4-9-7-1"
+         y="496.7793"
+         x="1303.0806"
+         style="font-size:13px;font-style:normal;font-weight:normal;fill:#000000;fill-opacity:1;stroke:none;font-family:Bitstream Vera Sans"
+         xml:space="preserve"><tspan
+           y="496.7793"
+           x="1303.0806"
+           id="tspan4250-6-4-2-6"
+           sodipodi:role="line"
+           style="font-family:Monospace;-inkscape-font-specification:Monospace">AAAAAAA...AAAA</tspan></text>
+    </g>
+    <text
+       xml:space="preserve"
+       style="font-size:8.71087837px;font-style:normal;font-weight:normal;fill:#000000;fill-opacity:1;stroke:none;font-family:Bitstream Vera Sans"
+       x="757.53308"
+       y="696.86621"
+       id="text4311-1-7-23"
+       transform="scale(1.0001216,0.99987841)"><tspan
+         sodipodi:role="line"
+         id="tspan4313-2-8-1"
+         x="757.53308"
+         y="696.86621">RNA + dT primer 5' in poly(A) tail</tspan></text>
+    <text
+       xml:space="preserve"
+       style="font-size:8.71087837px;font-style:normal;font-weight:normal;fill:#000000;fill-opacity:1;stroke:none;font-family:Bitstream Vera Sans"
+       x="549.88232"
+       y="794.96545"
+       id="text4509"
+       transform="scale(1.0001216,0.99987841)"><tspan
+         sodipodi:role="line"
+         id="tspan4511"
+         x="549.88232"
+         y="794.96545">Reverse transcription + DNA polymeration + RNA degradation by RNAse H</tspan></text>
+    <g
+       id="g4385-3-2-2"
+       transform="matrix(0.67014908,0,0,0.6699861,-223.1594,548.39826)">
+      <path
+         id="path4224-7-6-9-0-6"
+         d="m 969.98717,492.56327 332.34013,0 0,1.1785 0,0 0,0 0,0"
+         style="fill:none;stroke:#000000;stroke-width:1.49238682px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1" />
+      <text
+         id="text4248-4-9-7-1-0"
+         y="496.7793"
+         x="1303.0806"
+         style="font-size:13px;font-style:normal;font-weight:normal;fill:#000000;fill-opacity:1;stroke:none;font-family:Bitstream Vera Sans"
+         xml:space="preserve"><tspan
+           y="496.7793"
+           x="1303.0806"
+           id="tspan4250-6-4-2-6-1"
+           sodipodi:role="line"
+           style="font-family:Monospace;-inkscape-font-specification:Monospace">TTTTTTT...TTTT</tspan></text>
+    </g>
+    <g
+       id="g5116"
+       transform="matrix(0.67014908,0,0,0.6699861,45.103563,467.13393)">
+      <text
+         id="text4311-1-7-2-8"
+         y="581.13953"
+         x="1153.5352"
+         style="font-size:13px;font-style:normal;font-weight:normal;fill:#000000;fill-opacity:1;stroke:none;font-family:Bitstream Vera Sans"
+         xml:space="preserve"><tspan
+           y="581.13953"
+           x="1153.5352"
+           id="tspan4313-2-8-7-0"
+           sodipodi:role="line">DNA/DNA with short poly(A)</tspan></text>
+      <g
+         transform="translate(95.073237,108.43601)"
+         id="g4385-3-2-6">
+        <path
+           style="fill:none;stroke:#000000;stroke-width:1.49238682px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+           d="m 969.98717,492.56327 332.34013,0 0,1.1785 0,0 0,0 0,0"
+           id="path4224-7-6-9-0-63" />
+        <text
+           xml:space="preserve"
+           style="font-size:13px;font-style:normal;font-weight:normal;fill:#000000;fill-opacity:1;stroke:none;font-family:Bitstream Vera Sans"
+           x="1303.0806"
+           y="496.7793"
+           id="text4248-4-9-7-1-7"><tspan
+             style="font-family:Monospace;-inkscape-font-specification:Monospace"
+             sodipodi:role="line"
+             id="tspan4250-6-4-2-6-13"
+             x="1303.0806"
+             y="496.7793">AAAAAA</tspan></text>
+      </g>
+      <g
+         transform="translate(94.769847,121.96392)"
+         id="g4385-3-2-2-2">
+        <path
+           style="fill:none;stroke:#000000;stroke-width:1.49238682px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+           d="m 969.98717,492.56327 332.34013,0 0,1.1785 0,0 0,0 0,0"
+           id="path4224-7-6-9-0-6-7" />
+        <text
+           xml:space="preserve"
+           style="font-size:13px;font-style:normal;font-weight:normal;fill:#000000;fill-opacity:1;stroke:none;font-family:Bitstream Vera Sans"
+           x="1303.0806"
+           y="496.7793"
+           id="text4248-4-9-7-1-0-1"><tspan
+             style="font-family:Monospace;-inkscape-font-specification:Monospace"
+             sodipodi:role="line"
+             id="tspan4250-6-4-2-6-1-9"
+             x="1303.0806"
+             y="496.7793">TTTTTT</tspan></text>
+      </g>
+    </g>
+    <flowRoot
+       xml:space="preserve"
+       id="flowRoot4675"
+       style="font-size:13px;font-style:normal;font-weight:normal;fill:#000000;fill-opacity:1;stroke:none;font-family:Monospace;-inkscape-font-specification:Monospace"
+       transform="matrix(0.67014908,0,0,0.6699861,105.41308,404.0747)"><flowRegion
+         id="flowRegion4677"><rect
+           id="rect4679"
+           width="461.66666"
+           height="29.166666"
+           x="720"
+           y="790" /></flowRegion><flowPara
+         id="flowPara4681">Add A to 3' ends + sequencing adapters + PCR primers</flowPara></flowRoot>    <g
+       id="g4815"
+       transform="matrix(0.67014908,0,0,0.6699861,42.865841,485.03135)">
+      <text
+         id="text4311-1-7-2-8-6-4"
+         y="745.30042"
+         x="919.08759"
+         style="font-size:13px;font-style:normal;font-weight:normal;fill:#000000;fill-opacity:1;stroke:none;font-family:Bitstream Vera Sans"
+         xml:space="preserve"><tspan
+           y="745.30042"
+           x="919.08759"
+           id="tspan4313-2-8-7-0-0-7"
+           sodipodi:role="line">DNA/DNA with short poly(A)</tspan></text>
+      <g
+         transform="translate(-146.14552,272.60267)"
+         id="g4385-3-2-6-0-7">
+        <path
+           style="fill:none;stroke:#000000;stroke-width:1.49238682px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+           d="m 969.98717,492.56327 332.34013,0 0,1.1785 0,0 0,0 0,0"
+           id="path4224-7-6-9-0-63-2-1" />
+        <text
+           xml:space="preserve"
+           style="font-size:13px;font-style:normal;font-weight:normal;fill:#000000;fill-opacity:1;stroke:none;font-family:Bitstream Vera Sans"
+           x="1303.0806"
+           y="496.7793"
+           id="text4248-4-9-7-1-7-8-3"><tspan
+             style="font-family:Monospace;-inkscape-font-specification:Monospace"
+             sodipodi:role="line"
+             id="tspan4250-6-4-2-6-13-3-7"
+             x="1303.0806"
+             y="496.7793">AAAAAA(A)EI</tspan></text>
+      </g>
+      <g
+         transform="translate(-146.44891,286.13058)"
+         id="g4385-3-2-2-2-5-0">
+        <path
+           style="fill:none;stroke:#000000;stroke-width:1.49238682px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+           d="m 969.98717,492.56327 332.34013,0 0,1.1785 0,0 0,0 0,0"
+           id="path4224-7-6-9-0-6-7-9-0" />
+        <text
+           xml:space="preserve"
+           style="font-size:13px;font-style:normal;font-weight:normal;fill:#000000;fill-opacity:1;stroke:none;font-family:Bitstream Vera Sans"
+           x="1303.0806"
+           y="496.7793"
+           id="text4248-4-9-7-1-0-1-0-7"><tspan
+             style="font-family:Monospace;-inkscape-font-specification:Monospace"
+             sodipodi:role="line"
+             id="tspan4250-6-4-2-6-1-9-9-3"
+             x="1303.0806"
+             y="496.7793">TTTTTT(T)ÊW</tspan></text>
+      </g>
+      <text
+         id="text4744"
+         y="769.16669"
+         x="823.33337"
+         style="font-size:13px;font-style:normal;font-weight:normal;text-align:end;text-anchor:end;fill:#000000;fill-opacity:1;stroke:none;font-family:Monospace;-inkscape-font-specification:Monospace"
+         xml:space="preserve"><tspan
+           y="769.16669"
+           x="823.33337"
+           id="tspan4746"
+           sodipodi:role="line">WÊ(T)</tspan></text>
+      <text
+         id="text4744-0"
+         y="781.8432"
+         x="823.39972"
+         style="font-size:13px;font-style:normal;font-weight:normal;text-align:end;text-anchor:end;fill:#000000;fill-opacity:1;stroke:none;font-family:Monospace;-inkscape-font-specification:Monospace"
+         xml:space="preserve"><tspan
+           y="781.8432"
+           x="823.39972"
+           id="tspan4746-5"
+           sodipodi:role="line">IE(A)</tspan></text>
+    </g>
+    <text
+       xml:space="preserve"
+       style="font-size:8.71087837px;font-style:normal;font-weight:normal;text-align:start;text-anchor:start;fill:#000000;fill-opacity:1;stroke:none;font-family:Monospace;-inkscape-font-specification:Monospace"
+       x="578.35632"
+       y="1049.0638"
+       id="text4831"
+       transform="scale(1.0001216,0.99987841)"><tspan
+         sodipodi:role="line"
+         id="tspan4833"
+         x="578.35632"
+         y="1049.0638">15-20 rounds of PCR that somehow keeps the above format</tspan><tspan
+         sodipodi:role="line"
+         x="578.35632"
+         y="1059.9524"
+         id="tspan4835">Q: what happens to the I and W? Don't they get copied?</tspan><tspan
+         sodipodi:role="line"
+         x="578.35632"
+         y="1070.8411"
+         id="tspan3126">A: the primer is not part of the 'dangling' end. Still,</tspan><tspan
+         sodipodi:role="line"
+         x="578.35632"
+         y="1081.7296"
+         id="tspan3128">you will get the other dangling part. You still need verification of these detais.</tspan></text>
+    <g
+       transform="matrix(0.67014908,0,0,0.6699861,-491.7357,211.02935)"
+       id="g4815-8">
+      <text
+         id="text4311-1-7-2-8-6-4-7"
+         y="745.30042"
+         x="919.08759"
+         style="font-size:13px;font-style:normal;font-weight:normal;fill:#000000;fill-opacity:1;stroke:none;font-family:Bitstream Vera Sans"
+         xml:space="preserve"><tspan
+           y="745.30042"
+           x="919.08759"
+           id="tspan4313-2-8-7-0-0-7-1"
+           sodipodi:role="line">DNA/DNA with poly(A)</tspan></text>
+      <g
+         transform="translate(-146.14552,272.60267)"
+         id="g4385-3-2-6-0-7-1">
+        <path
+           style="fill:none;stroke:#000000;stroke-width:1.49238682px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+           d="m 969.98717,492.56327 332.34013,0 0,1.1785 0,0 0,0 0,0"
+           id="path4224-7-6-9-0-63-2-1-4" />
+        <text
+           xml:space="preserve"
+           style="font-size:13px;font-style:normal;font-weight:normal;fill:#000000;fill-opacity:1;stroke:none;font-family:Bitstream Vera Sans"
+           x="1303.0806"
+           y="496.7793"
+           id="text4248-4-9-7-1-7-8-3-8"><tspan
+             style="font-family:Monospace;-inkscape-font-specification:Monospace"
+             sodipodi:role="line"
+             id="tspan4250-6-4-2-6-13-3-7-4"
+             x="1303.0806"
+             y="496.7793">AAAAAA(A)EI</tspan></text>
+      </g>
+      <g
+         transform="translate(-146.44891,286.13058)"
+         id="g4385-3-2-2-2-5-0-2">
+        <path
+           style="fill:none;stroke:#000000;stroke-width:1.49238682px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+           d="m 969.98717,492.56327 332.34013,0 0,1.1785 0,0 0,0 0,0"
+           id="path4224-7-6-9-0-6-7-9-0-8" />
+        <text
+           xml:space="preserve"
+           style="font-size:13px;font-style:normal;font-weight:normal;fill:#000000;fill-opacity:1;stroke:none;font-family:Bitstream Vera Sans"
+           x="1303.0806"
+           y="496.7793"
+           id="text4248-4-9-7-1-0-1-0-7-2"><tspan
+             style="font-family:Monospace;-inkscape-font-specification:Monospace"
+             sodipodi:role="line"
+             id="tspan4250-6-4-2-6-1-9-9-3-5"
+             x="1303.0806"
+             y="496.7793">TTTTTT(T)ÊW</tspan></text>
+      </g>
+      <text
+         id="text4744-2"
+         y="769.16669"
+         x="823.33337"
+         style="font-size:13px;font-style:normal;font-weight:normal;text-align:end;text-anchor:end;fill:#000000;fill-opacity:1;stroke:none;font-family:Monospace;-inkscape-font-specification:Monospace"
+         xml:space="preserve"><tspan
+           y="769.16669"
+           x="823.33337"
+           id="tspan4746-50"
+           sodipodi:role="line">WÊ(T)</tspan></text>
+      <text
+         id="text4744-0-2"
+         y="781.8432"
+         x="823.39972"
+         style="font-size:13px;font-style:normal;font-weight:normal;text-align:end;text-anchor:end;fill:#000000;fill-opacity:1;stroke:none;font-family:Monospace;-inkscape-font-specification:Monospace"
+         xml:space="preserve"><tspan
+           y="781.8432"
+           x="823.39972"
+           id="tspan4746-5-3"
+           sodipodi:role="line">IE(A)</tspan></text>
+    </g>
+    <text
+       xml:space="preserve"
+       style="font-size:8.71087837px;font-style:normal;font-weight:normal;text-align:start;text-anchor:start;fill:#000000;fill-opacity:1;stroke:none;font-family:Monospace;-inkscape-font-specification:Monospace"
+       x="21.918097"
+       y="783.93188"
+       id="text5108"
+       transform="scale(1.0001216,0.99987841)"><tspan
+         sodipodi:role="line"
+         id="tspan5110"
+         x="21.918097"
+         y="783.93188">The two 5' ends bind to the surface -- hopefully far enough apart</tspan><tspan
+         sodipodi:role="line"
+         x="21.918097"
+         y="794.8205"
+         id="tspan5112">that their clusters don't overlap when fully grown</tspan></text>
+  </g>
+</svg>

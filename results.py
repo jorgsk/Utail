@@ -15,7 +15,7 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 #import matplotlib.cm as cm
-from matplotlib import lines
+#from matplotlib import lines
 
 #plt.ion() # turn on the interactive mode so you can play with plots
 plt.ioff() # turn off interactive mode for working undisturbed
@@ -27,7 +27,7 @@ from operator import itemgetter
 import math
 
 import numpy as np
-from scipy import stats
+#from scipy import stats
 
 import time
 import glob
@@ -975,21 +975,33 @@ def get_super_regions(dsets, settings, batch_key):
     junctions = os.path.join(settings.here, 'junctions',
                              'splice_junctions_merged.bed')
 
+    mySubBed = '/users/rg/jskancke/programs/other/bedtools/bin/subtractBed'
+    bedDir, subtrFile = os.path.split(mySubBed)
+    # You need to change directory to other bedtools bin, otherwise subtract bed
+    # doesnt find the bedtools main file it seems to be using
+    os.chdir(bedDir)
+
     # i.5) cut away the exon-exon noise
-    cmd = ['subtractBed', '-a', cluster_file, '-b', junctions]
+    cmd = [mySubBed, '-a', cluster_file, '-b', junctions]
     #p1 = Popen(cmd, stdout=open(temp_cluster_file, 'wb'), stderr=PIPE)
     p1 = Popen(cmd, stdout=open(temp_cluster_file, 'wb'))
     p1.wait()
 
+    mySlopBed = '/users/rg/jskancke/programs/other/bedtools/bin/slopBed'
     # ii) expand the entries
-    cmd = ['slopBed', '-i', temp_cluster_file, '-g', settings.hg19_path, '-b', '15']
-    p2 = Popen(cmd, stdout=open(cluster_file, 'wb'))
+    expanded = temp_cluster_file + '_expanded'
+    cmd = [mySlopBed, '-i', temp_cluster_file, '-g', settings.hg19_path, '-b', '15']
+    p2 = Popen(cmd, stdout=open(expanded, 'wb'))
     p2.wait()
 
+    myMergeBed = '/users/rg/jskancke/programs/other/bedtools/bin/mergeBed'
     # iii) merge and max scores
-    cmd = ['mergeBed', '-nms', '-s', '-scores', 'sum', '-i', cluster_file]
+    cmd = [myMergeBed, '-nms', '-s', '-scores', 'sum', '-i', expanded]
     #p3 = Popen(cmd, stdout=PIPE, stderr=PIPE)
     p3 = Popen(cmd, stdout=PIPE)
+
+    # go back to here
+    os.chdir(settings.here)
 
     # iv) read therough the centered output and update the super_cluster
     for line in p3.stdout:
@@ -4119,7 +4131,7 @@ def merge_polyAs(settings, toosmall, minus, cell_lines, speedrun, expandby):
     if speedrun:
         subset = subset[:2]
 
-    # 1.1) write each poly(A) site to file with +/- 15 and strand
+    # 1.1) write each poly(A) site to file +/- expandby
     batch_key = 'cuffer'
     region = 'whole'
 
@@ -4127,19 +4139,24 @@ def merge_polyAs(settings, toosmall, minus, cell_lines, speedrun, expandby):
                                           subset, speedrun)
 
     outdir = os.path.join(settings.here, 'genome_wide_dir')
-    outfile = 'all_pAs.bed'
+
+    if speedrun:
+        outfile = 'all_pAs_speedrun.bed'
+    else:
+        outfile = 'all_pAs.bed'
+
     outpath = os.path.join(outdir, outfile)
     outhandle = open(outpath, 'wb')
 
     for utr_id, utr in super_3utr[region].iteritems():
         for cls in utr.super_clusters:
 
-            if cls.nr_support_reads > toosmall: # ?
+            if cls.nr_support_reads > toosmall:
 
                 chrm = utr.chrm
                 beg = str(cls.polyA_coordinate-expandby)
                 end = str(cls.polyA_coordinate+expandby)
-                pas = '#'.join(cls.nearby_PAS)
+                pas = '#'.join(cls.dsets)
                 covr = str(cls.nr_support_reads)
                 strand = cls.strand
 
@@ -4307,8 +4324,8 @@ def gencode_cufflinks_report(settings):
     mincovr = 2
     compartments = ['Whole_Cell', 'Cytoplasm', 'Nucleus']
 
-    #speedrun = True
-    speedrun = False
+    speedrun = True
+    #speedrun = False
 
     polyA_path = merge_polyAs(settings, mincovr, minus, compartments,
                                      speedrun, expandby)
@@ -5458,6 +5475,23 @@ def EML(settings):
     p = Plotter()
     p.CyNucComp(data_dict, nr_comp, settings)
 
+def write_all_polyAs(settings):
+    """
+    Simply merge all polyA sites
+    """
+
+    minus = False
+
+    expandby = 0
+
+    mincovr = 2
+    compartments = ['Whole_Cell', 'Cytoplasm', 'Nucleus']
+
+    #speedrun = True
+    speedrun = False
+
+    merge_polyAs(settings, mincovr, minus, compartments,
+                                     speedrun, expandby)
 
 def main():
     # The path to the directory the script is located in
@@ -5470,7 +5504,7 @@ def main():
     settings = Settings(os.path.join(here, 'UTR_SETTINGS'), savedir, outputdir,
                         here, chr1=False)
 
-    gencode_report(settings, speedrun=False)
+    #gencode_report(settings, speedrun=False)
 
     # early, medium, late poly(A) in cytoplasm and nucleus
     #EML(settings)
@@ -5483,6 +5517,8 @@ def main():
                   #'K562']
     # NOTE must fix for individual cell lines
     #gencode_cufflinks_report(settings)
+
+    write_all_polyAs(settings)
 
     # Hagen's stuff
     #hagen(settings, speedrun=False) # negative results for your pA

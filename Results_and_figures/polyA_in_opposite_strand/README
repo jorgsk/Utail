@@ -1,0 +1,20 @@
+http://seqanswers.com/forums/showthread.php?t=21
+
+I am a little confused about this.
+
+In fig 6, the DNA is attached to flow-cell by both red and purple adapters in
+the same cluster. However, in fig 7, it is attached only by red adapters.
+
+What causes it to happen?
+
+Both adapters would mean the DNA strands in clusters are not identical, but
+half of them are complimentary to the other half.  For paired-end sequencing,
+after having reached the desired cycle-count the synthesized strand is removed,
+another step of bridge amplification is carried out, followed by a cleaving of
+sequences bound with adapter1 to the cell surface. Thus leaving the
+`other'/reverse strand bound to the flow cell for sequencing...
+
+
+I need to make a picture to show that the poly(A) reads come from the reverse
+strand. This picture should put me in a good position to select which end of
+the poly(A) read I think the actual poly(A) tail is at.

@@ -1,0 +1,308 @@
+########################################################
+whole
+Reads:686761 (same: 373175, opposite: 313586)
+
+### All clustes ###
+All:	327853 (1.00)	same 174907 (0.53)	opposite 152946 (0.47)
+With PAS:	87064 (0.27)	same 46340 (0.53)	opposite 40724 (0.47)
+AATAAA or ATTAAA:	29319 (0.09)	same 15386 (0.52)	opposite 13933 (0.48)
+Annotated:	14370 (0.04)	same 7419 (0.52)	opposite 6951 (0.48)
+Annotated with PAS:	12132 (0.04)	same 6199 (0.51)	opposite 5933 (0.49)
+With PET:	44881 (0.14)	same 23722 (0.53)	opposite 21159 (0.47)
+With PAS and PET:	20168 (0.06)	same 10557 (0.52)	opposite 9611 (0.48)
+With Cufflinks:	6656 (0.02)	same 3553 (0.53)	opposite 3103 (0.47)
+With PAS and Cufflinks:	3004 (0.01)	same 1571 (0.52)	opposite 1433 (0.48)
+All
+A	same: 77675 12.19	opposite: 81968 11.86	sum: 159643 12.02
+T	same: 97232 10.64	opposite: 70978 10.66	sum: 168210 10.65
+With PAS
+A	same: 13239 12.00	opposite: 15237 11.17	sum: 28476 11.55
+T	same: 33101 10.11	opposite: 25487 10.09	sum: 58588 10.10
+AATAAA or ATTAAA
+A	same: 2741 12.44	opposite: 3238 11.17	sum: 5979 11.75
+T	same: 12645 9.29	opposite: 10695 9.18	sum: 23340 9.24
+Annotated
+A	same: 436 12.78	opposite: 415 11.86	sum: 851 12.33
+T	same: 6983 8.52	opposite: 6536 8.44	sum: 13519 8.48
+Annotated with PAS
+A	same: 155 11.83	opposite: 143 12.52	sum: 298 12.16
+T	same: 6044 8.23	opposite: 5790 8.23	sum: 11834 8.23
+With PET
+A	same: 8133 13.30	opposite: 8299 13.11	sum: 16432 13.20
+T	same: 15589 9.69	opposite: 12860 9.45	sum: 28449 9.58
+With PAS and PET
+A	same: 1275 12.43	opposite: 1341 12.01	sum: 2616 12.22
+T	same: 9282 8.84	opposite: 8270 8.70	sum: 17552 8.77
+With Cufflinks
+A	same: 1037 12.38	opposite: 1075 12.04	sum: 2112 12.21
+T	same: 2516 10.58	opposite: 2028 9.88	sum: 4544 10.27
+With PAS and Cufflinks
+A	same: 184 12.99	opposite: 196 12.27	sum: 380 12.62
+T	same: 1387 9.47	opposite: 1237 9.06	sum: 2624 9.28
+
+### Clusters with 2 or more coverage ###
+All:	57031 (0.17)	same 31372 (0.55)	opposite 25659 (0.45)
+With PAS:	21860 (0.38)	same 11858 (0.54)	opposite 10002 (0.46)
+AATAAA or ATTAAA:	11342 (0.20)	same 6017 (0.53)	opposite 5325 (0.47)
+Annotated:	9850 (0.17)	same 5161 (0.52)	opposite 4689 (0.48)
+Annotated with PAS:	8895 (0.16)	same 4633 (0.52)	opposite 4262 (0.48)
+With PET:	17531 (0.31)	same 9375 (0.53)	opposite 8156 (0.47)
+With PAS and PET:	11435 (0.20)	same 6041 (0.53)	opposite 5394 (0.47)
+With Cufflinks:	2260 (0.04)	same 1194 (0.53)	opposite 1066 (0.47)
+With PAS and Cufflinks:	1581 (0.03)	same 825 (0.52)	opposite 756 (0.48)
+All
+A	same: 7920 8.16	opposite: 7951 8.29	sum: 15871 8.22
+T	same: 23452 10.02	opposite: 17708 9.63	sum: 41160 9.85
+With PAS
+A	same: 1484 7.48	opposite: 1547 7.95	sum: 3031 7.72
+T	same: 10374 9.24	opposite: 8455 8.94	sum: 18829 9.11
+AATAAA or ATTAAA
+A	same: 313 7.84	opposite: 310 7.71	sum: 623 7.78
+T	same: 5704 8.41	opposite: 5015 8.32	sum: 10719 8.37
+Annotated
+A	same: 135 10.98	opposite: 119 10.02	sum: 254 10.53
+T	same: 5026 8.31	opposite: 4570 8.24	sum: 9596 8.28
+Annotated with PAS
+A	same: 58 10.35	opposite: 47 10.53	sum: 105 10.43
+T	same: 4575 8.13	opposite: 4215 8.14	sum: 8790 8.14
+With PET
+A	same: 1512 10.04	opposite: 1464 10.30	sum: 2976 10.17
+T	same: 7863 9.03	opposite: 6692 8.81	sum: 14555 8.93
+With PAS and PET
+A	same: 262 9.02	opposite: 269 10.31	sum: 531 9.67
+T	same: 5779 8.45	opposite: 5125 8.34	sum: 10904 8.40
+With Cufflinks
+A	same: 141 10.78	opposite: 143 11.57	sum: 284 11.18
+T	same: 1053 9.15	opposite: 923 8.75	sum: 1976 8.96
+With PAS and Cufflinks
+A	same: 26 8.50	opposite: 21 10.22	sum: 47 9.27
+T	same: 799 8.51	opposite: 735 8.34	sum: 1534 8.43
+
+### Clusters with only 1 coverage ###
+All:	270822 (4.75)	same 143535 (0.53)	opposite 127287 (0.47)
+With PAS:	65204 (0.24)	same 34482 (0.53)	opposite 30722 (0.47)
+AATAAA or ATTAAA:	17977 (0.07)	same 9369 (0.52)	opposite 8608 (0.48)
+Annotated:	4520 (0.02)	same 2258 (0.50)	opposite 2262 (0.50)
+Annotated with PAS:	3237 (0.01)	same 1566 (0.48)	opposite 1671 (0.52)
+With PET:	27350 (0.10)	same 14347 (0.52)	opposite 13003 (0.48)
+With PAS and PET:	8733 (0.03)	same 4516 (0.52)	opposite 4217 (0.48)
+With Cufflinks:	4396 (0.02)	same 2359 (0.54)	opposite 2037 (0.46)
+With PAS and Cufflinks:	1423 (0.01)	same 746 (0.52)	opposite 677 (0.48)
+All
+A	same: 69755 12.65	opposite: 74017 12.24	sum: 143772 12.44
+T	same: 73780 10.83	opposite: 53270 11.00	sum: 127050 10.90
+With PAS
+A	same: 11755 12.57	opposite: 13690 11.53	sum: 25445 12.01
+T	same: 22727 10.51	opposite: 17032 10.66	sum: 39759 10.58
+AATAAA or ATTAAA
+A	same: 2428 13.03	opposite: 2928 11.53	sum: 5356 12.21
+T	same: 6941 10.00	opposite: 5680 9.94	sum: 12621 9.97
+Annotated
+A	same: 301 13.58	opposite: 296 12.60	sum: 597 13.10
+T	same: 1957 9.05	opposite: 1966 8.90	sum: 3923 8.98
+Annotated with PAS
+A	same: 97 12.71	opposite: 96 13.50	sum: 193 13.10
+T	same: 1469 8.52	opposite: 1575 8.46	sum: 3044 8.49
+With PET
+A	same: 6621 14.04	opposite: 6835 13.71	sum: 13456 13.87
+T	same: 7726 10.35	opposite: 6168 10.15	sum: 13894 10.26
+With PAS and PET
+A	same: 1013 13.31	opposite: 1072 12.44	sum: 2085 12.86
+T	same: 3503 9.48	opposite: 3145 9.29	sum: 6648 9.39
+With Cufflinks
+A	same: 896 12.63	opposite: 932 12.11	sum: 1828 12.36
+T	same: 1463 11.61	opposite: 1105 10.82	sum: 2568 11.27
+With PAS and Cufflinks
+A	same: 158 13.73	opposite: 175 12.51	sum: 333 13.09
+T	same: 588 10.77	opposite: 502 10.12	sum: 1090 10.47
+
+### Clusters with 3 or more coverage ###
+All:	25678 (0.09)	same 14013 (0.55)	opposite 11665 (0.45)
+With PAS:	12167 (0.47)	same 6520 (0.54)	opposite 5647 (0.46)
+AATAAA or ATTAAA:	7697 (0.30)	same 4053 (0.53)	opposite 3644 (0.47)
+Annotated:	7517 (0.29)	same 3908 (0.52)	opposite 3609 (0.48)
+Annotated with PAS:	6960 (0.27)	same 3602 (0.52)	opposite 3358 (0.48)
+With PET:	11009 (0.43)	same 5868 (0.53)	opposite 5141 (0.47)
+With PAS and PET:	8313 (0.32)	same 4363 (0.52)	opposite 3950 (0.48)
+With Cufflinks:	1416 (0.06)	same 715 (0.50)	opposite 701 (0.50)
+With PAS and Cufflinks:	1156 (0.05)	same 586 (0.51)	opposite 570 (0.49)
+All
+A	same: 2935 7.46	opposite: 2944 7.67	sum: 5879 7.56
+T	same: 11078 9.42	opposite: 8721 8.99	sum: 19799 9.23
+With PAS
+A	same: 576 6.82	opposite: 609 7.46	sum: 1185 7.15
+T	same: 5944 8.75	opposite: 5038 8.44	sum: 10982 8.61
+AATAAA or ATTAAA
+A	same: 121 7.02	opposite: 109 7.16	sum: 230 7.09
+T	same: 3932 8.18	opposite: 3535 8.10	sum: 7467 8.14
+Annotated
+A	same: 40 7.74	opposite: 54 8.87	sum: 94 8.39
+T	same: 3868 8.24	opposite: 3555 8.14	sum: 7423 8.19
+Annotated with PAS
+A	same: 21 8.20	opposite: 26 9.46	sum: 47 8.90
+T	same: 3581 8.11	opposite: 3332 8.09	sum: 6913 8.10
+With PET
+A	same: 569 8.84	opposite: 522 9.07	sum: 1091 8.95
+T	same: 5299 8.69	opposite: 4619 8.52	sum: 9918 8.61
+With PAS and PET
+A	same: 114 7.48	opposite: 117 9.98	sum: 231 8.75
+T	same: 4249 8.26	opposite: 3833 8.17	sum: 8082 8.22
+With Cufflinks
+A	same: 62 11.62	opposite: 61 14.39	sum: 123 12.99
+T	same: 653 8.44	opposite: 640 8.44	sum: 1293 8.44
+With PAS and Cufflinks
+A	same: 19 9.10	opposite: 9 15.35	sum: 28 11.11
+T	same: 567 8.28	opposite: 561 8.21	sum: 1128 8.25
+
+### Clusters with 4 or more coverage ###
+All:	16405 (0.64)	same 8966 (0.55)	opposite 7439 (0.45)
+With PAS:	8838 (0.54)	same 4751 (0.54)	opposite 4087 (0.46)
+AATAAA or ATTAAA:	6198 (0.38)	same 3283 (0.53)	opposite 2915 (0.47)
+Annotated:	6365 (0.39)	same 3328 (0.52)	opposite 3037 (0.48)
+Annotated with PAS:	5927 (0.36)	same 3086 (0.52)	opposite 2841 (0.48)
+With PET:	8593 (0.52)	same 4592 (0.53)	opposite 4001 (0.47)
+With PAS and PET:	6849 (0.42)	same 3618 (0.53)	opposite 3231 (0.47)
+With Cufflinks:	1155 (0.07)	same 586 (0.51)	opposite 569 (0.49)
+With PAS and Cufflinks:	982 (0.06)	same 499 (0.51)	opposite 483 (0.49)
+All
+A	same: 1726 7.41	opposite: 1677 7.67	sum: 3403 7.54
+T	same: 7240 9.00	opposite: 5762 8.62	sum: 13002 8.83
+With PAS
+A	same: 343 6.69	opposite: 327 7.46	sum: 670 7.06
+T	same: 4408 8.41	opposite: 3760 8.23	sum: 8168 8.33
+AATAAA or ATTAAA
+A	same: 72 7.27	opposite: 62 6.99	sum: 134 7.14
+T	same: 3211 8.06	opposite: 2853 8.04	sum: 6064 8.05
+Annotated
+A	same: 25 8.12	opposite: 33 7.94	sum: 58 8.02
+T	same: 3303 8.18	opposite: 3004 8.11	sum: 6307 8.15
+Annotated with PAS
+A	same: 12 8.94	opposite: 14 7.45	sum: 26 8.14
+T	same: 3074 8.07	opposite: 2827 8.06	sum: 5901 8.06
+With PET
+A	same: 336 8.85	opposite: 314 8.79	sum: 650 8.82
+T	same: 4256 8.53	opposite: 3687 8.36	sum: 7943 8.45
+With PAS and PET
+A	same: 69 7.74	opposite: 73 9.24	sum: 142 8.52
+T	same: 3549 8.18	opposite: 3158 8.09	sum: 6707 8.14
+With Cufflinks
+A	same: 42 12.95	opposite: 41 16.15	sum: 83 14.53
+T	same: 544 8.34	opposite: 528 8.34	sum: 1072 8.34
+With PAS and Cufflinks
+A	same: 12 10.39	opposite: 3 26.34	sum: 15 13.58
+T	same: 487 8.23	opposite: 480 8.13	sum: 967 8.18
+
+### Clusters with 5 or more coverage ###
+All:	11810 (0.72)	same 6454 (0.55)	opposite 5356 (0.45)
+With PAS:	6946 (0.59)	same 3736 (0.54)	opposite 3210 (0.46)
+AATAAA or ATTAAA:	5137 (0.43)	same 2744 (0.53)	opposite 2393 (0.47)
+Annotated:	5350 (0.45)	same 2796 (0.52)	opposite 2554 (0.48)
+Annotated with PAS:	5030 (0.43)	same 2622 (0.52)	opposite 2408 (0.48)
+With PET:	6909 (0.59)	same 3709 (0.54)	opposite 3200 (0.46)
+With PAS and PET:	5715 (0.48)	same 3031 (0.53)	opposite 2684 (0.47)
+With Cufflinks:	966 (0.08)	same 494 (0.51)	opposite 472 (0.49)
+With PAS and Cufflinks:	839 (0.07)	same 428 (0.51)	opposite 411 (0.49)
+All
+A	same: 1177 7.35	opposite: 1120 7.96	sum: 2297 7.65
+T	same: 5277 8.72	opposite: 4236 8.40	sum: 9513 8.58
+With PAS
+A	same: 238 6.40	opposite: 222 7.63	sum: 460 6.99
+T	same: 3498 8.28	opposite: 2988 8.13	sum: 6486 8.21
+AATAAA or ATTAAA
+A	same: 50 6.54	opposite: 37 7.13	sum: 87 6.79
+T	same: 2694 8.03	opposite: 2356 8.02	sum: 5050 8.03
+Annotated
+A	same: 13 6.28	opposite: 21 8.10	sum: 34 7.40
+T	same: 2783 8.13	opposite: 2533 8.10	sum: 5316 8.12
+Annotated with PAS
+A	same: 6 6.19	opposite: 9 7.45	sum: 15 6.94
+T	same: 2616 8.06	opposite: 2399 8.06	sum: 5015 8.06
+With PET
+A	same: 233 8.69	opposite: 197 9.06	sum: 430 8.86
+T	same: 3476 8.44	opposite: 3003 8.30	sum: 6479 8.37
+With PAS and PET
+A	same: 46 6.93	opposite: 47 10.25	sum: 93 8.61
+T	same: 2985 8.15	opposite: 2637 8.08	sum: 5622 8.12
+With Cufflinks
+A	same: 31 14.36	opposite: 33 18.39	sum: 64 16.44
+T	same: 463 8.11	opposite: 439 8.29	sum: 902 8.20
+With PAS and Cufflinks
+A	same: 5 9.76	opposite: 2 36.85	sum: 7 17.50
+T	same: 423 8.10	opposite: 409 8.14	sum: 832 8.12
+
+### Clusters with 10 or more coverage ###
+All:	4652 (0.39)	same 2496 (0.54)	opposite 2156 (0.46)
+With PAS:	3405 (0.73)	same 1806 (0.53)	opposite 1599 (0.47)
+AATAAA or ATTAAA:	2779 (0.60)	same 1478 (0.53)	opposite 1301 (0.47)
+Annotated:	2960 (0.64)	same 1549 (0.52)	opposite 1411 (0.48)
+Annotated with PAS:	2813 (0.60)	same 1468 (0.52)	opposite 1345 (0.48)
+With PET:	3500 (0.75)	same 1873 (0.54)	opposite 1627 (0.46)
+With PAS and PET:	3109 (0.67)	same 1651 (0.53)	opposite 1458 (0.47)
+With Cufflinks:	552 (0.12)	same 300 (0.54)	opposite 252 (0.46)
+With PAS and Cufflinks:	496 (0.11)	same 268 (0.54)	opposite 228 (0.46)
+All
+A	same: 330 7.68	opposite: 345 8.50	sum: 675 8.10
+T	same: 2166 8.16	opposite: 1811 8.03	sum: 3977 8.11
+With PAS
+A	same: 70 6.45	opposite: 80 7.66	sum: 150 7.09
+T	same: 1736 8.11	opposite: 1519 8.00	sum: 3255 8.06
+AATAAA or ATTAAA
+A	same: 15 5.99	opposite: 14 8.04	sum: 29 6.98
+T	same: 1463 8.03	opposite: 1287 7.98	sum: 2750 8.01
+Annotated
+A	same: 3 6.06	opposite: 6 10.66	sum: 9 9.13
+T	same: 1546 8.09	opposite: 1405 8.05	sum: 2951 8.07
+Annotated with PAS
+A	same: 1 6.92	opposite: 3 8.41	sum: 4 8.04
+T	same: 1467 8.06	opposite: 1342 8.02	sum: 2809 8.04
+With PET
+A	same: 73 8.88	opposite: 62 9.32	sum: 135 9.08
+T	same: 1800 8.24	opposite: 1565 8.10	sum: 3365 8.18
+With PAS and PET
+A	same: 19 7.41	opposite: 18 8.04	sum: 37 7.72
+T	same: 1632 8.14	opposite: 1440 8.03	sum: 3072 8.09
+With Cufflinks
+A	same: 14 17.45	opposite: 14 14.21	sum: 28 15.83
+T	same: 286 7.98	opposite: 238 8.20	sum: 524 8.08
+With PAS and Cufflinks
+A	same: 2 15.87	opposite: 1 45.03	sum: 3 25.59
+T	same: 266 8.11	opposite: 227 8.25	sum: 493 8.17
+
+### Clusters with 30 or more coverage ###
+All:	1476 (0.32)	same 805 (0.55)	opposite 671 (0.45)
+With PAS:	1237 (0.84)	same 662 (0.54)	opposite 575 (0.46)
+AATAAA or ATTAAA:	1046 (0.71)	same 558 (0.53)	opposite 488 (0.47)
+Annotated:	1117 (0.76)	same 584 (0.52)	opposite 533 (0.48)
+Annotated with PAS:	1078 (0.73)	same 564 (0.52)	opposite 514 (0.48)
+With PET:	1277 (0.87)	same 689 (0.54)	opposite 588 (0.46)
+With PAS and PET:	1184 (0.80)	same 634 (0.54)	opposite 550 (0.46)
+With Cufflinks:	246 (0.17)	same 130 (0.53)	opposite 116 (0.47)
+With PAS and Cufflinks:	225 (0.15)	same 118 (0.52)	opposite 107 (0.48)
+All
+A	same: 89 7.98	opposite: 73 8.54	sum: 162 8.23
+T	same: 716 8.05	opposite: 598 7.94	sum: 1314 8.00
+With PAS
+A	same: 19 5.76	opposite: 23 7.19	sum: 42 6.54
+T	same: 643 8.09	opposite: 552 7.92	sum: 1195 8.01
+AATAAA or ATTAAA
+A	same: 6 6.12	opposite: 1 6.48	sum: 7 6.17
+T	same: 552 7.99	opposite: 487 7.98	sum: 1039 7.99
+Annotated
+A	same: 1 5.20	opposite: 1 5.18	sum: 2 5.19
+T	same: 583 8.08	opposite: 532 7.94	sum: 1115 8.02
+Annotated with PAS
+A	same: 0 0	opposite: 1 5.18	sum: 1 5.18
+T	same: 564 8.04	opposite: 513 7.94	sum: 1077 7.99
+With PET
+A	same: 26 9.01	opposite: 13 11.99	sum: 39 10.01
+T	same: 663 8.18	opposite: 575 7.95	sum: 1238 8.07
+With PAS and PET
+A	same: 7 6.12	opposite: 7 6.09	sum: 14 6.11
+T	same: 627 8.13	opposite: 543 7.94	sum: 1170 8.04
+With Cufflinks
+A	same: 6 15.69	opposite: 4 21.44	sum: 10 17.99
+T	same: 124 7.94	opposite: 112 8.03	sum: 236 7.98
+With PAS and Cufflinks
+A	same: 1 10.13	opposite: 0 0	sum: 1 10.13
+T	same: 117 8.04	opposite: 107 8.10	sum: 224 8.07
+########################################################

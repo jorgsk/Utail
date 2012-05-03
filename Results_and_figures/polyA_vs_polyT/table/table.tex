@@ -1,0 +1,70 @@
+\documentclass[a4paper]{article}
+
+% Support for Norwegian letters
+\usepackage[latin1]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath,amsfonts,amssymb,amsthm,booktabs,array,mathtools}
+% consider package mhchem for typesetting chemical formulas
+
+% Proper space and font for integral differential term
+\newcommand{\dd}{\; \mathrm{d}} 
+% Shorcut for ODEs with proper font
+\newcommand{\diff}[2]{\frac{\mathrm{d} #1}{\mathrm{d} #2}}
+% Shortcut for PDEs with proper font (shortcut: PDB)
+\newcommand{\pdiff}[2]{\frac{\partial #1}{\partial #2}}
+\newcommand{\pdiffn}[3]{\frac{\partial^{#3} #1}{\partial #2^{#3}}}
+
+% Absolute value and norm commands.
+% Read the mathtools.pdf to fix these!
+\providecommand{\abs}[1]{\lvert#1\rvert} 
+\providecommand{\norm}[1]{\lVert#1\rVert}
+
+% Set the depth of section numbering
+\setcounter{secnumdepth}{0}
+
+\begin{document}
+
+A poly(A) tail from an mRNA will be represented by so called polyA reads in
+the output of an RNA-seq experiment. These polyA reads will primarily be on
+the form $TTTTTT\ldots$, and they will map to the opposite strand of the
+transcript from which it originated. The reason for this is that the original
+mRNA has been turned into cDNA, and that sequencing happens from the 5' ends
+of the ensuing cDNA pair. When the original mRNA is reverse-transcribed, the
+poly(T) end is now 5' and is where sequencing begins from. Depending on the
+read length and insert size of the experiment, there is also a probability of
+obtaining polyA reads from the non-reversed fragment. For example, if the
+insert size is 200 bt, and the poly(A) tail is 150 nt, then, with a read-length
+of 75, the first 50 bases will map to the genome while the last 25 will be As.
+
+In this example the poly(A) tail was 150 nt, while the full poly(A) tail is 250
+nt. However, in the cDNA step, a dT primer is used, which binds at random in
+the poly(A) tail. Thus the cDNA poly(A) tail will range in size from the dT
+primer size (20) to the full length of 250.
+
+All in all, whether we have polyA reads or polyT reads depends on 4 factors:
+the dT cDNA step (distribution of poly(A) lengths), the insert size resulting
+from the fragmentation, and the read length (# of sequenced nucleotides) from
+both sides of the insert fragment.
+
+A table showing the relationship between poly(A) and poly(T) reads.
+
+\begin{tabular}{llr}
+\toprule
+\multicolumn{2}{c}{Item} \\
+\cmidrule(r){1-2}
+Animal & Description & Price (\$) \\
+\midrule
+Gnat  & per gram & 13.65 \\
+      & each     &  0.01 \\
+Gnu   & stuffed  & 92.50 \\
+Emu   & stuffed  & 33.33 \\
+Armadillo & frozen & 8.99 \\
+\bottomrule
+\end{tabular}
+
+\bibliographystyle{plain}
+\bibliography{/home/jorgsk/phdproject/bibtex/jorgsk}
+
+\end{document}
+
+

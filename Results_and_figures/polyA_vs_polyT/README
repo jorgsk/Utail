@@ -1,0 +1,347 @@
+COMMON TO ALL:
+
+Running all reads, K562 cytoplasm and nucleus, both poly(A)+ and poly(A)-.
+
+K562_Cytoplasm_3UTR: Nr. of total reads: 249652136
+K562_Cytoplasm_3UTR: Nr. of readsReads with poly(A)-tail: 573895
+K562_Cytoplasm_3UTR: Nr. of readsReads with poly(T)-tail: 0
+
+K562_Nucleus_3UTR: Nr. of total reads: 234227244
+K562_Nucleus_3UTR: Nr. of readsReads with poly(A)-tail: 276180
+K562_Nucleus_3UTR: Nr. of readsReads with poly(T)-tail: 0
+
+K562_NucleusMinus_3UTR: Nr. of total reads: 228514042
+K562_NucleusMinus_3UTR: Nr. of readsReads with poly(A)-tail: 166190
+K562_NucleusMinus_3UTR: Nr. of readsReads with poly(T)-tail: 0
+
+K562_CytoplasmMinus_3UTR: Nr. of total reads: 164127562
+K562_CytoplasmMinus_3UTR: Nr. of readsReads with poly(A)-tail: 453266
+K562_CytoplasmMinus_3UTR: Nr. of readsReads with poly(T)-tail: 0
+
+
+===================================================================================
+Mapping to the genome from "THIS STRAND"
+===================================================================================
+
+FOR TTTTTTTT.... (for how many in which strand, se 'OTHER STRAND')
+----------------------------------------------------------------
+
+K562
+Cytoplasm
+Total poly(A) sites: 786
+Total poly(A) sites with 2+ reads or annotated: 317
+Total poly(A) reads (per site): 1842 (2.34)
+Annotated poly(A) sites: 36 (0.05)
+poly(A) sites with PAS: 154 (0.20)
+Annotated poly(A) sites with PAS: 11 (0.31)
+
+K562
+Nucleus
+Total poly(A) sites: 444
+Total poly(A) sites with 2+ reads or annotated: 101
+Total poly(A) reads (per site): 617 (1.39)
+Annotated poly(A) sites: 23 (0.05)
+poly(A) sites with PAS: 86 (0.19)
+Annotated poly(A) sites with PAS: 10 (0.43)
+
+K562
+NucleusMinus
+Total poly(A) sites: 229
+Total poly(A) sites with 2+ reads or annotated: 25
+Total poly(A) reads (per site): 247 (1.08)
+Annotated poly(A) sites: 12 (0.05)
+poly(A) sites with PAS: 55 (0.24)
+Annotated poly(A) sites with PAS: 5 (0.42)
+
+K562
+CytoplasmMinus
+Total poly(A) sites: 8
+Total poly(A) sites with 2+ reads or annotated: 1
+Total poly(A) reads (per site): 8 (1.00)
+Annotated poly(A) sites: 1 (0.12)
+poly(A) sites with PAS: 0 (0.00)
+Annotated poly(A) sites with PAS: 0 (0.00)
+
+FOR AAAAAAA.... (for how many in which strand, se 'OTHER STRAND')
+----------------------------------------------------------------
+
+K562
+Cytoplasm
+Total poly(A) sites: 686
+Total poly(A) sites with 2+ reads or annotated: 122
+Total poly(A) reads (per site): 980 (1.43)
+Annotated poly(A) sites: 26 (0.04)
+poly(A) sites with PAS: 162 (0.24)
+Annotated poly(A) sites with PAS: 5 (0.19)
+
+K562
+Nucleus
+Total poly(A) sites: 509
+Total poly(A) sites with 2+ reads or annotated: 66
+Total poly(A) reads (per site): 595 (1.17)
+Annotated poly(A) sites: 21 (0.04)
+poly(A) sites with PAS: 118 (0.23)
+Annotated poly(A) sites with PAS: 9 (0.43)
+
+K562
+NucleusMinus
+Total poly(A) sites: 104
+Total poly(A) sites with 2+ reads or annotated: 10
+Total poly(A) reads (per site): 113 (1.09)
+Annotated poly(A) sites: 3 (0.03)
+poly(A) sites with PAS: 28 (0.27)
+Annotated poly(A) sites with PAS: 1 (0.33)
+
+K562
+CytoplasmMinus
+Total poly(A) sites: 30
+Total poly(A) sites with 2+ reads or annotated: 3
+Total poly(A) reads (per site): 30 (1.00)
+Annotated poly(A) sites: 3 (0.10)
+poly(A) sites with PAS: 8 (0.27)
+Annotated poly(A) sites with PAS: 0 (0.00)
+
+
+===================================================================================
+Mapping to the genome from "OTHER STRAND"
+===================================================================================
+
+---------------------------------------------------------------------------
+First I run for getting ..AAAAA ends (5 or more).
+
+Cytoplasm
+This_strand_count	980
+Other_strand_count	2001 (RED: compare these to this_strand for ...TTT! I think they could be the true false-positives. There is no reason for these reads to appear.)
+Both_strands_count	4
+Both strands by chance	0.455064560961
+"False positive"-rate	0.489755122439
+"False negative"-rate	0.00199900049975
+other_strand Average total reads in clusters	2.10853530032
+other_strand Std total reads in clusters	3.85044724785
+other_strand Sum unique reads	1295
+other_strand Average unique reads in clusters	1.3645943098
+other_strand Std uniuqe reads in clusters	1.0366570903
+this_strand Average total reads in clusters	1.42857142857
+this_strand Std total reads in clusters	2.9648081664
+this_strand Sum unique reads	767
+this_strand Average unique reads in clusters	1.11807580175
+this_strand Std uniuqe reads in clusters	0.629030282494
+
+CytoplasmMinus
+This_strand_count	30
+Other_strand_count	26
+Both_strands_count	0
+Both strands by chance	0
+"False positive"-rate	1.15384615385
+"False negative"-rate	0.0
+other_strand Average total reads in clusters	1.0
+other_strand Std total reads in clusters	0.0
+other_strand Sum unique reads	26
+other_strand Average unique reads in clusters	1.0
+other_strand Std uniuqe reads in clusters	0.0
+this_strand Average total reads in clusters	1.0
+this_strand Std total reads in clusters	0.0
+this_strand Sum unique reads	30
+this_strand Average unique reads in clusters	1.0
+this_strand Std uniuqe reads in clusters	0.0
+
+Nucleus
+This_strand_count	595
+Other_strand_count	1038
+Both_strands_count	5
+Both strands by chance	0.396022189917
+"False positive"-rate	0.573217726397
+"False negative"-rate	0.00481695568401
+other_strand Average total reads in clusters	1.42778541953
+other_strand Std total reads in clusters	1.50192848728
+other_strand Sum unique reads	893
+other_strand Average unique reads in clusters	1.22833562586
+other_strand Std uniuqe reads in clusters	0.747390035622
+this_strand Average total reads in clusters	1.16895874263
+this_strand Std total reads in clusters	0.842707709215
+this_strand Sum unique reads	553
+this_strand Average unique reads in clusters	1.08644400786
+this_strand Std uniuqe reads in clusters	0.448083593744
+
+NucleusMinus
+This_strand_count	113
+Other_strand_count	215
+Both_strands_count	0
+Both strands by chance	0.0
+"False positive"-rate	0.525581395349
+"False negative"-rate	0.0
+other_strand Average total reads in clusters	1.20111731844
+other_strand Std total reads in clusters	0.679959646093
+other_strand Sum unique reads	203
+other_strand Average unique reads in clusters	1.13407821229
+other_strand Std uniuqe reads in clusters	0.522040061954
+this_strand Average total reads in clusters	1.08653846154
+this_strand Std total reads in clusters	0.342798912884
+this_strand Sum unique reads	106
+this_strand Average unique reads in clusters	1.01923076923
+this_strand Std uniuqe reads in clusters	0.137335162087
+
+
+Data from summary of if they have annotatd sites and such:
+
+NOTE!! THIS CANNOT BE TRUSTED FOR AAAA, BECAUSE FOR THESE RUNS YOU SHOULD MAP FROM "THIS STRAND" not from "OTHER STRAND" :)
+IF YOU RUN THIS AGAIN, TRYIGN TO MAP ONLY THOSE THAT MAP TO THE OTHER STRAND (4 runs -- 2 more) YOU HAVE A BETTER OVERVIEW.
+
+AND FURTHER NOTE THAT THERE WILL BE SOME UNDISCOVERED POLYAS OVERLAPPING THOSE YOU ALREADY HAVE :)
+
+NOTE: THE PROGRAM MUST BE ABLE TO KNOW IF A READ IS POLYA OR POLYT AND MUST BE ABLE TO SEE WHICH STRAND IT BELONGS TO
+POLY(A) READS MAP TO THE SAME STRAND AS THE TRANSCRIPT. POLY(T) READS MAP TO THE OPPOSITE STRAND. ALSO
+
+K562
+Cytoplasm
+Total poly(A) sites: 949
+Total poly(A) sites with 2+ reads or annotated: 328
+Total poly(A) reads (per site): 2001 (2.11)
+Annotated poly(A) sites: 67 (0.07)
+poly(A) sites with PAS: 190 (0.20)
+Annotated poly(A) sites with PAS: 22 (0.33)
+
+K562
+Nucleus
+Total poly(A) sites: 727
+Total poly(A) sites with 2+ reads or annotated: 164
+Total poly(A) reads (per site): 1038 (1.43)
+Annotated poly(A) sites: 44 (0.06)
+poly(A) sites with PAS: 122 (0.17)
+Annotated poly(A) sites with PAS: 10 (0.23)
+
+K562
+NucleusMinus
+Total poly(A) sites: 179
+Total poly(A) sites with 2+ reads or annotated: 33
+Total poly(A) reads (per site): 215 (1.20)
+Annotated poly(A) sites: 11 (0.06)
+poly(A) sites with PAS: 34 (0.19)
+Annotated poly(A) sites with PAS: 2 (0.18)
+
+K562
+CytoplasmMinus
+Total poly(A) sites: 26
+Total poly(A) sites with 2+ reads or annotated: 2
+Total poly(A) reads (per site): 26 (1.00)
+Annotated poly(A) sites: 2 (0.08)
+poly(A) sites with PAS: 4 (0.15)
+Annotated poly(A) sites with PAS: 0 (0.00)
+
+
+===================================================================================
+
+Second run : only TTTT... ends
+
+
+Cytoplasm
+This_strand_count	1842
+Other_strand_count	77072
+Both_strands_count	43
+Both strands by chance	2.82078356626
+"False positive"-rate	0.0238997301225
+"False negative"-rate	0.000557919867137
+other_strand Average total reads in clusters	10.6836706404
+other_strand Std total reads in clusters	50.1412533947
+other_strand Sum unique reads	12605
+other_strand Average unique reads in clusters	1.74729692265
+other_strand Std uniuqe reads in clusters	1.32003406054
+this_strand Average total reads in clusters	2.34351145038
+this_strand Std total reads in clusters	4.60407661882
+this_strand Sum unique reads	903
+this_strand Average unique reads in clusters	1.14885496183
+this_strand Std uniuqe reads in clusters	0.485913490695
+
+CytoplasmMinus
+This_strand_count	8
+Other_strand_count	384
+Both_strands_count	0
+Both strands by chance	0.0
+"False positive"-rate	0.0208333333333
+"False negative"-rate	0.0
+other_strand Average total reads in clusters	1.26315789474
+other_strand Std total reads in clusters	0.867822760413
+other_strand Sum unique reads	335
+other_strand Average unique reads in clusters	1.10197368421
+other_strand Std uniuqe reads in clusters	0.323624700349
+this_strand Average total reads in clusters	1.0
+this_strand Std total reads in clusters	0.0
+this_strand Sum unique reads	8
+this_strand Average unique reads in clusters	1.0
+this_strand Std uniuqe reads in clusters	0.0
+
+Nucleus
+This_strand_count	617
+Other_strand_count	7327
+Both_strands_count	4
+Both strands by chance	0.354304234831
+"False positive"-rate	0.0842090896683
+"False negative"-rate	0.000545926027023
+other_strand Average total reads in clusters	3.62363996044
+other_strand Std total reads in clusters	12.7061164662
+other_strand Sum unique reads	2819
+other_strand Average unique reads in clusters	1.39416419387
+other_strand Std uniuqe reads in clusters	0.841214308075
+this_strand Average total reads in clusters	1.38963963964
+this_strand Std total reads in clusters	1.188905491
+this_strand Sum unique reads	479
+this_strand Average unique reads in clusters	1.07882882883
+this_strand Std uniuqe reads in clusters	0.322717176651
+
+NucleusMinus
+This_strand_count	247
+Other_strand_count	1517
+Both_strands_count	0
+Both strands by chance	0.0
+"False positive"-rate	0.162821357943
+"False negative"-rate	0.0
+other_strand Average total reads in clusters	1.42709313264
+other_strand Std total reads in clusters	2.18867772334
+other_strand Sum unique reads	1163
+other_strand Average unique reads in clusters	1.09407337723
+other_strand Std uniuqe reads in clusters	0.342357306318
+this_strand Average total reads in clusters	1.07860262009
+this_strand Std total reads in clusters	0.410480349345
+this_strand Sum unique reads	235
+this_strand Average unique reads in clusters	1.02620087336
+this_strand Std uniuqe reads in clusters	0.159732237189
+
+K562
+Cytoplasm
+Total poly(A) sites: 7214
+Total poly(A) sites with 2+ reads or annotated: 5665
+Total poly(A) reads (per site): 77072 (10.68)
+Annotated poly(A) sites: 3610 (0.50)
+poly(A) sites with PAS: 3509 (0.49)
+Annotated poly(A) sites with PAS: 1796 (0.50)
+
+K562
+Nucleus
+Total poly(A) sites: 2022
+Total poly(A) sites with 2+ reads or annotated: 1551
+Total poly(A) reads (per site): 7327 (3.62)
+Annotated poly(A) sites: 1310 (0.65)
+poly(A) sites with PAS: 1008 (0.50)
+Annotated poly(A) sites with PAS: 654 (0.50)
+
+K562
+NucleusMinus
+Total poly(A) sites: 1063
+Total poly(A) sites with 2+ reads or annotated: 599
+Total poly(A) reads (per site): 1517 (1.43)
+Annotated poly(A) sites: 502 (0.47)
+poly(A) sites with PAS: 462 (0.43)
+Annotated poly(A) sites with PAS: 245 (0.49)
+
+K562
+CytoplasmMinus
+Total poly(A) sites: 304
+Total poly(A) sites with 2+ reads or annotated: 213
+Total poly(A) reads (per site): 384 (1.26)
+Annotated poly(A) sites: 192 (0.63)
+poly(A) sites with PAS: 124 (0.41)
+Annotated poly(A) sites with PAS: 77 (0.40)
+
+
+
+
