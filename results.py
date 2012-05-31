@@ -704,8 +704,9 @@ class Plotter(object):
             if colnr == 3:
                 fig.set_size_inches(18,19)
 
-            output_dir = os.path.join(here, 'Results_and_figures',
-                                      'GENCODE_report', 'Figures')
+            #output_dir = os.path.join(here, 'Results_and_figures',
+                                      #'GENCODE_report', 'Figures')
+            output_dir = os.path.join(here, 'thesis_figures')
 
             fname = filename+'_{0}'.format(thr)
             filepath = os.path.join(output_dir, fname+'.pdf')
@@ -737,8 +738,10 @@ class Plotter(object):
 
             for dsets, countdict in sorted(dictsum.items(), key=sorthelp):
                 countdict = countdict[yek]
-                # the the sum of rpeads from these datasets
-                x = [get_dsetreads(settings, '3UTR-exonic')[ds]
+                # the the sum of reads from these datasets
+                #x = [get_dsetreads(settings, '3UTR-exonic')[ds]
+                     #for ds in dsets.split(':')]
+                x = [get_dsetreads(settings, 'whole')[ds]
                      for ds in dsets.split(':')]
                 read_counts.append(sum(x))
 
@@ -748,32 +751,46 @@ class Plotter(object):
                 PETcluster_counts.append(countdict['PET'])
 
             ax.plot(read_counts, cluster_counts, color=cols[title],
-                          linewidth=4, label='All sites')
+                          linewidth=3, label='All sites')
             ax.plot(read_counts, PAScluster_counts, ls='--', color=cols[title],
-                          linewidth=4, label='Sites with PAS')
+                          linewidth=3, label='Sites with PAS')
             ax.plot(read_counts, PETcluster_counts, ls=':', color=cols[title],
-                          linewidth=4, label='Sites with PET')
+                          linewidth=3, label='Sites with PET')
 
-            ax.set_xlabel('Billons of reads', size=24)
-            ax.set_ylabel('Polyadenylation sites', size=24)
+            ax.set_xlabel('Billions of reads', size=22)
+            ax.set_ylabel('Polyadenylation sites', size=22)
             #ax.set_title('Polyadenylation site discovery saturates fast', size=22)
-            ax.set_title(title, size=28)
+            ax.set_title(title, size=24)
 
             # Sort the legends to your preference
             from matplotlib.font_manager import FontProperties
-            ax.legend(loc=0, prop=FontProperties(size=18))
+            ax.legend(loc=0, prop=FontProperties(size=15))
 
             # Set a grid on the y-axis
             ax.yaxis.grid(True)
             ax.xaxis.grid(True)
 
+            xmin, xmax = ax.get_xlim()
+            ymin, ymay = ax.get_ylim()
+
             # change the size of the ticks
             for label in ax.get_xticklabels() + ax.get_yticklabels():
-                label.set_fontsize(16)
+                label.set_fontsize(15)
 
-        output_dir = os.path.join(settings.here, 'thesis_figues')
+            if plot_nr == 0:
+                label ='A'
+            else:
+                label = 'B'
 
-        fig.set_size_inches(26,12)
+            # put A and B letters
+            # transform=ax.transAxes means use the axes frame (0,0) to (1,1)
+            ax.text(-0.15, 1.05, label, transform=ax.transAxes, fontsize=20,
+                    fontweight='bold', va='top')
+
+        output_dir = os.path.join(settings.here, 'thesis_figures')
+
+        plt.tight_layout()
+        fig.set_size_inches(16,8)
         filename = 'Saturation_plot_{0}'.format(yek)
         filepath = os.path.join(output_dir, filename+'.pdf')
         fig.savefig(filepath, format='pdf')
@@ -974,11 +991,13 @@ def get_super_regions(dsets, settings, batch_key):
     junctions = os.path.join(settings.here, 'junctions',
                              'splice_junctions_merged.bed')
 
-    mySubBed = '/users/rg/jskancke/programs/other/bedtools/bin/subtractBed'
+    # This is for CRG only... sigh.
+    #mySubBed = '/users/rg/jskancke/programs/other/bedtools/bin/subtractBed'
+    mySubBed = '/usr/local/bin/subtractBed'
     bedDir, subtrFile = os.path.split(mySubBed)
     # You need to change directory to other bedtools bin, otherwise subtract bed
     # doesnt find the bedtools main file it seems to be using
-    os.chdir(bedDir)
+    #os.chdir(bedDir) CRG
 
     # i.5) cut away the exon-exon noise
     cmd = [mySubBed, '-a', cluster_file, '-b', junctions]
@@ -986,21 +1005,23 @@ def get_super_regions(dsets, settings, batch_key):
     p1 = Popen(cmd, stdout=open(temp_cluster_file, 'wb'))
     p1.wait()
 
-    mySlopBed = '/users/rg/jskancke/programs/other/bedtools/bin/slopBed'
+    #mySlopBed = '/users/rg/jskancke/programs/other/bedtools/bin/slopBed' CRG
+    mySlopBed = 'slopBed'
     # ii) expand the entries
     expanded = temp_cluster_file + '_expanded'
     cmd = [mySlopBed, '-i', temp_cluster_file, '-g', settings.hg19_path, '-b', '15']
     p2 = Popen(cmd, stdout=open(expanded, 'wb'))
     p2.wait()
 
-    myMergeBed = '/users/rg/jskancke/programs/other/bedtools/bin/mergeBed'
+    #myMergeBed = '/users/rg/jskancke/programs/other/bedtools/bin/mergeBed' CRG
+    myMergeBed = 'mergeBed'
     # iii) merge and max scores
     cmd = [myMergeBed, '-nms', '-s', '-scores', 'sum', '-i', expanded]
     #p3 = Popen(cmd, stdout=PIPE, stderr=PIPE)
     p3 = Popen(cmd, stdout=PIPE)
 
-    # go back to here
-    os.chdir(settings.here)
+    # go back to here CRG
+    #os.chdir(settings.here)
 
     # iv) read therough the centered output and update the super_cluster
     for line in p3.stdout:
@@ -1577,13 +1598,17 @@ def super_cluster_statprinter(dsetclusters, region, thiskey, settings, filename)
     handle.write('########################################################\n')
     handle.close()
 
-def clusterladder(settings, speedrun):
+def clusterladder(settings, speedrun, reuse_data):
     """
     The more reads, the more polyAs, up to a point.
     """
 
-    #region = 'whole'
-    region = '3UTR-exonic'
+    # where you save your reused data
+    plot_save_file = os.path.join(settings.here, 'thesis_figures','save_data',
+                                  'clusterladder')
+
+    region = 'whole'
+    #region = '3UTR-exonic'
 
     #1) Make a dictionary: dataset-> nr of total reads and dataset -> nr of
     #clusters
@@ -1613,35 +1638,60 @@ def clusterladder(settings, speedrun):
         data_grouping['Poly(A) plus'] = data_grouping['Poly(A) plus'][:3]
         data_grouping['Poly(A) minus'] = data_grouping['Poly(A) minus'][:3]
 
-    for title, dsets in data_grouping.items():
+    # only calculate again if not reusing data
+    if not reuse_data:
+        for title, dsets in data_grouping.items():
 
-        # sort the dsets in cell_lines by # of reads
-        def mysorter(dset):
-            return clustercount[dset]
-        all_dsets = sorted(dsets, key=mysorter, reverse=True)
+            # sort the dsets in cell_lines by # of reads
+            def mysorter(dset):
+                return clustercount[dset]
+            all_dsets = sorted(dsets, key=mysorter, reverse=True)
 
-        # add more and more datasets
-        subsets = [all_dsets[:end] for end in range(1, len(all_dsets)+1, 2)]
-        #subsets = [all_dsets[:end] for end in range(1, len(all_dsets)+1)]
+            # add more and more datasets
+            subsets = [all_dsets[:end] for end in range(1, len(all_dsets)+1, 2)]
+            #subsets = [all_dsets[:end] for end in range(1, len(all_dsets)+1)]
 
-        subsetcounts = {}
+            subsetcounts = {}
 
-        for subset in subsets:
+            for subset in subsets:
 
-            # Get the number of 'good' and 'all' clusters
-            key = ':'.join(subset)
-            batch_key = 'first_ladder'
-            dsetclusters = get_dsetclusters(subset, region, settings,
-                                            speedrun, batch_key)
+                # Get the number of 'good' and 'all' clusters
+                key = ':'.join(subset)
+                batch_key = 'first_ladder'
+                dsetclusters = get_dsetclusters(subset, region, settings,
+                                                speedrun, batch_key)
 
-            subsetcounts[key] = count_clusters(dsetclusters, dsetreads)
+                subsetcounts[key] = count_clusters(dsetclusters, dsetreads)
+            plotdict[title] = subsetcounts
 
-        plotdict[title] = subsetcounts
+        # save plot data
+        pickle_wrap(storage_file=plot_save_file, action='save', data=plotdict)
+
+    else:
+        plotdict = pickle_wrap(storage_file=plot_save_file, action='load')
 
     p = Plotter()
     for yek in ['2+', '3+']:
 
         p.AllLadderPlot(plotdict, settings, data_grouping, yek)
+
+
+def pickle_wrap(storage_file, action, data=0):
+    """
+    Either save data to plot_save_file or load data from plot_save file and
+    return it.
+    """
+
+    if action == 'save' and data != 0:
+        pickle.dump(data, open(storage_file, 'wb'))
+
+    if action == 'save' and data == 0:
+        print('Watcha savin bro?')
+
+    if action == 'load' and data == 0:
+        output = pickle.load(open(storage_file, 'rb'))
+
+        return output
 
 def count_clusters(dsetclusters, dsetreads):
     """
@@ -3941,6 +3991,12 @@ def gencode_report(settings, speedrun):
     speedrun = True
     #speedrun = False
 
+    # reuse plot_data from previous simulation
+    # this saves precious time if you just want to change some detail in a plot
+
+    reuse_data = True
+    #reuse_data = False
+
     # TODO interesting for 3'utrs. Before, how long were they on average -- how
     # much were they extended by?
     # How many poly(A) sites without PAS also have PET?
@@ -3951,7 +4007,8 @@ def gencode_report(settings, speedrun):
     #cumul_stats_printer_all(settings, speedrun)
 
     # 1) nr of polyA sites obtained with increasing readnr
-    clusterladder(settings, speedrun)
+    # XXX seems to work. Even put letters there.
+    clusterladder(settings, speedrun, reuse_data)
     #clusterladder_cell_lines(settings)
 
     # 2) venn diagram of all the poly(A) sites from the whole genome for 3UTR and
