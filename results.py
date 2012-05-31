@@ -5487,8 +5487,8 @@ def write_all_polyAs(settings):
     mincovr = 2
     compartments = ['Whole_Cell', 'Cytoplasm', 'Nucleus']
 
-    #speedrun = True
-    speedrun = False
+    speedrun = True
+    #speedrun = False
 
     merge_polyAs(settings, mincovr, minus, compartments,
                                      speedrun, expandby)
