@@ -20,7 +20,7 @@ import matplotlib.pyplot as plt
 #plt.ion() # turn on the interactive mode so you can play with plots
 plt.ioff() # turn off interactive mode for working undisturbed
 
-import csv2latex
+#import csv2latex
 
 from operator import attrgetter
 from operator import itemgetter
@@ -771,8 +771,7 @@ class Plotter(object):
             for label in ax.get_xticklabels() + ax.get_yticklabels():
                 label.set_fontsize(16)
 
-        output_dir = os.path.join(settings.here, 'Results_and_figures',
-                                  'GENCODE_report', 'Figures')
+        output_dir = os.path.join(settings.here, 'thesis_figues')
 
         fig.set_size_inches(26,12)
         filename = 'Saturation_plot_{0}'.format(yek)
@@ -1583,10 +1582,13 @@ def clusterladder(settings, speedrun):
     The more reads, the more polyAs, up to a point.
     """
 
+    #region = 'whole'
+    region = '3UTR-exonic'
+
     #1) Make a dictionary: dataset-> nr of total reads and dataset -> nr of
     #clusters
-    dsetreads = get_dsetreads(settings, region='3UTR-exonic')
-    clustercount = get_clustercount(settings, region='3UTR-exonic')
+    dsetreads = get_dsetreads(settings, region=region)
+    clustercount = get_clustercount(settings, region=region)
 
     #2) Make super-clusters for your datasets of choice
 
@@ -1606,12 +1608,11 @@ def clusterladder(settings, speedrun):
     plotdict = {}
 
     #speedrun = True
-    speedrun = False
+    #speedrun = False
     if speedrun:
         data_grouping['Poly(A) plus'] = data_grouping['Poly(A) plus'][:3]
         data_grouping['Poly(A) minus'] = data_grouping['Poly(A) minus'][:3]
 
-    region = 'whole'
     for title, dsets in data_grouping.items():
 
         # sort the dsets in cell_lines by # of reads
@@ -3937,8 +3938,8 @@ def gencode_report(settings, speedrun):
     """ Make figures for the GENCODE report. The report is an overview of
     evidence for polyadenylation from the Gingeras RNA-seq experiments.
     """
-    #speedrun = True
-    speedrun = False
+    speedrun = True
+    #speedrun = False
 
     # TODO interesting for 3'utrs. Before, how long were they on average -- how
     # much were they extended by?
@@ -3950,7 +3951,7 @@ def gencode_report(settings, speedrun):
     #cumul_stats_printer_all(settings, speedrun)
 
     # 1) nr of polyA sites obtained with increasing readnr
-    #clusterladder(settings, speedrun)
+    clusterladder(settings, speedrun)
     #clusterladder_cell_lines(settings)
 
     # 2) venn diagram of all the poly(A) sites from the whole genome for 3UTR and
@@ -3976,11 +3977,6 @@ def gencode_report(settings, speedrun):
     # transcript 3UTRs and the RPKM of the 3UTRs.
     #rpkm_polyA_correlation(settings, speedrun)
     # still no correlation. (and you should have kept the old code)
-
-    # TODO why is there a difference in the side_sense and intersection plots?
-    # this is a bummer. If you add the intersection-number of +3 to poly(A)+, the
-    # number fits exactly to the +2. So there is a +3 +2 mix. Damn. Go carefully
-    # through every step. OK, you find the +2 to +3. Redraw. Rethink.
 
     # 4) Sidewise bar plots of the number of poly(A) incidents in the different
     # genomic regions, for poly(A)+ and poly(A)-
@@ -4119,15 +4115,17 @@ def join_antiexonic(exonic, anti, genome_dir):
 def merge_polyAs(settings, toosmall, minus, cell_lines, speedrun, expandby):
 
     co = cell_lines
-    # 1) get all polyA + datasets
+    # 1) get all polyA- datasets
     if minus:
         subset = [ds for ds in settings.datasets if ('Minus' in ds) and
                        ((co[0] in ds) or (co[1] in ds) or (co[2] in ds))]
 
+    # 2) or polyA+ datasets
     if not minus:
         subset = [ds for ds in settings.datasets if (not 'Minus' in ds) and
                        ((co[0] in ds) or (co[1] in ds) or (co[2] in ds))]
 
+    # reduce the nr of datasets
     if speedrun:
         subset = subset[:2]
 
@@ -5490,8 +5488,7 @@ def write_all_polyAs(settings):
     #speedrun = True
     speedrun = False
 
-    merge_polyAs(settings, mincovr, minus, compartments,
-                                     speedrun, expandby)
+    merge_polyAs(settings, mincovr, minus, compartments, speedrun, expandby)
 
 def main():
     # The path to the directory the script is located in
@@ -5504,7 +5501,7 @@ def main():
     settings = Settings(os.path.join(here, 'UTR_SETTINGS'), savedir, outputdir,
                         here, chr1=False)
 
-    #gencode_report(settings, speedrun=False)
+    gencode_report(settings, speedrun=False)
 
     # early, medium, late poly(A) in cytoplasm and nucleus
     #EML(settings)
@@ -5518,7 +5515,7 @@ def main():
     # NOTE must fix for individual cell lines
     #gencode_cufflinks_report(settings)
 
-    write_all_polyAs(settings)
+    #write_all_polyAs(settings)
 
     # Hagen's stuff
     #hagen(settings, speedrun=False) # negative results for your pA
