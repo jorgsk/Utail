@@ -778,7 +778,7 @@ class Plotter(object):
                 label.set_fontsize(15)
 
             if plot_nr == 0:
-                label ='A'
+                label = 'A'
             else:
                 label = 'B'
 
@@ -2433,7 +2433,7 @@ def barsense_counter(super_3utr, comp, frac, region, d_keys):
 
     return count_dict
 
-def side_sense_plot(settings, speedrun):
+def side_sense_plot(settings, speedrun, reuse_data):
     """
     Side plot of poly(A) reads in different regions, as well as the
     sense/antisense debacle. You should probably run the region-stuff with
@@ -2446,6 +2446,7 @@ def side_sense_plot(settings, speedrun):
     IDEA: to simplify, should you show just the Exonic areas for 3UTR and 5UTR?
     Maybe show CDS intronic as well.
     """
+
 
     #1 Gather the data in a dictlike this [wc/n/c|/+/-]['region'] = [#cl, #cl w/pas]
 
@@ -2719,18 +2720,22 @@ def merge_paths(settings, paths, temp_dir, key, min_covr, comp, reg):
 
     return finalpath
 
-def all_sideplot(settings):
+def standard_sideplot(settings, speedrun, reuse_data):
     """
     Intersect poly(A)+ and poly(A)- for the all regions in all compartments.
     Finally merge the poly(A) sites for each region and plot them sidebarwise.
     """
+
+    plot_save_file = os.path.join(settings.here, 'thesis_figures','save_data',
+                                  'side_standard')
+
     co = ['Whole_Cell', 'Cytoplasm', 'Nucleus']
     #co = ['Whole_Cell', 'Whole_Cell', 'Whole_Cell']
 
-    regions = ['5UTR-exonic', '5UTR-intronic', '3UTR-exonic', '3UTR-intronic',
-               'CDS-exonic', 'CDS-intronic', 'Nocoding-exonic',
-               'Noncoding-intronic', 'Intergenic']
-    #regions = ['3UTR-exonic', 'CDS-exonic', 'CDS-intronic', 'Intergenic']
+    #regions = ['5UTR-exonic', '5UTR-intronic', '3UTR-exonic', '3UTR-intronic',
+               #'CDS-exonic', 'CDS-intronic', 'Nocoding-exonic',
+               #'Noncoding-intronic', 'Intergenic']
+    regions = ['3UTR-exonic', 'CDS-exonic', 'CDS-intronic', 'Intergenic']
     #regions = ['3UTR-exonic', 'anti-3UTR-exonic']
 
     # Get one dict for the bar plot and one dict for the sense-plot
@@ -2741,40 +2746,41 @@ def all_sideplot(settings):
     temp_dir = os.path.join(settings.here, 'temp_files')
     min_covr = 2
 
-    # Merge the plus and minus subsets for each region
-    reg_dict = {}
-    for reg in regions:
+    if not reuse_data:
+        # Merge the plus and minus subsets for each region
+        reg_dict = {}
+        for reg in regions:
 
-        plus_subset = [path for ds, path in dsetdict[reg].items() if
-                       (not 'Minus' in ds) and ((co[0] in ds) or
-                                                (co[1] in ds) or
-                                                (co[2] in ds))]
+            plus_subset = [path for ds, path in dsetdict[reg].items() if
+                           (not 'Minus' in ds) and ((co[0] in ds) or
+                                                    (co[1] in ds) or
+                                                    (co[2] in ds))]
 
-        minus_subset = [path for ds, path in dsetdict[reg].items() if
-                        ('Minus' in ds) and ((co[0] in ds) or
-                                             (co[1] in ds) or
-                                             (co[2] in ds))]
-        # FOR SPEED
-        #plus_subset = plus_subset[:1]
-        #minus_subset = minus_subset[:1]
-        debug()
+            minus_subset = [path for ds, path in dsetdict[reg].items() if
+                            ('Minus' in ds) and ((co[0] in ds) or
+                                                 (co[1] in ds) or
+                                                 (co[2] in ds))]
+            if speedrun:
+                plus_subset = plus_subset[:2]
+                minus_subset = minus_subset[:2]
 
-        path_dict = {'plus': plus_subset, 'minus': minus_subset}
-        merged = {}
+            path_dict = {'plus': plus_subset, 'minus': minus_subset}
+            merged = {}
 
-        comp ='All'
-        for key, paths in path_dict.items():
-            merged[key] = merge_paths(settings, paths, temp_dir, key,
-                                      min_covr, comp, reg)
+            comp ='All'
+            for key, paths in path_dict.items():
+                merged[key] = merge_paths(settings, paths, temp_dir, key,
+                                          min_covr, comp, reg)
 
-        reg_dict[reg] = merged
+            reg_dict[reg] = merged
 
+        data_dict = count_these_all(reg_dict)
 
-    ## save the bedfiles for the different regions
-    #save_dir = os.path.join(settings.here, 'analysis', 'all_sideplot')
-    #save_pure(comp_dict, save_dir)
+        pickle_wrap(storage_file=plot_save_file, action='save', data=data_dict)
 
-    data_dict = count_these_all(reg_dict)
+    else:
+
+        data_dict = pickle_wrap(storage_file=plot_save_file, action='load')
 
     p = Plotter()
 
@@ -2782,10 +2788,16 @@ def all_sideplot(settings):
 
     p.all_lying_bar(data_dict, regions, title, settings.here)
 
-def intersection_sideplot(settings, speedrun):
+def intersection_sideplot(settings, speedrun, reuse_data):
     """
-    Intersect poly(A)+ and poly(A)- for the different regions and
+    Intersect poly(A)+ and poly(A)- for the different regions and blot
+    intersection and unique ones on both sides.
     """
+
+    # where you save your reused data
+    plot_save_file = os.path.join(settings.here, 'thesis_figures','save_data',
+                                  'side_intersection')
+
     compartments = ['Whole_Cell', 'Cytoplasm', 'Nucleus']
 
     #regions = ['5UTR-exonic', '5UTR-intronic', '3UTR-exonic', '3UTR-intronic',
@@ -2803,56 +2815,66 @@ def intersection_sideplot(settings, speedrun):
     # maybe this isn't a good idea? Maybe do it like the other function?
 
     temp_dir = os.path.join(settings.here, 'temp_files')
-    min_covr = 1
+    min_covr = 2
     extendby = 20
 
     #speedrun = True
     speedrun = False
 
-    compDsetNr = {'plus_sliced': {},
-                  'minus_sliced': {},
-                  'intersection': {}}
+    if not reuse_data:
+        compDsetNr = {'plus_sliced': {},
+                      'minus_sliced': {},
+                      'intersection': {}}
+        comp_dict = {}
+        for comp in compartments:
 
-    comp_dict = {}
-    for comp in compartments:
+            # Merge the plus and minus subsets for each region
+            reg_dict = {}
+            for reg in regions:
 
-        # Merge the plus and minus subsets for each region
-        reg_dict = {}
-        for reg in regions:
+                plus_subset = [path for ds, path in dsetdict[reg].items() if 
+                               (not 'Minus' in ds) and comp in ds]
+                minus_subset = [path for ds, path in dsetdict[reg].items() if 
+                                ('Minus' in ds) and comp in ds]
+                if speedrun:
+                    plus_subset = plus_subset[:2]
+                    minus_subset = minus_subset[:2]
 
-            plus_subset = [path for ds, path in dsetdict[reg].items() if 
-                           (not 'Minus' in ds) and comp in ds]
-            minus_subset = [path for ds, path in dsetdict[reg].items() if 
-                            ('Minus' in ds) and comp in ds]
-            if speedrun:
-                plus_subset = plus_subset[:2]
-                minus_subset = minus_subset[:2]
+                path_dict = {'plus': plus_subset, 'minus': minus_subset}
+                merged = {}
 
-            path_dict = {'plus': plus_subset, 'minus': minus_subset}
-            merged = {}
+                # merge each plus and minus separately
+                for key, paths in path_dict.items():
+                    merged[key] = merge_paths(settings, paths, temp_dir, key,
+                                              min_covr, comp, reg)
 
-            # merge each plus and minus separately
-            for key, paths in path_dict.items():
-                merged[key] = merge_paths(settings, paths, temp_dir, key,
-                                          min_covr, comp, reg)
+                # join plus and minus and return a dictionary
+                # separated['plus'/'minus'/'intersected']
+                separated = isect(settings, merged, extendby, temp_dir, comp, reg)
 
-            # join plus and minus and return a dictionary
-            # separated['plus'/'minus'/'intersected']
-            separated = isect(settings, merged, extendby, temp_dir, comp, reg)
+                reg_dict[reg] = separated
 
-            reg_dict[reg] = separated
+            comp_dict[comp] = reg_dict
 
-        comp_dict[comp] = reg_dict
+            compDsetNr['plus_sliced'][comp] = len(plus_subset)
+            compDsetNr['intersection'][comp] = len(plus_subset)
+            compDsetNr['minus_sliced'][comp] = len(minus_subset)
 
-        compDsetNr['plus_sliced'][comp] = len(plus_subset)
-        compDsetNr['intersection'][comp] = len(plus_subset)
-        compDsetNr['minus_sliced'][comp] = len(minus_subset)
+        # save the bedfiles for the different regions
+        save_dir = os.path.join(settings.here, 'analysis', 'pure')
+        save_pure(comp_dict, save_dir) # note! you output the split files.
 
-    # save the bedfiles for the different regions
-    save_dir = os.path.join(settings.here, 'analysis', 'pure')
-    save_pure(comp_dict, save_dir) # note! you output the split files.
+        data_dict = count_these(comp_dict)
 
-    data_dict = count_these(comp_dict)
+        saver = (data_dict, compDsetNr)
+
+        pickle_wrap(storage_file=plot_save_file, action='save', data=saver)
+
+    else:
+
+        # get the data from the previous run
+        (data_dict, compDsetNr) = pickle_wrap(storage_file=plot_save_file,
+                                              action='load')
 
     p = Plotter()
 
@@ -4037,13 +4059,13 @@ def gencode_report(settings, speedrun):
 
     # 4) Sidewise bar plots of the number of poly(A) incidents in the different
     # genomic regions, for poly(A)+ and poly(A)-
-    #side_sense_plot(settings, speedrun)
+    #side_sense_plot(settings, speedrun, reuse_data)
 
     # 5) Poly(A)+ pure, intersection, poly(A)-
-    #intersection_sideplot(settings, speedrun)
+    #intersection_sideplot(settings, speedrun, reuse_data)
 
     # 6) All side plot!
-    #all_sideplot(settings)
+    #standard_sideplot(settings, speedrun, reuse_data)
 
     # 6) Cytoplasmic vs. nuclear RPKMS in 3UTR exonic exons
     #cytonuclear_rpkms_genc3(settings) # negative result
