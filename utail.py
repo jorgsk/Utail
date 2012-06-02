@@ -189,7 +189,7 @@ class Annotation(object):
         """
         Intersect the genomic features with PET marks
         """
-        PET_file = '/users/rg/jskancke/phdproject/3UTR/PET/all_Pet_merged10+.bed'
+        PET_file = '/home/jorgsk/phdproject/3UTR/PET/all_Pet_merged10+.bed'
 
         utr_path = self.utrfile_path
 
@@ -219,7 +219,7 @@ class Annotation(object):
         """
         Intersect the genomic features with cufflinks 3'utr ends
         """
-        cuff_file = '/users/rg/jskancke/phdproject/3UTR/CUFF_LINKS/'\
+        cuff_file = '/home/jorgsk/phdproject/3UTR/CUFF_LINKS/'\
                 'cufflinks_3UTR_ends_merged_zeroed.bed'
 
         region_path = self.utrfile_path
@@ -1563,11 +1563,12 @@ def read_settings(settings_file, polyA_cache):
 
     # check if the datset files are actually there...
     # BUT! if you have polyA_cache and the files are loaded, you don't need this
-    # for now skipping the checking that the actual files are in polyA_cachke.
-    # to do this, check for dset_processed.bed in the polyA_cachke dir.
     pAc = 'polyA_cache/polyA_reads_'
     for dset, files in datasets.items():
         if polyA_cache and os.path.isfile(pAc + dset + '_processed_mapped.bed'):
+            continue
+        # one-off fix for the carrie dir ... how to make it general?
+        if polyA_cache and dset == 'carrie':
             continue
         else:
             [verify_access(f) for f in files]
@@ -2444,6 +2445,7 @@ def downstream_sequence(settings, polyA_clusters, feature_coords):
             # skip the ones without sequence
             if centers == []:
                 continue
+
             # we need to send in a dict[pA_coord] = (chrm, beg, beg+1, strnd)
             # NOTE DICT IS HASHED BY THE BEG COORDINATE, IRRESPECTIVE OF STRAND
             # UTILIZE THIS IFARMATIONZ l8r
@@ -2461,13 +2463,19 @@ def downstream_sequence(settings, polyA_clusters, feature_coords):
                     end = center + 40
                     strand = '-'
 
+                # Bug caused by negative beg
+                if beg < 0:
+                    beg = 0
+
                 center_dict[center] = (chrm, beg, end, strand)
 
             # get the sequences! note: the sequence fetcher automatically
             # reverse-transribes regions on the - strand. In other words, it
             # always returns sequences in the 5->3 direction.
+
             orient_dict[orientation] = genome.get_seqs(center_dict,
                                                        settings.hgfasta_path)
+
         pA_seqs[reg_id] = orient_dict
 
     return pA_seqs
@@ -2923,8 +2931,14 @@ def only_polyA_writer(dset_id, annotation, pA_seqs, polyA_reads, settings,
                                                                   sequence)
 
                 if nearby_PAS != 'NA':
-                    nearby_PAS = '#'.join(nearby_PAS)
-                    PAS_distance = '#'.join([str(di) for di in PAS_distance])
+                    all_nearby_PAS = '#'.join(nearby_PAS)
+                    all_PAS_distance = '#'.join([str(di) for di in PAS_distance])
+                else:
+                    all_nearby_PAS = 'NA'
+                    all_PAS_distance = 'NA'
+
+                if len(all_nearby_PAS) > 100:
+                    debug()
 
                 number_supporting_reads = len(cls_reads)
                 number_unique_supporting_reads = len(set(cls_reads))
@@ -2937,8 +2951,8 @@ def only_polyA_writer(dset_id, annotation, pA_seqs, polyA_reads, settings,
                            'polyA_coordinate': str(cls_center),
                            'polyA_coordinate_strand': pA_coord_strand,
                            'annotated_polyA_distance':str(annotated_polyA_distance),
-                           'nearby_PAS': nearby_PAS,
-                           'PAS_distance': PAS_distance,
+                           'nearby_PAS': all_nearby_PAS,
+                           'PAS_distance': all_PAS_distance,
                            'PET_support': str(PET_support),
                            'cufflinks_support': str(cufflinks_support),
                            'polyA_average_composition': tail_info,
@@ -3420,8 +3434,8 @@ def main():
     # function (called below). It also affects the 'temp' and 'output'
     # directories, respectively.
 
-    DEBUGGING = True # warning... some stuff wasnt updated here
-    #DEBUGGING = False
+    #DEBUGGING = True # warning... some stuff wasnt updated here
+    DEBUGGING = False
 
     # with this option, always remake the bedfiles
     rerun_annotation_parser = False
@@ -3516,12 +3530,12 @@ def piperunner(settings, annotation, simulate, DEBUGGING, beddir, tempdir,
                          annotation, DEBUGGING, polyA_cache, here)
 
             ###### FOR DEBUGGING ######
-            #akk = pipeline(*arguments)
+            akk = pipeline(*arguments)
             ###########################
-            #debug()
+            debug()
 
-            result = my_pool.apply_async(pipeline, arguments)
-            results.append(result)
+            #result = my_pool.apply_async(pipeline, arguments)
+            #results.append(result)
 
         my_pool.close()
         my_pool.join()
