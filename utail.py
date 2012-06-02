@@ -1510,7 +1510,7 @@ def verify_access(f):
               'check permissions'.format(f))
         sys.exit()
 
-def read_settings(settings_file):
+def read_settings(settings_file, polyA_cache):
     """
     Read the settings and get all the settings parameters. These should be used
     to create a 'Settings' object.
@@ -1562,8 +1562,15 @@ def read_settings(settings_file):
                 datasets.pop(dset)
 
     # check if the datset files are actually there...
+    # BUT! if you have polyA_cache and the files are loaded, you don't need this
+    # for now skipping the checking that the actual files are in polyA_cachke.
+    # to do this, check for dset_processed.bed in the polyA_cachke dir.
+    pAc = 'polyA_cache/polyA_reads_'
     for dset, files in datasets.items():
-        [verify_access(f) for f in files]
+        if polyA_cache and os.path.isfile(pAc + dset + '_processed_mapped.bed'):
+            continue
+        else:
+            [verify_access(f) for f in files]
 
     # set minimum length of 3 utr
     try:
@@ -3403,6 +3410,12 @@ def main():
     This method is called if script is run as __main__.
     """
 
+    # If this is true, the poly(A) reads will be saved after getting them. That
+    # will save all that reading. They will only be saved if you run with no
+    # restriction in reads.
+    polyA_cache = True
+    #polyA_cache = False
+
     # Set debugging mode. This affects the setting that are in the debugging
     # function (called below). It also affects the 'temp' and 'output'
     # directories, respectively.
@@ -3426,7 +3439,7 @@ def main():
     settings_file = os.path.join(here, 'UTR_SETTINGS')
 
     # Create the settings object from the settings file
-    settings = Settings(*read_settings(settings_file))
+    settings = Settings(*read_settings(settings_file, polyA_cache))
 
     # You can chose to not simulate. Only purpose is to make bigwigs.
     #simulate = False
@@ -3449,10 +3462,12 @@ def main():
         # update the region bedfile for each run
 
         piperunner(settings, annotation, simulate, DEBUGGING, beddir, tempdir,
-                   output_dir, rerun_annotation_parser, here, region_file)
+                   output_dir, rerun_annotation_parser, here, region_file,
+                   polyA_cache)
 
 def piperunner(settings, annotation, simulate, DEBUGGING, beddir, tempdir,
-               output_dir, rerun_annotation_parser, here, region_file):
+               output_dir, rerun_annotation_parser, here, region_file,
+               polyA_cache):
 
     # Check if 3UTRfile has been made or provided; if not, get it from annotation
     annotation.utrfile_path = get_utr_path(settings, beddir,
@@ -3474,14 +3489,6 @@ def piperunner(settings, annotation, simulate, DEBUGGING, beddir, tempdir,
 
     # :/ more AD HOC! This time cufflinks
     annotation.cufflinksDict = annotation.get_cuff_dict()
-
-    # make a similar dictionary but for pet-reads
-
-    # If this is true, the poly(A) reads will be saved after getting them. That
-    # will save all that reading. They will only be saved if you run with no
-    # restriction in reads.
-    #polyA_cache = True
-    polyA_cache = False # XX fix this sometime
 
     # Extract the name of the bed-region you are checking for poly(A) reads
     # you might have to extract it differently, because 'intergenic' doesn't
@@ -3509,12 +3516,12 @@ def piperunner(settings, annotation, simulate, DEBUGGING, beddir, tempdir,
                          annotation, DEBUGGING, polyA_cache, here)
 
             ###### FOR DEBUGGING ######
-            akk = pipeline(*arguments)
+            #akk = pipeline(*arguments)
             ###########################
             #debug()
 
-            #result = my_pool.apply_async(pipeline, arguments)
-            #results.append(result)
+            result = my_pool.apply_async(pipeline, arguments)
+            results.append(result)
 
         my_pool.close()
         my_pool.join()
