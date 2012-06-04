@@ -1561,14 +1561,17 @@ def read_settings(settings_file, polyA_cache):
             if os.path.isdir(pa):
                 datasets.pop(dset)
 
+    if polyA_cache:
+        if 'carrie' in datasets:
+            datasets.pop('carrie')
+        if 'genc7' in datasets:
+            datasets.pop('genc7')
+
     # check if the datset files are actually there...
     # BUT! if you have polyA_cache and the files are loaded, you don't need this
     pAc = 'polyA_cache/polyA_reads_'
     for dset, files in datasets.items():
         if polyA_cache and os.path.isfile(pAc + dset + '_processed_mapped.bed'):
-            continue
-        # one-off fix for the carrie dir ... how to make it general?
-        if polyA_cache and dset == 'carrie':
             continue
         else:
             [verify_access(f) for f in files]
@@ -2478,6 +2481,11 @@ def downstream_sequence(settings, polyA_clusters, feature_coords):
 
         pA_seqs[reg_id] = orient_dict
 
+        for orr, subdict in orient_dict.items():
+            for pos, seq in subdict.items():
+                if len(seq) > 50:
+                    debug()
+
     return pA_seqs
 
 def pipeline(dset_id, dset_reads, tempdir, output_dir, settings, annotation,
@@ -2588,6 +2596,7 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, settings, annotation,
     # clustering somehow
     if polyA:
         print('Clustering poly(A) reads ...')
+
     polyA_clusters = cluster_polyAs(settings, utr_polyAs, feature_coords, polyA)
 
     if polyA:
@@ -3530,12 +3539,12 @@ def piperunner(settings, annotation, simulate, DEBUGGING, beddir, tempdir,
                          annotation, DEBUGGING, polyA_cache, here)
 
             ###### FOR DEBUGGING ######
-            akk = pipeline(*arguments)
+            #akk = pipeline(*arguments)
             ###########################
-            debug()
+            #debug()
 
-            #result = my_pool.apply_async(pipeline, arguments)
-            #results.append(result)
+            result = my_pool.apply_async(pipeline, arguments)
+            results.append(result)
 
         my_pool.close()
         my_pool.join()

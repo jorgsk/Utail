@@ -12,7 +12,7 @@ from copy import deepcopy
 from subprocess import Popen, PIPE
 
 import matplotlib
-matplotlib.use('Agg')
+#matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 #import matplotlib.cm as cm
 #from matplotlib import lines
@@ -32,6 +32,8 @@ import numpy as np
 import time
 import glob
 import cPickle as pickle
+
+import pybedtools
 
 # For making nice tables
 #from TableFactory import *
@@ -580,6 +582,8 @@ class Plotter(object):
         for thr in ['2+', '3+']:
             (fig, axes) = plt.subplots(3, colnr, sharex=True)
 
+            # make enough letters to cover all the plots
+            plot_names = list('IHGFEDCBA')[:colnr*3]
             for comp_nr, comp in enumerate(compartments):
                 for blob_nr, (blob, blob_name)\
                         in enumerate(sorted(blobs.items(), key = blobsort)):
@@ -617,6 +621,11 @@ class Plotter(object):
 
                     ax = axes[comp_nr, blob_nr]
                     rects = dict() # save the rect information
+
+                    # put A and B letters
+                    # transform=ax.transAxes means use the axes frame (0,0) to (1,1)
+                    ax.text(0, 1.05, plot_names.pop(), transform=ax.transAxes, fontsize=18,
+                            fontweight='bold', va='top')
 
                     # make the actual plots
                     for pkey in plot_keys:
@@ -953,11 +962,12 @@ def get_super_regions(dsets, settings, batch_key):
 
     out_handle = open(cluster_file, 'wb')
 
+    line_nr = 0
     for cell_line, comp_dict in dsets.items():
         for comp, utr_dict in comp_dict.items():
             for feature_id, feature in utr_dict.iteritems():
 
-                # store every foudn feature in super_features for lalter
+                # store every found feature in super_features for later
                 if feature_id not in super_features:
                     feature.super_clusters = [] # superclusters later
                     super_features[feature_id] = feature
@@ -978,6 +988,11 @@ def get_super_regions(dsets, settings, batch_key):
                                      str(cls.annotated_polyA_distance),
                                      str(cls.PET_support),
                                      str(cls.cuff_support)])
+                    line_nr +=1
+                    # bug at 6232 -> way too large name.
+                    # cls id anti-3utr_32546
+                    #if line_nr == 6232:
+                        #debug()
                     # also add PAS_distance and PAS_type
                     out_handle.write('\t'.join([cls.chrm,
                                                 str(cls.polyA_coordinate),
@@ -999,26 +1014,43 @@ def get_super_regions(dsets, settings, batch_key):
     # doesnt find the bedtools main file it seems to be using
     #os.chdir(bedDir) CRG
 
+    # XXX subtractBed fails because merged_pA_first_ladder contas a line of
+    # 30mbytes at line 6231 with region=whole
+    #debug()
     # i.5) cut away the exon-exon noise
     cmd = [mySubBed, '-a', cluster_file, '-b', junctions]
-    #p1 = Popen(cmd, stdout=open(temp_cluster_file, 'wb'), stderr=PIPE)
-    p1 = Popen(cmd, stdout=open(temp_cluster_file, 'wb'))
+    p1 = Popen(cmd, stdout=open(temp_cluster_file, 'wb'), stderr=PIPE)
     p1.wait()
+
+    # check for errors
+    errors1 = [l for l in p1.stderr]
+    if errors1 != []:
+        debug()
 
     #mySlopBed = '/users/rg/jskancke/programs/other/bedtools/bin/slopBed' CRG
     mySlopBed = 'slopBed'
     # ii) expand the entries
     expanded = temp_cluster_file + '_expanded'
     cmd = [mySlopBed, '-i', temp_cluster_file, '-g', settings.hg19_path, '-b', '15']
-    p2 = Popen(cmd, stdout=open(expanded, 'wb'))
+    p2 = Popen(cmd, stdout=open(expanded, 'wb'), stderr=PIPE)
     p2.wait()
+
+    # check for errors
+    errors2 = [l for l in p2.stderr]
+    if errors2 != []:
+        debug()
 
     #myMergeBed = '/users/rg/jskancke/programs/other/bedtools/bin/mergeBed' CRG
     myMergeBed = 'mergeBed'
     # iii) merge and max scores
     cmd = [myMergeBed, '-nms', '-s', '-scores', 'sum', '-i', expanded]
-    #p3 = Popen(cmd, stdout=PIPE, stderr=PIPE)
-    p3 = Popen(cmd, stdout=PIPE)
+    p3 = Popen(cmd, stdout=PIPE, stderr=PIPE)
+
+    # check for errors. This doesn't work. Its it because you haven't done a
+    #wait?
+    #errors3 = [l for l in p3.stderr]
+    #if errors3 != []:
+        #debug()
 
     # go back to here CRG
     #os.chdir(settings.here)
@@ -1465,6 +1497,9 @@ def get_dsetclusters(subset, region, settings, speedrun, batch_key):
     return bigcl
 
 def super_cluster_statprinter(dsetclusters, region, thiskey, settings, filename):
+    """
+    Write key stats about the clusters
+    """
 
     statdict = dsetclusters[thiskey]
 
@@ -1512,7 +1547,7 @@ def super_cluster_statprinter(dsetclusters, region, thiskey, settings, filename)
     local_sum = total_sum
 
     output_path = os.path.join(settings.here,
-                          'Results_and_figures/GENCODE_report/region_stats')
+                          'thesis_figures/thesis_stats')
 
     output_file = os.path.join(output_path, region+'_'+filename+'.stats')
     handle = open(output_file, 'wb')
@@ -1632,13 +1667,17 @@ def clusterladder(settings, speedrun, reuse_data):
     # keep a dictionary with reference to all the plots
     plotdict = {}
 
-    #speedrun = True
-    #speedrun = False
     if speedrun:
-        data_grouping['Poly(A) plus'] = data_grouping['Poly(A) plus'][:3]
-        data_grouping['Poly(A) minus'] = data_grouping['Poly(A) minus'][:3]
+        max_sets = 5 # you need minimum 3. why?
+        data_grouping['Poly(A) plus'] = data_grouping['Poly(A) plus'][:max_sets]
+        data_grouping['Poly(A) minus'] = data_grouping['Poly(A) minus'][:max_sets]
+
+    # dont speedrun the rest of the application!
+    #speedrun = True
+    speedrun = False
 
     # only calculate again if not reusing data
+    t1 = time.time()
     if not reuse_data:
         for title, dsets in data_grouping.items():
 
@@ -1662,6 +1701,7 @@ def clusterladder(settings, speedrun, reuse_data):
                                                 speedrun, batch_key)
 
                 subsetcounts[key] = count_clusters(dsetclusters, dsetreads)
+
             plotdict[title] = subsetcounts
 
         # save plot data
@@ -1670,6 +1710,8 @@ def clusterladder(settings, speedrun, reuse_data):
     else:
         plotdict = pickle_wrap(storage_file=plot_save_file, action='load')
 
+
+    print("It took {0} seconds to merge".format(time.time()-t1))
     p = Plotter()
     for yek in ['2+', '3+']:
 
@@ -1895,9 +1937,16 @@ def intersect_wrap(paths, outdir, extendby=20):
 
     # function used only here
     def extender(extendby, path, hg19, ext_path):
+
+        out_handle = open(ext_path, 'wb')
+
         cmd1 = ['slopBed', '-b', str(extendby), '-i', path, '-g', hg19]
-        p1 = Popen(cmd1, stdout = open(ext_path, 'wb'))
-        p1.wait()
+        p1 = Popen(cmd1, stdout = PIPE)
+
+        for line in p1.stdout:
+            out_handle.write(line)
+
+        out_handle.close()
 
     # 1) extend all files
     for pathname, path in paths.items():
@@ -2058,8 +2107,8 @@ def cumul_stats_printer_all(settings, speedrun):
     #speedrun = True
     speedrun = False
 
-    #region = 'whole'
-    region = 'Intergenic'
+    region = 'whole'
+    #region = 'Intergenic'
     for fraction in ['Plus', 'Minus']:
 
         if fraction == 'Plus':
@@ -2079,7 +2128,7 @@ def cumul_stats_printer_all(settings, speedrun):
 
         dsetclusters = {}
 
-        batch_key = 'all_stats_3utr'
+        batch_key = 'all_stats_cumul'
         dsetclusters[region] = get_dsetclusters(all_dsets, region, settings,
                                                 speedrun, batch_key)
 
@@ -2118,8 +2167,8 @@ def cumul_stats_printer_genome(settings, speedrun):
 
 def cumul_stats_printer(settings, speedrun):
 
-    #regions = ['3UTR-exonic', 'CDS-exonic', 'CDS-intronic', 'Intergenic', 'whole']
-    regions = ['3UTR-exonic']
+    regions = ['3UTR-exonic', 'CDS-exonic', 'CDS-intronic', 'Intergenic', 'whole']
+    #regions = ['3UTR-exonic']
 
     for region in regions:
 
@@ -2447,7 +2496,6 @@ def side_sense_plot(settings, speedrun, reuse_data):
     Maybe show CDS intronic as well.
     """
 
-
     #1 Gather the data in a dictlike this [wc/n/c|/+/-]['region'] = [#cl, #cl w/pas]
 
     compartments = ['Whole_Cell', 'Cytoplasm', 'Nucleus']
@@ -2466,9 +2514,11 @@ def side_sense_plot(settings, speedrun, reuse_data):
 
     compDsetNr = {'+': {}, '-':{}}
 
-    #speedrun = True
-    speedrun = False
+    speedrun = True
+    #speedrun = False
 
+    total = len(compartments) * len(fractions)
+    current = 0
     for comp in compartments:
         for frac in fractions:
 
@@ -2487,7 +2537,8 @@ def side_sense_plot(settings, speedrun, reuse_data):
             for region in regions:
 
                 batch_key = 'side_sense'
-                speedrun = False
+                #speedrun = False
+                speedrun = True
                 dsets, super_3utr = super_falselength(settings, region,
                                                       batch_key, subset,
                                                       speedrun=speedrun)
@@ -2498,6 +2549,9 @@ def side_sense_plot(settings, speedrun, reuse_data):
                 # add for +2 and +3
                 for key in data_dict_keys:
                     data_dict[key][comp][region][frac] = counted[key]
+
+            current += 1
+            print("Finished {0} of {1}".format(current, total))
 
     p = Plotter()
 
@@ -2521,9 +2575,16 @@ def isect(settings, merged, extendby, temp_dir, comp, reg):
 
     # function used only here
     def extender(extendby, path, hg19, ext_path):
+
+        out_handle = open(ext_path, 'wb')
+
         cmd1 = ['slopBed', '-b', str(extendby), '-i', path, '-g', hg19]
-        p1 = Popen(cmd1, stdout = open(ext_path, 'wb'))
-        p1.wait()
+        p1 = Popen(cmd1, stdout = PIPE)
+
+        for line in p1.stdout:
+            out_handle.write(line)
+
+        out_handle.close()
 
     # 1) extend all files
     expanded = {}
@@ -2592,10 +2653,14 @@ def isect(settings, merged, extendby, temp_dir, comp, reg):
     # 2) subtract from the two origial files that which overlaps the extended
     # intersection
     for pathname, path in merged.items():
-        cmd = ['subtractBed', '-s', '-a', path, '-b', isect_exp_path]
         outpath = path + '_Sliced'
-        p3 = Popen(cmd, stdout = open(outpath, 'wb'))
-        p3.wait()
+        out_handle = open(outpath, 'wb')
+        cmd = ['subtractBed', '-s', '-a', path, '-b', isect_exp_path]
+        p3 = Popen(cmd, stdout = PIPE)
+        for line in p3.stdout:
+            out_handle.write(line)
+
+        out_handle.close()
 
         output_dict[pathname+'_sliced'] = outpath
 
@@ -2860,9 +2925,9 @@ def intersection_sideplot(settings, speedrun, reuse_data):
             compDsetNr['intersection'][comp] = len(plus_subset)
             compDsetNr['minus_sliced'][comp] = len(minus_subset)
 
-        # save the bedfiles for the different regions
-        save_dir = os.path.join(settings.here, 'analysis', 'pure')
-        save_pure(comp_dict, save_dir) # note! you output the split files.
+        # save the bedfiles for the different regions. DOn't doit any more.
+        #save_dir = os.path.join(settings.here, 'analysis', 'pure')
+        #save_pure(comp_dict, save_dir) # note! you output the split files.
 
         data_dict = count_these(comp_dict)
 
@@ -2900,7 +2965,7 @@ def save_pure(comp_dict, save_dir):
         for region, slice_dict in reg_dict.items():
             for sl, slice_path in slice_dict.items():
 
-                outname = '__'.join([compartment, region, sl])
+                outname = '_'.join([compartment, region, sl])
                 outpath = os.path.join(save_dir, outname)
                 outhandle = open(outpath, 'wb')
 
@@ -4016,8 +4081,8 @@ def gencode_report(settings, speedrun):
     # reuse plot_data from previous simulation
     # this saves precious time if you just want to change some detail in a plot
 
-    reuse_data = True
-    #reuse_data = False
+    #reuse_data = True
+    reuse_data = False
 
     # TODO interesting for 3'utrs. Before, how long were they on average -- how
     # much were they extended by?
@@ -4030,7 +4095,7 @@ def gencode_report(settings, speedrun):
 
     # 1) nr of polyA sites obtained with increasing readnr
     # XXX seems to work. Even put letters there.
-    clusterladder(settings, speedrun, reuse_data)
+    #clusterladder(settings, speedrun, reuse_data)
     #clusterladder_cell_lines(settings)
 
     # 2) venn diagram of all the poly(A) sites from the whole genome for 3UTR and
@@ -4062,7 +4127,7 @@ def gencode_report(settings, speedrun):
     #side_sense_plot(settings, speedrun, reuse_data)
 
     # 5) Poly(A)+ pure, intersection, poly(A)-
-    #intersection_sideplot(settings, speedrun, reuse_data)
+    intersection_sideplot(settings, speedrun, reuse_data)
 
     # 6) All side plot!
     #standard_sideplot(settings, speedrun, reuse_data)
@@ -5561,13 +5626,13 @@ def write_all_polyAs(settings):
 
     expandby = 0
 
-    mincovr = 2
+    covr_more_than = 1 #
     compartments = ['Whole_Cell', 'Cytoplasm', 'Nucleus']
 
     #speedrun = True
     speedrun = False
 
-    merge_polyAs(settings, mincovr, minus, compartments, speedrun, expandby)
+    merge_polyAs(settings, covr_more_than, minus, compartments, speedrun, expandby)
 
 def main():
     # The path to the directory the script is located in
