@@ -3599,11 +3599,11 @@ def intergenic_finder(settings):
         batch_key = 'intergenicFinder'
         dsets, super_3utr = super_falselength(settings, region, batch_key, subset,
                                               speedrun)
-        Fdir = '/users/rg/jskancke/phdproject/3UTR/annotation_split/extended3UTR'
+        Fdir = '/home/jorgsk/phdproject/3UTR/extended_3UTR'
+        outdir = '/home/jorgsk/phdproject/3UTR/the_project/thesis_figures/thesis_stats'
 
         # use all cell lines and intergenic
 
-        outdir = Fdir
         outfile = 'intergenic_pAsites'
         outpath = os.path.join(outdir, outfile)
         pAouthandle = open(outpath, 'wb')
@@ -3701,8 +3701,12 @@ def intergenic_finder(settings):
                   #.format(fails))
             for keyw in ['same', 'other']:
                 keytotal = countdict[keyw]['total']
-                print('\t{3} strand: {1}, ratio: {2:.2f}'\
-                      .format(total, keytotal, keytotal/total, keyw.capitalize()))
+                if total > 0:
+                    ratio = format(keytotal/total, '.2f')
+                elif total == 0:
+                    ratio = 'NaN'
+                print('\t{3} strand: {1}, ratio: {2}'\
+                      .format(total, keytotal, ratio, keyw.capitalize()))
 
                 CUF = countdict[keyw]['Cufflinks']
                 PAS = countdict[keyw]['PAS']
@@ -3720,14 +3724,7 @@ def intergenic_finder(settings):
                 print('')
 
             ## write to a tab-delimited file for ease of re-use.
-            ##Extension Total #Same_strand #Same_w PAS # #Same_w T
-            #outhandle.write('\t'.join([comp,
-                                       #str(dist)+' nt',
-                                       #str(total),
-                                       #str(same)+\
-                                       #' ('+format(same/total, '.2f')+')',
-                                       #format(same_PAS/same, '.2f'),
-                                       #format(same_T/same, '.2f')]) + '\n')
+            #Extension Total #Same_strand #Same_w PAS # #Same_w T
     outhandle.close()
 
 def write_all_pA(settings):
@@ -4127,7 +4124,7 @@ def gencode_report(settings, speedrun):
     #side_sense_plot(settings, speedrun, reuse_data)
 
     # 5) Poly(A)+ pure, intersection, poly(A)-
-    intersection_sideplot(settings, speedrun, reuse_data)
+    #intersection_sideplot(settings, speedrun, reuse_data)
 
     # 6) All side plot!
     #standard_sideplot(settings, speedrun, reuse_data)
