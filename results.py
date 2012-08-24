@@ -416,6 +416,9 @@ class Plotter(object):
     Collection of plot-methods
     """
 
+    # if you had made a @staticmethod here you would not need to do
+    # plot_obj=Plotter() and the plot_obj.all_lying_bar, but could instead have
+    # called Plotter.all_lying_bar directly
     def all_lying_bar(self, data_dict, regions, title, here):
         """ Plot the poly(A) sites from the different regions
         """
@@ -506,6 +509,9 @@ class Plotter(object):
                              verticalalignment='center', color=clr,
                              weight='bold', fontsize=fsize)
 
+            # set a grid so its easier to see
+            ax.xaxis.grid(True, alpha=0.5, color='lightgrey')
+
             # print the total number for 'all', and the percentage of
             # 'all' for the other two
             # specify xticks if needeed
@@ -548,17 +554,17 @@ class Plotter(object):
 
         fig.suptitle('Poly(A) sites for WC, N, and C merged', size=20)
 
-        output_dir = os.path.join(here, 'Results_and_figures', 'GENCODE_report',
-                                  'Figures')
+        output_dir = os.path.join(here, 'thesis_figures')
 
-        filename = 'All_polyA_different_compartmentsd'
+        filename = 'All_polyA_different_compartments'
         filepath = os.path.join(output_dir, filename+'.pdf')
         fig.savefig(filepath, format='pdf')
         filepath = os.path.join(output_dir, filename+'.eps')
         fig.savefig(filepath, format='eps', papertype='A4')
 
-    def unified_lying_bar(self, data_dict, regions, title, blobs, blob_order,
-                          here, compartments, filename, compDsetNr):
+    @staticmethod
+    def unified_lying_bar(data_dict, regions, title, blobs, blob_order, here,
+                          compartments, filename, compDsetNr):
         """
         Side-lying barplot for 2 of your bar plots. You recently joined them to
         make the code easier to maintain.
@@ -583,7 +589,7 @@ class Plotter(object):
             (fig, axes) = plt.subplots(3, colnr, sharex=True)
 
             # make enough letters to cover all the plots
-            plot_names = list('IHGFEDCBA')[:colnr*3]
+            plot_names = list('IHGFEDCBA')[-colnr*3:]
             for comp_nr, comp in enumerate(compartments):
                 for blob_nr, (blob, blob_name)\
                         in enumerate(sorted(blobs.items(), key = blobsort)):
@@ -624,8 +630,11 @@ class Plotter(object):
 
                     # put A and B letters
                     # transform=ax.transAxes means use the axes frame (0,0) to (1,1)
-                    ax.text(0, 1.05, plot_names.pop(), transform=ax.transAxes, fontsize=18,
-                            fontweight='bold', va='top')
+                    ax.text(0, 1.05, plot_names.pop(), transform=ax.transAxes,
+                            fontsize=18, fontweight='bold', va='top')
+
+                    # set a grid so it's easier to see the values
+                    ax.xaxis.grid(True, ls='-', alpha=0.3, color='grey')
 
                     # make the actual plots
                     for pkey in plot_keys:
@@ -635,34 +644,35 @@ class Plotter(object):
                                               color=colors[pkey],
                                               label=labels[pkey])
 
-                    # print either the number or percentage
-                    for pkey, rs in rects.items():
-                        for r_nr, rect in enumerate(rs):
-                            width = int(rect.get_width())
-                            xloc = width + 100
-                            yloc = rect.get_y()+rect.get_height()/2.0
-                            clr = 'black'
-                            align = 'left'
+                    ## print either the number or percentage
+                    # XXX For now, don't do this.
+                    #for pkey, rs in rects.items():
+                        #for r_nr, rect in enumerate(rs):
+                            #width = int(rect.get_width())
+                            #xloc = width + 100
+                            #yloc = rect.get_y()+rect.get_height()/2.0
+                            #clr = 'black'
+                            #align = 'left'
 
-                            if pkey == 'all':
-                                txt = width
-                                fsize=11
-                            else:
-                                divby = plotme['all'][r_nr]
-                                try:
-                                    txt = format(width/divby, '.2f')
-                                except ZeroDivisionError:
-                                    txt = '0'
+                            #if pkey == 'all':
+                                #txt = width
+                                #fsize=11
+                            #else:
+                                #divby = plotme['all'][r_nr]
+                                #try:
+                                    #txt = format(width/divby, '.2f')
+                                #except ZeroDivisionError:
+                                    #txt = '0'
 
-                                fsize=9
-                                yloc = yloc - 0.04
+                                #fsize=9
+                                #yloc = yloc - 0.04
 
-                            # ylocation, centered at bar
+                            ## ylocation, centered at bar
 
-                            ax.text(xloc, yloc, txt,
-                                     horizontalalignment=align,
-                                     verticalalignment='center', color=clr,
-                                     weight='bold', fontsize=fsize)
+                            #ax.text(xloc, yloc, txt,
+                                     #horizontalalignment=align,
+                                     #verticalalignment='center', color=clr,
+                                     #weight='bold', fontsize=fsize)
 
                     # print the total number for 'all', and the percentage of
                     # 'all' for the other two
@@ -687,21 +697,28 @@ class Plotter(object):
                     if comp_nr == 0:
                         ax.set_title(blobs[blob], size=22)
 
-                    # put the legend only in the top-left corner plot
-                    if blob_nr == 1 and comp_nr == 0:
-                        ax.legend(loc='upper right')
+
+            # put the legend only in the top-left corner plot
+            axes[0][-1].legend(loc='upper right')
 
             # Set xlim (it's shared)
             xlm = ax.get_xlim()
-            stepsize = 5000
+            extra_space = 2000
+            ax.set_xlim((0, xlm[1]+extra_space))
 
-            ax.set_xlim((0, xlm[1]+stepsize))
-            #xticks = range(0, xlm[1]+stepsize, stepsize)
-            #ax.set_xticks(xticks)
-            #f = lambda x: '' if x%(stepsize*2) else x
-            #ticklabels = [f(tick) for tick in xticks]
-            #ax.set_xticklabels(ticklabels)
             ax.set_xticklabels([]) # remove xticks
+
+            # set ticks for the two bottom axes
+            stepsize = 5000
+            xticks = np.arange(0, xlm[1]+stepsize, stepsize)
+            f = lambda x: '' if x%(stepsize*2) else int(x)
+            ticklabels = [f(tick) for tick in xticks]
+
+            # set x-ticks in the two last axes
+            two_last = axes[-1]
+            for ax in two_last:
+                ax.set_xticks(xticks)
+                ax.set_xticklabels(ticklabels)
 
             fig.subplots_adjust(wspace=0.1)
             fig.subplots_adjust(hspace=0.2)
@@ -720,8 +737,8 @@ class Plotter(object):
             fname = filename+'_{0}'.format(thr)
             filepath = os.path.join(output_dir, fname+'.pdf')
             fig.savefig(filepath, format='pdf')
-            filepath = os.path.join(output_dir, fname+'.eps')
-            fig.savefig(filepath, format='eps', papertype='A4')
+            #filepath = os.path.join(output_dir, fname+'.eps')
+            #fig.savefig(filepath, format='eps', papertype='A4')
 
     def AllLadderPlot(self, plotdict, settings, data_grouping, yek):
 
@@ -803,8 +820,8 @@ class Plotter(object):
         filename = 'Saturation_plot_{0}'.format(yek)
         filepath = os.path.join(output_dir, filename+'.pdf')
         fig.savefig(filepath, format='pdf')
-        filepath = os.path.join(output_dir, filename+'.eps')
-        fig.savefig(filepath, format='eps', papertype='A4')
+        #filepath = os.path.join(output_dir, filename+'.eps')
+        #fig.savefig(filepath, format='eps', papertype='A4')
 
     def CyNucComp(self, data_dict, nr_comp, settings):
         """
@@ -880,7 +897,7 @@ def super_falselength(settings, region, batch_key, subset=[], speedrun=False):
 
         # limit the nr of reads from each dset if you want to be fast
         if speedrun:
-            maxlines = 100
+            maxlines = 200
 
         linenr = 0
 
@@ -1493,7 +1510,6 @@ def get_dsetclusters(subset, region, settings, speedrun, batch_key):
 
                 bigcl['only1'] = data_scooper(cls, keyw, bigcl['only1'])
 
-
     return bigcl
 
 def super_cluster_statprinter(dsetclusters, region, thiskey, settings, filename):
@@ -1678,6 +1694,11 @@ def clusterladder(settings, speedrun, reuse_data):
 
     # only calculate again if not reusing data
     t1 = time.time()
+
+    if reuse_data and (not os.path.isfile(plot_save_file)):
+        print("Reuse data set, but no savefile found. Gathering data ...")
+        reuse_data = False
+
     if not reuse_data:
         for title, dsets in data_grouping.items():
 
@@ -2107,9 +2128,10 @@ def cumul_stats_printer_all(settings, speedrun):
     #speedrun = True
     speedrun = False
 
-    region = 'whole'
-    #region = 'Intergenic'
-    for fraction in ['Plus', 'Minus']:
+    #region = 'whole'
+    region = '3UTR-exonic'
+    #for fraction in ['Plus', 'Minus']:
+    for fraction in ['Minus']:
 
         if fraction == 'Plus':
             all_dsets = [ds for ds in settings.datasets if (('Cytoplasm' in ds) or
@@ -2129,6 +2151,9 @@ def cumul_stats_printer_all(settings, speedrun):
         dsetclusters = {}
 
         batch_key = 'all_stats_cumul'
+
+        #speedrun = True
+
         dsetclusters[region] = get_dsetclusters(all_dsets, region, settings,
                                                 speedrun, batch_key)
 
@@ -2167,8 +2192,8 @@ def cumul_stats_printer_genome(settings, speedrun):
 
 def cumul_stats_printer(settings, speedrun):
 
-    regions = ['3UTR-exonic', 'CDS-exonic', 'CDS-intronic', 'Intergenic', 'whole']
-    #regions = ['3UTR-exonic']
+    #regions = ['3UTR-exonic', 'CDS-exonic', 'CDS-intronic', 'Intergenic', 'whole']
+    regions = ['3UTR-exonic']
 
     for region in regions:
 
@@ -2482,19 +2507,14 @@ def barsense_counter(super_3utr, comp, frac, region, d_keys):
 
     return count_dict
 
-def side_sense_plot(settings, speedrun, reuse_data):
+def side_plot(settings, speedrun, reuse_data):
     """
-    Side plot of poly(A) reads in different regions, as well as the
-    sense/antisense debacle. You should probably run the region-stuff with
-    non_stranded and the sense/antisense with stranded.
-
-    Initial results show some contradicting results for the stranded regions.
-    Maybe it's the overlap that's killing you? Maybe you need an overlap free
-    region.
-
-    IDEA: to simplify, should you show just the Exonic areas for 3UTR and 5UTR?
-    Maybe show CDS intronic as well.
+    Side plot of poly(A) reads in different regions. Show PAS and PET support.
     """
+
+    # if reusing data, save to this file
+    plot_save_file = os.path.join(settings.here, 'thesis_figures', 'save_data',
+                                  'side_not_intersected')
 
     #1 Gather the data in a dictlike this [wc/n/c|/+/-]['region'] = [#cl, #cl w/pas]
 
@@ -2510,50 +2530,66 @@ def side_sense_plot(settings, speedrun, reuse_data):
     regions = ['3UTR-exonic', 'CDS-exonic', 'CDS-intronic', 'Intergenic']
 
     data_dict_keys = ['2+', '3+']
-    data_dict = dict((key, AutoVivification()) for key in data_dict_keys)
 
     compDsetNr = {'+': {}, '-':{}}
 
-    speedrun = True
-    #speedrun = False
+    reuse_data = True
+    #reuse_data = False
+
+    #speedrun = True
+    speedrun = False
 
     total = len(compartments) * len(fractions)
     current = 0
-    for comp in compartments:
-        for frac in fractions:
 
-            if frac == '+':
-                subset = [ds for ds in settings.datasets if (comp in ds) and
-                          (not 'Minus' in ds)]
-            if frac == '-':
-                subset = [ds for ds in settings.datasets if (comp in ds) and
-                          ('Minus' in ds)]
+    # if not reusing data, get all the stuff anew
+    data_dict = dict((key, AutoVivification()) for key in data_dict_keys)
 
-            compDsetNr[frac][comp] = len(subset)
+    if reuse_data and (not os.path.isfile(plot_save_file)):
+        print("Reuse data set, but no savefile found. Gathering data ...")
+        reuse_data = False
 
-            if speedrun:
-                subset = subset[:2]
+    if not reuse_data:
+        for comp in compartments:
+            for frac in fractions:
 
-            for region in regions:
+                if frac == '+':
+                    subset = [ds for ds in settings.datasets if (comp in ds) and
+                              (not 'Minus' in ds)]
+                if frac == '-':
+                    subset = [ds for ds in settings.datasets if (comp in ds) and
+                              ('Minus' in ds)]
 
-                batch_key = 'side_sense'
-                #speedrun = False
-                speedrun = True
-                dsets, super_3utr = super_falselength(settings, region,
-                                                      batch_key, subset,
-                                                      speedrun=speedrun)
+                compDsetNr[frac][comp] = len(subset)
 
-                # count the number clusters with +1, of those with PAS/good_PAS
-                counted = barsense_counter(super_3utr, comp, frac, region,
-                                           data_dict_keys)
-                # add for +2 and +3
-                for key in data_dict_keys:
-                    data_dict[key][comp][region][frac] = counted[key]
+                if speedrun:
+                    subset = subset[:1]
 
-            current += 1
-            print("Finished {0} of {1}".format(current, total))
+                speedrun = False
+                for region in regions:
 
-    p = Plotter()
+                    batch_key = 'side'
+                    dsets, super_3utr = super_falselength(settings, region,
+                                                          batch_key, subset,
+                                                          speedrun=speedrun)
+
+                    # count the number clusters with +1, of those with PAS/good_PAS
+                    counted = barsense_counter(super_3utr, comp, frac, region,
+                                               data_dict_keys)
+                    # add for +2 and +3
+                    for key in data_dict_keys:
+                        data_dict[key][comp][region][frac] = counted[key]
+
+                current += 1
+                print("Finished {0} of {1}".format(current, total))
+
+        saver = (data_dict, compDsetNr)
+
+        pickle_wrap(storage_file=plot_save_file, action='save', data=saver)
+
+    else:
+        (data_dict, compDsetNr) = pickle_wrap(storage_file=plot_save_file, action='load')
+
 
     # Stuff for the plot
     title = 'Polyadenlyation in different regions for different'\
@@ -2562,7 +2598,7 @@ def side_sense_plot(settings, speedrun, reuse_data):
     blob_order = ['Poly(A)+', 'Poly(A)-']
     filename = 'Sidebars_pA'
 
-    p.unified_lying_bar(data_dict, regions, title, blobs, blob_order,
+    Plotter.unified_lying_bar(data_dict, regions, title, blobs, blob_order,
                         settings.here, compartments, filename, compDsetNr)
 
 def isect(settings, merged, extendby, temp_dir, comp, reg):
@@ -2791,7 +2827,7 @@ def standard_sideplot(settings, speedrun, reuse_data):
     Finally merge the poly(A) sites for each region and plot them sidebarwise.
     """
 
-    plot_save_file = os.path.join(settings.here, 'thesis_figures','save_data',
+    plot_save_file = os.path.join(settings.here, 'thesis_figures', 'save_data',
                                   'side_standard')
 
     co = ['Whole_Cell', 'Cytoplasm', 'Nucleus']
@@ -2810,6 +2846,10 @@ def standard_sideplot(settings, speedrun, reuse_data):
 
     temp_dir = os.path.join(settings.here, 'temp_files')
     min_covr = 2
+
+    if reuse_data and (not os.path.isfile(plot_save_file)):
+        print("Reuse data set, but no savefile found. Gathering data ...")
+        reuse_data = False
 
     if not reuse_data:
         # Merge the plus and minus subsets for each region
@@ -2880,11 +2920,17 @@ def intersection_sideplot(settings, speedrun, reuse_data):
     # maybe this isn't a good idea? Maybe do it like the other function?
 
     temp_dir = os.path.join(settings.here, 'temp_files')
-    min_covr = 2
+    min_covr = 1
     extendby = 20
 
-    #speedrun = True
-    speedrun = False
+    speedrun = True
+    #speedrun = False
+
+    reuse_data = True
+
+    if reuse_data and (not os.path.isfile(plot_save_file)):
+        print("Reuse data set, but no savefile found. Gathering data ...")
+        reuse_data = False
 
     if not reuse_data:
         compDsetNr = {'plus_sliced': {},
@@ -2941,8 +2987,6 @@ def intersection_sideplot(settings, speedrun, reuse_data):
         (data_dict, compDsetNr) = pickle_wrap(storage_file=plot_save_file,
                                               action='load')
 
-    p = Plotter()
-
     title = 'Polyadenlyation in different regions for different'\
             ' cellular compartments'
 
@@ -2952,8 +2996,9 @@ def intersection_sideplot(settings, speedrun, reuse_data):
 
     filename = 'intersected_sidebars_pA'
     blob_order = ['Poly(A)+ unique', 'Common to poly(A)+/-', 'Poly(A)- unique']
-    p.unified_lying_bar(data_dict, regions, title, blobs, blob_order,
-                        settings.here, compartments, filename, compDsetNr)
+
+    Plotter.unified_lying_bar(data_dict, regions, title, blobs, blob_order,
+                              settings.here, compartments, filename, compDsetNr)
 
 
 def save_pure(comp_dict, save_dir):
@@ -3572,6 +3617,7 @@ def strand_prediction(settings):
 
 def intergenic_finder(settings):
     """
+    TODO make a table of this for the RNA seq part in the paper.
     """
     #speedrun = True
     speedrun = False
@@ -4071,15 +4117,23 @@ def regionalizer(settings):
 def gencode_report(settings, speedrun):
     """ Make figures for the GENCODE report. The report is an overview of
     evidence for polyadenylation from the Gingeras RNA-seq experiments.
+
+    Mystery: underreporting of polyA sites. I get smth like 40 percent when 75
+    percent have it in the raw data.
+
+    So far you've put numbers on several plots. Just make a table with the
+    number of extended 3UTR sites and their strand, and I think that should be
+    enough. Spend a few days discussing about it. In the meanwhile, you can fix
+    more plots?
     """
-    speedrun = True
-    #speedrun = False
+    #speedrun = True
+    speedrun = False
 
     # reuse plot_data from previous simulation
     # this saves precious time if you just want to change some detail in a plot
 
-    #reuse_data = True
-    reuse_data = False
+    reuse_data = True
+    #reuse_data = False
 
     # TODO interesting for 3'utrs. Before, how long were they on average -- how
     # much were they extended by?
@@ -4121,13 +4175,13 @@ def gencode_report(settings, speedrun):
 
     # 4) Sidewise bar plots of the number of poly(A) incidents in the different
     # genomic regions, for poly(A)+ and poly(A)-
-    #side_sense_plot(settings, speedrun, reuse_data)
+    #side_plot(settings, speedrun, reuse_data)
 
     # 5) Poly(A)+ pure, intersection, poly(A)-
-    #intersection_sideplot(settings, speedrun, reuse_data)
+    intersection_sideplot(settings, speedrun, reuse_data)
 
     # 6) All side plot!
-    #standard_sideplot(settings, speedrun, reuse_data)
+    standard_sideplot(settings, speedrun, reuse_data)
 
     # 6) Cytoplasmic vs. nuclear RPKMS in 3UTR exonic exons
     #cytonuclear_rpkms_genc3(settings) # negative result
@@ -4271,7 +4325,7 @@ def merge_polyAs(settings, toosmall, minus, cell_lines, speedrun, expandby):
         subset = subset[:2]
 
     # 1.1) write each poly(A) site to file +/- expandby
-    batch_key = 'cuffer'
+    batch_key = 'merge_all'
     region = 'whole'
 
     dsets, super_3utr = super_falselength(settings, region, batch_key,
@@ -4284,6 +4338,11 @@ def merge_polyAs(settings, toosmall, minus, cell_lines, speedrun, expandby):
     else:
         outfile = 'all_pAs.bed'
 
+    if minus:
+        outfile = 'minus_'+ outfile
+    else:
+        outfile = 'plus_'+ outfile
+
     outpath = os.path.join(outdir, outfile)
     outhandle = open(outpath, 'wb')
 
@@ -4295,11 +4354,13 @@ def merge_polyAs(settings, toosmall, minus, cell_lines, speedrun, expandby):
                 chrm = utr.chrm
                 beg = str(cls.polyA_coordinate-expandby)
                 end = str(cls.polyA_coordinate+expandby)
-                pas = '#'.join(cls.dsets)
+                dsets = '#'.join(cls.dsets)
+                pas = '#'.join(cls.nearby_PAS)
+                annot_dist = str(cls.annotated_polyA_distance)
                 covr = str(cls.nr_support_reads)
                 strand = cls.strand
 
-                outhandle.write('\t'.join([chrm, beg, end, pas, covr,
+                outhandle.write('\t'.join([chrm, beg, end, annot_dist, dsets, covr, pas,
                                            strand])+'\n')
 
     outhandle.close()
@@ -5619,7 +5680,8 @@ def write_all_polyAs(settings):
     Simply merge all polyA sites
     """
 
-    minus = False
+    #minus = False
+    minus = True
 
     expandby = 0
 
