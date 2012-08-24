@@ -1,0 +1,19 @@
+Here is Sarah's gff file that they whish to have the poly(A) site file modelled
+after. Also a readme for that file.
+
+Also, a file with the labExpID attribute like Julien wants it in
+all_mouse+human_samples.tsv
+
+As well, the file which outlines the location of these data.
+
+
+Paths:
+
+ftp://genome.crg.es/pub/Encode/data_analysis/TSS/Gencodev10_CAGE_TSS_clusters_May2012.gff.gz
+
+ftp://genome.crg.es/pub/Encode/data_analysis/TSS/Gencodev10_CAGE_TSS_clusters_May2012.txt
+
+/users/rg/jlagarde/projects/encode/scaling/whole_genome/dcc_submission/samples/all_Mouse+Human_samples.tsv
+
+
+http://genome.crg.es/encode_RNA_dashboard/hg19/hg19_RNA_dashboard_files.txt.crg

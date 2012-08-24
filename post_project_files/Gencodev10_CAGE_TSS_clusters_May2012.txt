@@ -1,0 +1,74 @@
+
+May 17th 2012
+
+File: ftp://genome.crg.es/pub/Encode/data_analysis/TSS/Gencodev10_CAGE_TSS_clusters_May2012.gff.gz
+
+Contact: Sarah Djebali at sarah.djebali@crg.eu
+
+* Gencodev10_CAGE_TSS_clusters_May2012.gff is a gff version2 file.
+  It contains TSS clusters obtained from two different sources of information:
+  - Gencode v10 TSS (ftp://genome.crg.es/pub/Encode/data_analysis/TSS/Gencodev10_TSS_May2012.gff.gz) =  most 5' bp of Gencode v10 transcripts
+  - PolyA+ Whole cell TSS CAGE clusters (Timo Lassmann at Riken, Jan11 + Mar12 freezes) filtered for IDR (0.1) and for HMM TSS prediction strength (0.5)
+  
+* The 148,434 (not low confidence) Gencode v10 TSS (present here ftp://genome.crg.es/pub/Encode/data_analysis/TSS/Gencodev10_TSS_May2012.gff.gz)
+  were first extented by 50 bp on 5' and on 3' and strandedly merged into 103,956 Gencode TSS clusters.
+  Timo's whole cell polyA+ CAGE clusters filtered for IDR (0.1) and for HMM TSS prediction strength (0.5) were strandedly merged into 72,186 CAGE clusters.
+  These two types of TSS clusters were then strandedly merged into 151,219 Gencode CAGE clusters of which:
+  - 80,118 are GencOnly
+  - 48,832 are CAGEOnly
+  - 22,269 are GencCAGE
+  and were then quantified using the individual CAGE cluster within each cell line (mean tpm).
+
+* More details are provided at ftp://genome.crg.es/pub/Encode/data_analysis/TSS/Gencodev10_CAGE_TSS_clusters_May2012.pdf
+
+* In this gff file, each line represents a different Gencode CAGE TSS cluster and looks like this:
+--------------------------------------------------------------------------------------------------
+chr1  rikcrg  tss     11818   11924   .       +       .       class: GencOnly A549 0 AG04450 0 BJ 0 CD20+ 0 GM12878 0 H1-hESC 0 HAoAF 0 HAoEC 0 HCH 0 HFDPC 0 HMEpC 0 HOB 0 HPC-PL 0 HPIEpC 0 HSaVEC 0 HUVEC 0 HVMF 0 HWP 0 HeLa-S3 0 HepG2 0 IMR90 0 K562 0 MCF-7 0 Monocytes-CD14+ 0 NHDF 0 NHEK 0 NHEM.f_M2 0 NHEM_M2 0 SK-N-SH_RA 0 SkMC 0 hMSC-AT 0 hMSC-BM 0 hMSC-UC 0 list_genctssclus: chr1_11819_11919_+,chr1_11822_11922_+,chr1_11824_11924_+, list_genctssclus: ENSG00000223972.4,
+
+* Here is the meaning of the different fields and subfields:
+------------------------------------------------------------
+  - field no 1: Gencode CAGE TSS cluster chromosome
+  - field no 2: 'rikcrg'
+  - field no 3: 'TSS'
+  - field no 4: Gencode CAGE TSS cluster start (1-based)
+  - field no 5: Gencode CAGE TSS cluster end (1-based)
+  - field no 6: '.'
+  - field no 7: Gencode CAGE TSS cluster strand
+  - field no 8: '.'
+  - field no 9: list of (key,value):
+     ** Gencode CAGE TSS cluster class (GencOnly, CAGEOnly or GencCAGE)
+     ** expression level in tpm in A549
+     ** expression level in tpm in AG04450
+     ** expression level in tpm in BJ
+     ** expression level in tpm in CD20+
+     ** expression level in tpm in GM12878
+     ** expression level in tpm in H1-hESC
+     ** expression level in tpm in HAoAF
+     ** expression level in tpm in HAoEC
+     ** expression level in tpm in HCH
+     ** expression level in tpm in HFDPC
+     ** expression level in tpm in HMEpC
+     ** expression level in tpm in HOB
+     ** expression level in tpm in HPC-PL
+     ** expression level in tpm in HPIEpC
+     ** expression level in tpm in HSaVEC
+     ** expression level in tpm in HUVEC
+     ** expression level in tpm in HVMF
+     ** expression level in tpm in HWP
+     ** expression level in tpm in HeLa-S3
+     ** expression level in tpm in HepG2
+     ** expression level in tpm in IMR90
+     ** expression level in tpm in K562
+     ** expression level in tpm in MCF-7
+     ** expression level in tpm in Monocytes-CD14+
+     ** expression level in tpm in NHDF
+     ** expression level in tpm in NHEK
+     ** expression level in tpm in NHEM.f_M2
+     ** expression level in tpm in NHEM_M2
+     ** expression level in tpm in SK-N-SH_RA
+     ** expression level in tpm in SkMC
+     ** expression level in tpm in hMSC-AT
+     ** expression level in tpm in hMSC-BM
+     ** expression level in tpm in hMSC-UC
+    ** list of Gencode TSS cluster coordinates ('.' for CAGEOnly)
+    ** list of Gencode TSS cluster genes ('.' for CAGEOnly)

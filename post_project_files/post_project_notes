@@ -1,0 +1,28 @@
+So. Julien's comrades want to get the poly(A) sites in a different fashion.
+
+What do they want?
+
+You currently have an output file. They want this file, but modified to suit
+the consortium... :S sounds scary. Anyway, they want the following:
+
+1) Normalized, tags per million (TPM) reads mapped, instead of / in addition to
+the raw number of supporting reads
+
+2) The 4th column must use different terminology. Use experiment IDs (see
+labExpid attribute in
+/users/rg/jlagarde/projects/encode/scaling/whole_genome/dcc_submission/samples/all_Mouse+Human_samples.tsv
+instead of metadata concatenation)
+
+3) Explicitly list all the experiments which have been considered in the 4th
+field for all cell-lines, like Sarah has done. The best would be a key-value
+pair labExpId:TPM
+
+4) Do this for all 200 RNAseq as well as 34 in mouse.
+
+
+You are grepping out type=bam, dataType=RnaSeq, and LongPolyA for the dashboard
+file to get what you want.
+
+
+One question for Julien: what is the view=Alignments/Splices/Spikeins tag for?
+Should I only use the alignments?

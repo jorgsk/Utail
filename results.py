@@ -4253,6 +4253,87 @@ def join_antiexonic(exonic, anti, genome_dir):
 
     return genome
 
+def write_gff(settings, toosmall, minus, cell_lines, speedrun, expandby):
+    """
+    File must be in compliance with Sarah's file for transcription start sites.
+
+  - field no 1: Poly(A) cluster chromosome
+  - field no 2: 'encodecrg'
+  - field no 3: 'TER/TTS' (transcript end region)/(transcription termination site)
+  - field no 4: Poly(A) cluster start (1-based)'
+  - field no 5: Poly(A) cluster end (1-based)
+  - field no 6: '.'
+  - field no 7: Poly(A) cluster strand
+  - field no 8: '.'
+  - field no 9: list of (key, value) pairs:
+      * Cluster class: (Gencode/GenSeq/RnaSeqOnly)
+      * Cluster center: value
+      * Expression by tpm in GM12878
+      * Expression by tpm in ...
+      *
+      * List of Gencode TTS cluster coordinates ('.' for RnaSeqOnly)
+      * list of Gencode TTS cluster genes ('.' for RnaSeqOnly)
+
+
+    NOTE TO SELF:
+
+    To be able to do the above I must modify the information I keep during
+    clustering. For example, I must keep the positions of the inidividual polyA
+    sites during clustering, or at least the min/max.
+
+    """
+
+    co = cell_lines
+    # 1) get all polyA- datasets
+    if minus:
+        subset = [ds for ds in settings.datasets if ('Minus' in ds) and
+                       ((co[0] in ds) or (co[1] in ds) or (co[2] in ds))]
+
+    # 2) or polyA+ datasets
+    if not minus:
+        subset = [ds for ds in settings.datasets if (not 'Minus' in ds) and
+                       ((co[0] in ds) or (co[1] in ds) or (co[2] in ds))]
+
+    # reduce the nr of datasets
+    if speedrun:
+        subset = subset[:2]
+
+    # 1.1) write each poly(A) site to file +/- expandby
+    batch_key = 'cuffer'
+    region = 'whole'
+
+    dsets, super_3utr = super_falselength(settings, region, batch_key,
+                                          subset, speedrun)
+
+    outdir = os.path.join(settings.here, 'genome_wide_dir')
+
+    if speedrun:
+        outfile = 'all_pAs_speedrun.bed'
+    else:
+        outfile = 'all_pAs.bed'
+
+    outpath = os.path.join(outdir, outfile)
+    outhandle = open(outpath, 'wb')
+
+    for utr_id, utr in super_3utr[region].iteritems():
+        for cls in utr.super_clusters:
+
+            if cls.nr_support_reads > toosmall:
+
+                debug()
+
+                chrm = utr.chrm
+                beg = str(cls.polyA_coordinate-expandby)
+                end = str(cls.polyA_coordinate+expandby)
+                pas = '#'.join(cls.dsets)
+                covr = str(cls.nr_support_reads)
+                strand = cls.strand
+
+                outhandle.write('\t'.join([chrm, beg, end, pas, covr,
+                                           strand])+'\n')
+
+    outhandle.close()
+
 def merge_polyAs(settings, toosmall, minus, cell_lines, speedrun, expandby):
 
     co = cell_lines
@@ -5626,10 +5707,11 @@ def write_all_polyAs(settings):
     covr_more_than = 1 #
     compartments = ['Whole_Cell', 'Cytoplasm', 'Nucleus']
 
-    #speedrun = True
-    speedrun = False
+    speedrun = True
+    #speedrun = False
 
-    merge_polyAs(settings, covr_more_than, minus, compartments, speedrun, expandby)
+    #merge_polyAs(settings, covr_more_than, minus, compartments, speedrun, expandby)
+    write_gff(settings, covr_more_than, minus, compartments, speedrun, expandby)
 
 def main():
     # The path to the directory the script is located in
@@ -5642,7 +5724,7 @@ def main():
     settings = Settings(os.path.join(here, 'UTR_SETTINGS'), savedir, outputdir,
                         here, chr1=False)
 
-    gencode_report(settings, speedrun=False)
+    #gencode_report(settings, speedrun=False)
 
     # early, medium, late poly(A) in cytoplasm and nucleus
     #EML(settings)
@@ -5656,7 +5738,7 @@ def main():
     # NOTE must fix for individual cell lines
     #gencode_cufflinks_report(settings)
 
-    #write_all_polyAs(settings)
+    write_all_polyAs(settings)
 
     # Hagen's stuff
     #hagen(settings, speedrun=False) # negative results for your pA
