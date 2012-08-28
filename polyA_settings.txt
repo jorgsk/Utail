@@ -1,0 +1,51 @@
+[DATASETS]
+# Provide paths to the RNA-seq read files. The files must be either gem-files,
+# zipped gem-files, bed-files, or zipped bedfiles. The extensions must thus be
+# either of: .map.gz, .gem.map.gz, .bed, or .bed.gz.
+# Avoid spaces and punctuation marks (.) in the filenames to aviod problems.
+
+[ANNOTATION]
+# Put annotation_path = false if you don't want to use an annotation.
+# Supported annotation formats: GENCODE, ENSEMBL
+# If you want a stranded analysis, use 'stranded = true'. Use this if you
+# supply genomic regions where you know that the strands of the genomic regions
+# are factual. Use 'stranded = false' if you're just investigting general
+# 'exonic' regions for example. If you supply both regional bedfiles and an
+# annotation, the bedfiles will take presedence.
+
+# annotation_path = false
+# annotation_path = /users/rg/jskancke/phdproject/3UTR/gencode7/gencode7_annotation.gtf
+annotation_path = /home/jorgsk/phdproject/3UTR/gencode7/gencode7_annotation.gtf
+annotation_format = GENCODE
+# annotation_format = ENSEMBL
+
+# annotated_polyA_files = /users/rg/jskancke/phdproject/3UTR/the_project/source_bedfiles/polyAdb_gencode_merged.bed
+annotated_polyA_files = /home/jorgsk/phdproject/3UTR/the_project/source_bedfiles/polyAdb_gencode_merged.bed
+
+[SUPPLIED_3UTR_BEDFILE]
+[RESTRICT_READS]
+# Set RESTRICT_READS to the number of reads to grab from the datasets. This
+# option is primarily for debugging purposes.
+restrict_reads = false
+# restrict_reads = 500000
+
+[CHROMOSOME1]
+# only_chr1 = true:
+# run the whole simulation only with chromosome 1. This is for making
+# speed-runs of the program. The first time this setting is used, the
+# chromosome 1 entries from the annotation file above will be filtered out to a
+# separate file.
+#
+only_chr1 = false
+# run with all chromosomes
+# only_chr1 = true
+
+# NOTE: leve out the suffix of the index file!!
+# gem_mapper_index = /users/rg/atanzer/DATA/GEM_indices/Genomes/H.sapiens.genome.hg19.main
+gem_mapper_index = /home/jorgsk/phdproject/3UTR/mapping_files/gem/H.sapiens.genome.hg19.main
+
+[CPU_CORES]
+# Set how many cores you wish to use. default uses system_max minus 1. For
+# example, with two processors that have two cores each, default is 4-1 = 3.
+max_cores = 4
+# max_cores = default
