@@ -42,7 +42,8 @@ class Settings(object):
     the UTR_SETTINGS file. Useful for passing to downstream code.
     """
 
-    def __init__(self, datasets, read_limit, max_cores, chr1, gem_index):
+    def __init__(self, datasets, read_limit, max_cores, chr1, gem_index,
+                 hg_fasta):
 
         self.datasets = datasets
         # these two might be included later
@@ -54,6 +55,8 @@ class Settings(object):
         self.chr1 = chr1
         self.gem_index = gem_index
 
+        self.hgfasta_path = hg_fasta
+
     def DEBUGGING(self):
         """
         For modifying the settings from UTR_FINDER -- only to be used in when
@@ -63,7 +66,7 @@ class Settings(object):
         self.chr1 = True
         #self.chr1 = False
         #self.read_limit = False
-        self.read_limit = 1000000 # less than 10000 no reads map
+        self.read_limit = 100000 # less than 10000 no reads map
         self.max_cores = 3
 
 def verify_access(f):
@@ -108,7 +111,7 @@ def read_settings(settings_file):
     conf.read(settings_file)
 
     expected_fields = ['DATASETS', 'ANNOTATION', 'CPU_CORES', 'RESTRICT_READS',
-                       'CHROMOSOME1', 'GEM_MAPPER']
+                       'CHROMOSOME1', 'GEM_MAPPER', 'HG19FASTA']
 
     missing = set(conf.sections()) - set(expected_fields)
 
@@ -145,10 +148,13 @@ def read_settings(settings_file):
     # Get the gem_index_file
     gem_index = conf.get('GEM_MAPPER', 'gem_mapper_index')
 
+    # Get a file for the hg19 fasta file
+    hg19_fasta = conf.get('HG19FASTA', 'hg19_fasta_path')
+
     # you need the index file for the gem-mapper
     verify_access(gem_index+'.blf') # Check if is a file
 
-    return(datasets, read_limit, max_cores, chr1, gem_index)
+    return(datasets, read_limit, max_cores, chr1, gem_index, hg19_fasta)
 
 def make_directories(here, dirnames, DEBUGGING):
     """
@@ -388,41 +394,44 @@ def pipeline(exp_id, dset_info, tempdir, output_dir, settings, DEBUGGING,
     # Give new names to some parameters to shorten the code
     read_limit = settings.read_limit
 
-    just_dset = '_'.join(exp_id.split('_')[:-1])
-    polyA_path = os.path.join(tempdir, 'polyA_reads_'+just_dset+'.fa')
+    merged_info = exp_id + '__' + dset_info['description']
+
+    # the raw poly(A) reads
+    putative_polyA_reads = os.path.join(tempdir, 'polyA_reads_'+merged_info+'.fa')
 
     if DEBUGGING:
-        cache_dir = os.path.join(os.path.join(here, 'DEBUGGING'),
-                                 'polyA_cache')
+        output_dir = os.path.join(os.path.join(here, 'DEBUGGING'),
+                                 'polyA_output')
     else:
-        cache_dir = os.path.join(here, 'polyA_output')
+        output_dir = os.path.join(here, 'polyA_output')
 
-    if not os.path.isdir(cache_dir):
-        os.makedirs(cache_dir)
+    if not os.path.isdir(output_dir):
+        os.makedirs(output_dir)
 
-    print('Obtaining reads from mapping for {0} ...\n'.format(exp_id))
-    all_reads = get_bed_reads(dset_info['paths'], exp_id, read_limit, tempdir,
-                              polyA_path)
+    print('Obtaining unmapped reads from {0} ...\n'.format(exp_id))
+    all_reads = get_putative_polyA_reads(dset_info['paths'], exp_id, read_limit,
+                                         tempdir, putative_polyA_reads)
 
     # Extract info from reads
-    (unmapped_reads, total_reads, total_mapped_reads, acount, tcount) = all_reads
+    (total_nr_reads, total_nr_mapped_reads, acount, tcount) = all_reads
 
     # PolyA pipeline: remove low-quality reads, remap, and -> .bed-format:
 
-    # 1) Process reads by removing those with low-quality, and removing the
-    #    leading Ts and/OR trailing As.
-    processed_reads, avrg_read_len = process_reads(unmapped_reads)
+    # 1) Process reads by removing very short ones or ones with abnormal A or T
+    # frequencies
+    print('Removing low quality reads.')
+    processed_reads, avrg_read_len = process_reads(putative_polyA_reads)
 
     # 2) Map the surviving reads to the genome and return unique ones
     print('Remapping poly(A)-reads for {0} + noise filtering...'.format(exp_id))
     polyA_bed_path = map_reads(processed_reads, avrg_read_len, settings)
 
-    # 3) Save the polyA_bed_path to the cache dir
-    polydone_path = os.path.splitext(os.path.split(polyA_path)[1])[0]
-    polyA_cached_path = os.path.join(cache_dir, polydone_path+\
+    # 3) Save the polyA_bed_path to the output dir
+    polydone_path = os.path.splitext(os.path.split(putative_polyA_reads)[1])[0]
+    polyA_processed = os.path.join(output_dir, polydone_path+\
                                      '_processed_mapped.bed')
 
-    shutil.copyfile(polyA_bed_path, polyA_cached_path)
+    shutil.copyfile(polyA_bed_path, polyA_processed)
 
     debug()
 
@@ -447,7 +456,7 @@ def process_reads(pA_reads_path):
             As = seq.count('A')
             Ts = seq.count('T')
             # only save if A/T frequencies are not abnormal
-            if (As/seqlen < 0.70) and (Ts/seqlen < 0.70):
+            if (As/seqlen < 0.60) and (Ts/seqlen < 0.60):
                 length_sum += seqlen
                 tot_reads += 1
                 # trim the title
@@ -599,7 +608,7 @@ def read_is_noise(chrm, strand, beg, seq, at, tail_info, settings):
 
     pass
 
-def get_bed_reads(dset_paths, exp_id, read_limit, tempdir, polyA_path):
+def get_putative_polyA_reads(dset_paths, exp_id, read_limit, tempdir, polyA_path):
     """
     Get reads from file. Determine file-type. If gem, extract from gem and
     convert to bed. If .bed, concatenate the bedfiles and convert them to the
@@ -716,7 +725,7 @@ def get_bed_reads(dset_paths, exp_id, read_limit, tempdir, polyA_path):
     print('{0}: Nr. of readsReads with poly(A)-tail: {1}'.format(exp_id, acount))
     print('{0}: Nr. of readsReads with poly(T)-tail: {1}\n'.format(exp_id, tcount))
 
-    return (polyA_path, total_reads, total_mapped_reads, acount, tcount)
+    return (total_reads, total_mapped_reads, acount, tcount)
 
 def strip_tailT(seq, lead_T, non_T, min_length, rd, min_T):
     """

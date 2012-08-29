@@ -35,10 +35,14 @@ only_chr1 = false
 # run with all chromosomes
 # only_chr1 = true
 
+[HG19FASTA]
+# a fasta file for hg19
+hg19_fasta_path = /users/rg/jskancke/phdproject/3UTR/hg19fasta/hg19.fa
+
 [GEM_MAPPER]
 # NOTE: leve out the suffix of the index file!!
-# gem_mapper_index = /users/rg/atanzer/DATA/GEM_indices/Genomes/H.sapiens.genome.hg19.main
-gem_mapper_index = /home/jorgsk/phdproject/3UTR/mapping_files/gem/H.sapiens.genome.hg19.main
+gem_mapper_index = /users/rg/atanzer/DATA/GEM_indices/Genomes/H.sapiens.genome.hg19.main
+# gem_mapper_index = /home/jorgsk/phdproject/3UTR/mapping_files/gem/H.sapiens.genome.hg19.main
 
 [CPU_CORES]
 # Set how many cores you wish to use. default uses system_max minus 1. For
