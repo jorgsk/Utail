@@ -42,7 +42,7 @@ class Settings(object):
     the UTR_SETTINGS file. Useful for passing to downstream code.
     """
 
-    def __init__(self, datasets, read_limit, max_cores, chr1, hg_fasta, gem_index):
+    def __init__(self, datasets, read_limit, max_cores, chr1, gem_index):
 
         self.datasets = datasets
         # these two might be included later
@@ -78,6 +78,25 @@ def verify_access(f):
               'check permissions'.format(f))
         sys.exit()
 
+def get_dataset_paths(dataset_filepaths):
+    """
+    Make a mapping from dsetId to paths and description
+    """
+
+    datasets = {}
+    for line in open(dataset_filepaths, 'rb'):
+        if line.startswith('#'):
+            continue
+
+        exp_id, description, paths = line.split('\t')
+        paths = paths.rstrip() # remove end of line character
+
+        subset = {'description': description, 'paths': paths.split(';')}
+
+        datasets[exp_id] = subset
+
+    return datasets
+
 def read_settings(settings_file):
     """
     Read the settings and get all the settings parameters. These should be used
@@ -89,7 +108,7 @@ def read_settings(settings_file):
     conf.read(settings_file)
 
     expected_fields = ['DATASETS', 'ANNOTATION', 'CPU_CORES', 'RESTRICT_READS',
-                       'CHROMOSOME1', 'HG_FASTA', 'PLOTTING']
+                       'CHROMOSOME1', 'GEM_MAPPER']
 
     missing = set(conf.sections()) - set(expected_fields)
 
@@ -99,25 +118,12 @@ def read_settings(settings_file):
         print('The following options sections are missing: {}'.format(missing))
         sys.exit()
 
-    datasets = dict((dset, files.split(':')) for dset,
-                    files in conf.items('DATASETS'))
-
-    # Go through all the items in 'datsets'. Pop the directories from the list.
-    # They are likely to be shortcuts.
-    for (dset, dpaths) in datasets.items():
-        for pa in dpaths:
-            if os.path.isdir(pa):
-                datasets.pop(dset)
-
-    if 'carrie' in datasets:
-        datasets.pop('carrie')
-    if 'genc7' in datasets:
-        datasets.pop('genc7')
+    dataset_filepaths = conf.items('DATASETS')[0][1]
+    datasets = get_dataset_paths(dataset_filepaths)
 
     # check if the datset files are actually there...
-    # BUT! if you have polyA_cache and the files are loaded, you don't need this
-    for dset, files in datasets.items():
-        [verify_access(f) for f in files]
+    #for dset, files in datasets.items():
+        #[verify_access(f) for f in files]
 
     # cpu cores
     try:
@@ -136,15 +142,13 @@ def read_settings(settings_file):
     # restrict to chromosome 1
     chr1 = conf.getboolean('CHROMOSOME1', 'only_chr1')
 
-    # human genome fasta file
-    hg_fasta = conf.get('HG_FASTA', 'hg_fasta')
-
     # Get the gem_index_file
-    gem_index = conf.get('POLYA_READS', 'gem_mapper_index')
+    gem_index = conf.get('GEM_MAPPER', 'gem_mapper_index')
+
     # you need the index file for the gem-mapper
     verify_access(gem_index+'.blf') # Check if is a file
 
-    return(datasets, read_limit, max_cores, chr1, hg_fasta, gem_index)
+    return(datasets, read_limit, max_cores, chr1, gem_index)
 
 def make_directories(here, dirnames, DEBUGGING):
     """
@@ -174,16 +178,145 @@ def make_directories(here, dirnames, DEBUGGING):
 
     return outdirs
 
+def run_dataset_map():
+    """
+    Create a mapping from labExpId to bam file locations under
+    ENCODE/gingerascarrie...
+
+    For this you require the files:
+        1) Dataset.info.txt, which maps datasets to folders
+        2) hg19_RNA_dashboard_files.txt.crg, maps datsets to labExpId
+
+    You have copied both these files to your local drive.
+
+    UPDATE: the bam files from David's pipeline do not contain the unmapped
+    reads. wtflord. sticking to gem. I still need to make the mapping though.
+
+    1) Make the dataset -> folder mapping K532_WC_2 will be the second
+    replicate (1 being the first replicate ..) of cell, compartment.
+
+    2) make the labExpId -> datset mapping
+    """
+    from glob import glob
+
+    ging_folder = '/users/rg/dgonzalez/Projects/ENCODE/GingerasCarrie'
+
+    # 1) dataset -> folder mapping
+    dset_info = 'post_project_files/Dataset.info.txt'
+    dset_path = {}
+
+    for line in open(dset_info, 'rb'):
+        set_code, cell_line, compartment, longshort, rpl = line.split()
+
+        # get only the long poly(A) samples
+        if longshort != 'LONGPOLYA':
+            continue
+
+        # only get gingeras datsets
+        if set_code[:4] != 'Ging':
+            continue
+
+        # get rid of two pesky datasets
+        if ('BROAD' in cell_line) or ('SKNSHRA' in cell_line):
+            continue
+
+        # don't get spikein or poly(A) minus
+        if ('spike' in set_code) or ('Minus' in set_code):
+            continue
+
+        #if 'BROAD' in line:
+            #debug()
+
+        dataset = '_'.join([cell_line, compartment.lower(), rpl])
+
+        folder = set_code[4:]
+
+        dset_path[dataset] = glob(ging_folder+'/'+folder+'/SAM/*.map.gz')
+
+    # 2) dataset -> labExpId
+    labExpId_info = 'post_project_files/all_Gingeras_samples.tsv'
+    dset_labExpId = {}
+
+    headers = 0
+
+    for line in open(labExpId_info, 'rb'):
+
+        # skip comments
+        if line.startswith('#'):
+            headers = line.split()
+            headers[0] = headers[0][1:]
+            continue
+
+        # make some rudementary filtes
+        if ('RnaSeq' not in line) or ('longPolyA' not in line):
+            continue
+
+        # make a dictionary of the line
+        line_info = dict(zip(headers, line.split()))
+
+        # re-filter just to be sure some filters
+        if line_info['dataType'] != 'RnaSeq':
+            continue
+
+        if line_info['rnaExtract'] != 'longPolyA':
+            continue
+
+        # obtain cell line, compartment, and repliate info
+        cell_line = line_info['cell']
+
+        # if the cell is hela or h1, change the wording to make it compatible
+        # with the other textfile :(
+        if cell_line == 'HeLa-S3':
+            cell_line = 'HELAS3'
+
+        elif cell_line == 'H1-hESC':
+            cell_line = 'H1HESC'
+
+        elif cell_line == 'MCF-7':
+            cell_line = 'MCF7'
+
+        elif cell_line == 'HepG2':
+            cell_line = 'HEPG2'
+
+        compartment =  line_info['localization']
+
+        # not all entries have a replicate
+        if 'replicate' in line_info:
+            rpl = line_info['replicate']
+        else:
+            rpl = '1'
+
+        dataset = '_'.join([cell_line, compartment, rpl])
+
+        dset_labExpId[dataset] = line_info['labExpId']
+
+    outp_file = 'post_project_files/id_descr_paths.tsv'
+    outp_handle = open(outp_file, 'wb')
+
+    outp_handle.write('#labExpID\tDescription\tPaths\n')
+
+    # write to file 
+    for dset, paths in dset_path.items():
+        labId = dset_labExpId[dset]
+        outp_handle.write('\t'.join([labId, dset, ';'.join(paths)]) + '\n')
+
+    outp_handle.close()
+
+    return outp_file
+
 def main():
     """
     This method is called if script is run as __main__.
     """
 
+    # obtain a file that maps from labID to paths and previous dset-info-keys
+    # XXX not part of the pipeline; just here for convenience
+    #map_file = run_dataset_map()
+
     # Set debugging mode. This affects the setting that are in the debugging
     # function (called below). It also affects the 'temp' and 'output'
     # directories, respectively.
-
-    DEBUGGING = True # warning... some stuff wasnt updated here
+    DEBUGGING = True #
     #DEBUGGING = False
 
     # The path to the directory the script is located in
@@ -219,11 +352,11 @@ def main():
     # Apply all datasets to the pool
     t1 = time.time()
 
-    # dset_id and dset_reads are as given in UTR_SETTINGS
-    for dset_id, dset_reads in settings.datasets.items():
+    # exp_id and dset_reads are as given in UTR_SETTINGS
+    for exp_id, dset_info in settings.datasets.items():
 
         # The arguments needed for the pipeline
-        arguments = (dset_id, dset_reads, tempdir, output_dir, settings,
+        arguments = (exp_id, dset_info, tempdir, output_dir, settings,
                      DEBUGGING, here)
 
         ###### FOR DEBUGGING ######
@@ -244,7 +377,7 @@ def main():
     print('Total elapsed time: {0}\n'.format(time.time()-t1))
     ###################################################################
 
-def pipeline(dset_id, dset_reads, tempdir, output_dir, settings, DEBUGGING,
+def pipeline(exp_id, dset_info, tempdir, output_dir, settings, DEBUGGING,
              here):
     """
     Get reads, get polyA reads, cluster polyA reads, get coverage, combine it in
@@ -255,7 +388,7 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, settings, DEBUGGING,
     # Give new names to some parameters to shorten the code
     read_limit = settings.read_limit
 
-    just_dset = '_'.join(dset_id.split('_')[:-1])
+    just_dset = '_'.join(exp_id.split('_')[:-1])
     polyA_path = os.path.join(tempdir, 'polyA_reads_'+just_dset+'.fa')
 
     if DEBUGGING:
@@ -267,21 +400,21 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, settings, DEBUGGING,
     if not os.path.isdir(cache_dir):
         os.makedirs(cache_dir)
 
-    all_reads = get_bed_reads(dset_reads, dset_id, read_limit, tempdir, polyA_path)
+    print('Obtaining reads from mapping for {0} ...\n'.format(exp_id))
+    all_reads = get_bed_reads(dset_info['paths'], exp_id, read_limit, tempdir,
+                              polyA_path)
 
-    # Extract from all_reads. polyA might have been modified from True to
-    # 'some_path' if cached polyA reads have been found
-    (bed_reads, p_polyA_bed, total_reads, total_mapped_reads, acount, tcount) =\
-            all_reads
+    # Extract info from reads
+    (unmapped_reads, total_reads, total_mapped_reads, acount, tcount) = all_reads
 
     # PolyA pipeline: remove low-quality reads, remap, and -> .bed-format:
 
     # 1) Process reads by removing those with low-quality, and removing the
     #    leading Ts and/OR trailing As.
-    processed_reads, avrg_read_len = process_reads(p_polyA_bed)
+    processed_reads, avrg_read_len = process_reads(unmapped_reads)
 
     # 2) Map the surviving reads to the genome and return unique ones
-    print('Remapping poly(A)-reads for {0} + noise filtering...'.format(dset_id))
+    print('Remapping poly(A)-reads for {0} + noise filtering...'.format(exp_id))
     polyA_bed_path = map_reads(processed_reads, avrg_read_len, settings)
 
     # 3) Save the polyA_bed_path to the cache dir
@@ -290,6 +423,8 @@ def pipeline(dset_id, dset_reads, tempdir, output_dir, settings, DEBUGGING,
                                      '_processed_mapped.bed')
 
     shutil.copyfile(polyA_bed_path, polyA_cached_path)
+
+    debug()
 
 def process_reads(pA_reads_path):
     """
@@ -464,56 +599,16 @@ def read_is_noise(chrm, strand, beg, seq, at, tail_info, settings):
 
     pass
 
-def get_bed_reads(dset_reads, dset_id, read_limit, tempdir, polyA, get_length,
-                  polyA_path):
+def get_bed_reads(dset_paths, exp_id, read_limit, tempdir, polyA_path):
     """
     Get reads from file. Determine file-type. If gem, extract from gem and
     convert to bed. If .bed, concatenate the bedfiles and convert them to the
-    desired internal format.
-    """
+    desired internal format. Works like a wrapper around zcat.
 
-    # Path of .bed output
-    out_path = os.path.join(tempdir, 'reads_'+dset_id+'.bed')
-
-    # allowed suffixes:
-    # [gem, map, gz]
-    ok_sufx = ['gem', 'map', 'gz']
-
-    # Building a suffix: Start with a '.' separated list of
-    # the file name. Proceed backwards, adding to reverese_suffix if the entry
-    # is in the allowed group.
-    dotsplit = os.path.basename(dset_reads[0]).split('.')
-    suflist = [sufpart for sufpart in reversed(dotsplit) if sufpart in ok_sufx]
-
-    suffix = '.'.join(reversed(suflist))
-
-    # If in gem-format, go through the file with zcat -f
-    if suffix in ['gem.map.gz', 'gem.map']:
-        print('Obtaining reads from mapping for {0} ...\n'.format(dset_id))
-        # Get only the uniquely mapped reads (up to 2 mismatches)
-        bundle = zcat_wrapper(dset_id, dset_reads, read_limit, out_path, polyA,
-                                   polyA_path, get_length)
-
-        (total_mapped_reads, total_reads, acount, tcount) = bundle
-
-    else:
-        print('Non-valid suffix: {0}. Allowed suffixes are .gem.map.gz and \
-              .gem.map'.format(suffix))
-        sys.exit()
-
-    return (out_path, polyA_path, total_reads, total_mapped_reads, acount, tcount)
-
-def zcat_wrapper(dset_id, bed_reads, read_limit, out_path, polyA, polyA_path,
-                 get_length):
-    """
-    Wrapper around zcat. Call on gem-mapped reads. Write uniquely mapped
-    reads (up to 2 mismatches) to .bed file.
-
-    If polyA parameter was passed as True, write unmapped reads with leading
-    poly(T) or tailing poly(A) to .bed file. The read is written to the bed-file
-    as stripped of polyA or polyT stretch. Either 5 contiguous A/Ts or 6 A/Ts in
-    the last/first 7 nucleotides must be present for the read to be considered
-    as a putative poly(A) read.
+    Write unmapped reads with leading poly(T) or tailing poly(A) to .bed file.
+    The read is written to the bed-file as stripped of polyA or polyT stretch.
+    Either 5 contiguous A/Ts or 6 A/Ts in the last/first 7 nucleotides must be
+    present for the read to be considered as a putative poly(A) read.
     """
 
     # Keep track on the number of reads you get for the sake of RPKM
@@ -522,18 +617,7 @@ def zcat_wrapper(dset_id, bed_reads, read_limit, out_path, polyA, polyA_path,
     acount = 0
     tcount = 0
 
-    # TODO If the out_path exists, print to screen that you're using the version in
-    # the temp-dir. Continue with the get_length flag as false. Note: this will
-    # disable speed-runs, where you want to do something quick. Why did I want
-    # to do it again? I don't remember.
-    #debug()
-
-    # if get_length is false AND! polyA is given, return nothing
-    if not get_length and polyA != True:
-        return total_mapped_reads, total_reads, acount, tcount
-
-    # File objects for writing to
-    out_file = open(out_path, 'wb')
+    # File object for writing to
     polyA_file = open(polyA_path, 'wb')
 
     # Accept up to two mismatches. Make as set for speedup.
@@ -542,11 +626,8 @@ def zcat_wrapper(dset_id, bed_reads, read_limit, out_path, polyA, polyA_path,
     # nucleotides
     nucleotides = set(['G', 'A', 'T', 'C'])
 
-    # A dictionary of strands
-    getstrand = {'R':'-', 'F':'+'}
-
     # Run zcat with -f to act as noram cat if the gem-file is not compressed
-    cmd = ['zcat', '-f'] + bed_reads
+    cmd = ['zcat', '-f'] + dset_paths
     f = Popen(cmd, stdout=PIPE)
 
     # You need an overall method for determining tails.
@@ -566,7 +647,7 @@ def zcat_wrapper(dset_id, bed_reads, read_limit, out_path, polyA, polyA_path,
     min_T = 'T'*min_length
 
     # Make regular expression for getting read-start
-    start_re = re.compile('[0-9]*')
+    #start_re = re.compile('[0-9]*')
     trail_A = re.compile('A{{{0},}}'.format(min_length))
     lead_T = re.compile('T{{{0},}}'.format(min_length))
     non_A = re.compile('[^A]')
@@ -577,7 +658,7 @@ def zcat_wrapper(dset_id, bed_reads, read_limit, out_path, polyA, polyA_path,
         try:
             (ID, seq, quality, mapinfo, position) = map_line.split('\t')
         except ValueError:
-            print 'read error from line {0} in {1} '.format(map_line, bed_reads)
+            print 'read error from line {0} in {1} '.format(map_line, dset_paths)
             continue
 
         total_reads +=1
@@ -586,68 +667,56 @@ def zcat_wrapper(dset_id, bed_reads, read_limit, out_path, polyA, polyA_path,
         if read_limit and total_reads > read_limit:
             break
 
-        # Acceptable and poly(A) reads are mutually exclusive.
-        if mapinfo in acceptable and get_length == True:
-            # Get chromosome
-            chrom, rest = position.split(':')
-            # Get the strand
-            strand = getstrand[rest[0]]
-            # Get read beg
-            beg = start_re.match(rest[1:]).group()
-
-            # Write to file
-            out_file.write('\t'.join([chrom, beg, str(int(beg)+len(seq)), '0',
-                                      '0', strand]) + '\n')
+        # count mapped reads
+        if mapinfo in acceptable:
             total_mapped_reads +=1
 
-        # When looking for poly(A) reads, filter by non-uniquely mapped reads
-        if polyA == True:
-            if mapinfo[:5] == '0:0:0':
-                if seq[:2] == 'NN':
-                    seq = seq[2:]
+        # Look for unmapped reads
+        if mapinfo[:5] == '0:0:0':
+            if seq[:2] == 'NN':
+                seq = seq[2:]
 
-                # If more than two ambigious, discard.
-                if seq.count('N') > 2:
-                    continue
+            # If more than two bases are ambigious, discard.
+            if seq.count('N') > 2:
+                continue
 
-                # Check for putative poly(T)-head. Remove tail and write to file.
-                if (seq[:min_length] == min_T) or (seq[:rd].count('T') >=rd-1)\
-                   or (seq[:2*rd].count('T') >=2*rd-2):
+            # Check for putative poly(T)-head. Remove tail and write to file.
+            if (seq[:min_length] == min_T) or (seq[:rd].count('T') >=rd-1)\
+               or (seq[:2*rd].count('T') >=2*rd-2):
 
-                    t_strip = strip_tailT(seq, lead_T, non_T, min_length, rd,
-                                          min_T)
-                    striplen = len(t_strip)
-                    if striplen > 25:
-                        seqlen = len(seq)
-                        tail = seq[:seqlen-striplen]
-                        tail_rep = ':'.join([l+'='+str(tail.count(l)) for
-                                             l in nucleotides])
-                        polyA_file.write(t_strip + ' T '+tail_rep+'\n')
-                        tcount +=1
+                t_strip = strip_tailT(seq, lead_T, non_T, min_length, rd,
+                                      min_T)
+                striplen = len(t_strip)
+                if striplen > 25:
+                    seqlen = len(seq)
+                    tail = seq[:seqlen-striplen]
+                    tail_rep = ':'.join([l+'='+str(tail.count(l)) for
+                                         l in nucleotides])
+                    polyA_file.write(t_strip + ' T '+tail_rep+'\n')
+                    tcount +=1
 
-                # Check for putative poly(A)-tail. Remove tail and write to file.
-                if (seq[-min_length:] == min_A) or (seq[-rd:].count('A') >=rd-1)\
-                   or (seq[-2*rd:].count('A') >=2*rd-2):
+            # Check for putative poly(A)-tail. Remove tail and write to file.
+            if (seq[-min_length:] == min_A) or (seq[-rd:].count('A') >=rd-1)\
+               or (seq[-2*rd:].count('A') >=2*rd-2):
 
-                    a_strip = strip_tailA(seq, trail_A, non_A, min_length, rd,
-                                          min_A)
-                    striplen = len(a_strip)
-                    if striplen > 25:
-                        seqlen = len(seq)
-                        tail = seq[-(seqlen-striplen):]
-                        tail_rep = ':'.join([l+'='+str(tail.count(l)) for
-                                             l in nucleotides])
-                        polyA_file.write(a_strip + ' A '+tail_rep+'\n')
-                        acount += 1
+                a_strip = strip_tailA(seq, trail_A, non_A, min_length, rd,
+                                      min_A)
+                striplen = len(a_strip)
+                if striplen > 25:
+                    seqlen = len(seq)
+                    tail = seq[-(seqlen-striplen):]
+                    tail_rep = ':'.join([l+'='+str(tail.count(l)) for
+                                         l in nucleotides])
+                    polyA_file.write(a_strip + ' A '+tail_rep+'\n')
+                    acount += 1
 
-    out_file.close()
     polyA_file.close()
 
-    print('\n{0}: Nr. of total reads: {1}'.format(dset_id, total_reads))
-    print('{0}: Nr. of readsReads with poly(A)-tail: {1}'.format(dset_id, acount))
-    print('{0}: Nr. of readsReads with poly(T)-tail: {1}\n'.format(dset_id, tcount))
+    print('\n{0}: Nr. of total reads: {1}'.format(exp_id, total_reads))
+    print('{0}: Nr. of readsReads with poly(A)-tail: {1}'.format(exp_id, acount))
+    print('{0}: Nr. of readsReads with poly(T)-tail: {1}\n'.format(exp_id, tcount))
 
-    return (total_mapped_reads, total_reads, acount, tcount)
+    return (polyA_path, total_reads, total_mapped_reads, acount, tcount)
 
 def strip_tailT(seq, lead_T, non_T, min_length, rd, min_T):
     """
