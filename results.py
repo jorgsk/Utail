@@ -33,7 +33,7 @@ import time
 import glob
 import cPickle as pickle
 
-import pybedtools
+from pybedtools import BedTool, chromsizes
 
 # For making nice tables
 #from TableFactory import *
@@ -166,13 +166,16 @@ class Super(object):
     A simplified class for the super objects
     """
 
-    def __init__(self, dsets, center, covrg, tail_types, tail_infos, strand,
-                 nearby_PASes, PAS_distances, annot_distances, PET_sup,
+    def __init__(self, dsets, begend, center, coverages, covrg_sum, tail_types,
+                 tail_infos, strand, nearby_PASes, PAS_distances,
+                 annot_distances, PET_sup,
                  cuffL_support):
 
+        self.beg, self.end = begend
         self.dsets = dsets
+        self.coverages = coverages
         self.polyA_coordinate = center
-        self.nr_support_reads = covrg
+        self.nr_support_reads = covrg_sum
         self.tail_types = tail_types
         self.tail_infos = tail_infos
         self.strand = strand
@@ -932,13 +935,13 @@ def super_falselength(settings, region, batch_key, subset=[], speedrun=False):
 
 def get_super_regions(dsets, settings, batch_key):
     """
-    Use bed-tools to cluster the 3utrs
+    Use bed-tools to cluster the regions
 
-    Let each 3UTR know about all the cell lines and compartments where its
+    Let each dna-patch know about all the cell lines and compartments where its
     poly(A) clusters are found.
 
-    Update all the 3UTR clusters in dsetswith their super-cluster key
-    At the same time create a 3UTR dict. Each 3UTR has information about the
+    Update all the clusters in dsetswith their super-cluster key
+    At the same time create a 3UTR dict. Each dna-patch has information about the
     compartments and cell lines where it resides.
 
     dsets has a dsets[cell_line][compartment][feature_dict] structure
@@ -957,7 +960,7 @@ def get_super_regions(dsets, settings, batch_key):
     # 1) super cluster key: 'chr1-10518929', for example
     # 2) the other datasets where this cluster appears (hela nucl etc)
 
-    cluster_file = os.path.join(settings.here,'merge_dir','merged_pA_'+batch_key)
+    cluster_file = os.path.join(settings.here, 'merge_dir', 'merged_pA_'+batch_key)
     temp_cluster_file = cluster_file + '_temp'
 
     out_handle = open(cluster_file, 'wb')
@@ -985,20 +988,17 @@ def get_super_regions(dsets, settings, batch_key):
                                      cls.tail_info,
                                      PAS,
                                      PAS_distance,
+                                     str(cls.nr_support_reads),
                                      str(cls.annotated_polyA_distance),
                                      str(cls.PET_support),
                                      str(cls.cuff_support)])
                     line_nr +=1
-                    # bug at 6232 -> way too large name.
-                    # cls id anti-3utr_32546
-                    #if line_nr == 6232:
-                        #debug()
-                    # also add PAS_distance and PAS_type
+
                     out_handle.write('\t'.join([cls.chrm,
                                                 str(cls.polyA_coordinate),
                                                 str(cls.polyA_coordinate+1),
                                                 name,
-                                                str(cls.nr_support_reads),
+                                                str(0),
                                                 cls.strand+'\n'
                                                ]))
     out_handle.close()
@@ -1014,9 +1014,6 @@ def get_super_regions(dsets, settings, batch_key):
     # doesnt find the bedtools main file it seems to be using
     #os.chdir(bedDir) CRG
 
-    # XXX subtractBed fails because merged_pA_first_ladder contas a line of
-    # 30mbytes at line 6231 with region=whole
-    #debug()
     # i.5) cut away the exon-exon noise
     cmd = [mySubBed, '-a', cluster_file, '-b', junctions]
     p1 = Popen(cmd, stdout=open(temp_cluster_file, 'wb'), stderr=PIPE)
@@ -1044,6 +1041,8 @@ def get_super_regions(dsets, settings, batch_key):
     myMergeBed = 'mergeBed'
     # iii) merge and max scores
     cmd = [myMergeBed, '-nms', '-s', '-scores', 'sum', '-i', expanded]
+    # iii) merge and collapse scores
+    #cmd = [myMergeBed, '-nms', '-s', '-scores', 'collapse', '-i', expanded]
     p3 = Popen(cmd, stdout=PIPE, stderr=PIPE)
 
     # check for errors. This doesn't work. Its it because you haven't done a
@@ -1055,12 +1054,11 @@ def get_super_regions(dsets, settings, batch_key):
     # go back to here CRG
     #os.chdir(settings.here)
 
-    # iv) read therough the centered output and update the super_cluster
+    # iv) read through the centered output and update the super_cluster
     for line in p3.stdout:
         (chrm, beg, end, names, maxcovrg, strand) = line.split()
 
         center = int((int(beg)+int(end))/2)
-        polyA_coverage = int(float(maxcovrg))
 
         dsets = []
         f_ids = []
@@ -1068,6 +1066,7 @@ def get_super_regions(dsets, settings, batch_key):
         tail_infos = []
         nearby_PASes = []
         PAS_distances = []
+        coverages = []
         annot_distances = []
         pet_sup = []
         cuf_sup = []
@@ -1075,7 +1074,7 @@ def get_super_regions(dsets, settings, batch_key):
         # un-split the joined names
         name_list = names.split(';')
         for names2 in name_list:
-            (dset, f_id, t_type, t_info, nearby_PAS, PAS_distance,
+            (dset, f_id, t_type, t_info, nearby_PAS, PAS_distance, coverage,
              annot_dist, PET_support, cufflinks_support) = names2.split('%')
             dsets.append(dset)
             f_ids.append(f_id)
@@ -1083,16 +1082,19 @@ def get_super_regions(dsets, settings, batch_key):
             tail_infos.append(t_info)
             nearby_PASes.append(nearby_PAS)
             PAS_distances.append(PAS_distance)
+            coverages.append(coverage)
             annot_distances.append(annot_dist)
             pet_sup.append(int(PET_support))
             cuf_sup.append(int(cufflinks_support))
 
         feature_id = set(f_ids).pop()
 
+        polyA_coverage = sum([int(c) for c in coverages])
+
         # create cluster object
-        cls = Super(dsets, center, polyA_coverage, tail_types, tail_infos,
-                    strand, nearby_PASes, PAS_distances, annot_distances,
-                    pet_sup, cuf_sup)
+        cls = Super(dsets, (beg, end), center, coverages, polyA_coverage,
+                    tail_types, tail_infos, strand, nearby_PASes, PAS_distances,
+                    annot_distances, pet_sup, cuf_sup)
 
         # add the cluster to super_featuress
         super_features[feature_id].super_clusters.append(cls)
@@ -4087,7 +4089,7 @@ def gencode_report(settings, speedrun):
 
     # 0.1) Core stats selected regions + genome
     #cumul_stats_printer(settings, speedrun)
-    # 0.2 Core stats All regions All cell lines
+    # 0.2) Core stats All regions All cell lines
     #cumul_stats_printer_all(settings, speedrun)
 
     # 1) nr of polyA sites obtained with increasing readnr
@@ -4096,7 +4098,7 @@ def gencode_report(settings, speedrun):
     #clusterladder_cell_lines(settings)
 
     # 2) venn diagram of all the poly(A) sites from the whole genome for 3UTR and
-    #venn_polysites(settings, speedrun)
+    # venn_polysites(settings, speedrun)
     # Then: correct the slides with the numbers. Maybe make a table.
     # Then: cufflinks. Shit this cufflinks.
     # Maybe you have to add another 'pet' --> cufflinks data. From all the
@@ -4265,22 +4267,29 @@ def write_gff(settings, toosmall, minus, cell_lines, speedrun, expandby):
   - field no 6: '.'
   - field no 7: Poly(A) cluster strand
   - field no 8: '.'
-  - field no 9: list of (key, value) pairs:
+  - field no 9: list of (key value1,value2,value3,...) pairs:
       * Cluster class: (Gencode/GenSeq/RnaSeqOnly)
       * Cluster center: value
+      * Cluster total TPM: value
       * Expression by tpm in GM12878
       * Expression by tpm in ...
       *
       * List of Gencode TTS cluster coordinates ('.' for RnaSeqOnly)
       * list of Gencode TTS cluster genes ('.' for RnaSeqOnly)
 
-
     NOTE TO SELF:
 
     To be able to do the above I must modify the information I keep during
     clustering. For example, I must keep the positions of the inidividual polyA
-    sites during clustering, or at least the min/max.
+    sites during clustering, or at least the min/max. I must also keep
+    information about how many reads have been found for each cell
+    line/fraction. Also obtain the number of reads for each cell line /
+    fraction.
 
+    Recalleth that they proposed another measure: poly(A) reads divided by nr of
+    other reads covering this site. I should pick a spot 10 nt downstream the
+    site actually (or the downstream end of the cluster). Will you have to use
+    bedtools to get this number out of the bam files? it will take-ya forever.
     """
 
     co = cell_lines
@@ -4308,9 +4317,9 @@ def write_gff(settings, toosmall, minus, cell_lines, speedrun, expandby):
     outdir = os.path.join(settings.here, 'genome_wide_dir')
 
     if speedrun:
-        outfile = 'all_pAs_speedrun.bed'
+        outfile = 'all_pAs_speedrun.gff'
     else:
-        outfile = 'all_pAs.bed'
+        outfile = 'all_pAs.gff'
 
     outpath = os.path.join(outdir, outfile)
     outhandle = open(outpath, 'wb')
@@ -4320,19 +4329,30 @@ def write_gff(settings, toosmall, minus, cell_lines, speedrun, expandby):
 
             if cls.nr_support_reads > toosmall:
 
-                debug()
+                core_fields = '\t'.join([utr.chrm,
+                                           'encodeCRG',
+                                           'TER/TTS',
+                                           cls.beg,
+                                           cls.end,
+                                           '.',
+                                           cls.strand,
+                                           '.'])
 
-                chrm = utr.chrm
-                beg = str(cls.polyA_coordinate-expandby)
-                end = str(cls.polyA_coordinate+expandby)
-                pas = '#'.join(cls.dsets)
-                covr = str(cls.nr_support_reads)
-                strand = cls.strand
 
-                outhandle.write('\t'.join([chrm, beg, end, pas, covr,
-                                           strand])+'\n')
+                clusterClass = 'clusterClass: RnaSeqOnly'
+                clusterCenter = 'clusterCenter: {0}'.format(cls.polyA_coordinate)
+                clusterTPM = 'clusterTotalReads: {0}'.format(cls.nr_support_reads)
+
+                dsetcount = ' '.join([' '.join(t) for t in zip(cls.dsets, cls.coverages)])
+
+                keyvals = ' '.join([clusterClass, clusterCenter, clusterTPM,
+                                   dsetcount])
+
+                outhandle.write(core_fields + '\t' + keyvals + '\n')
 
     outhandle.close()
+
+    return outpath
 
 def merge_polyAs(settings, toosmall, minus, cell_lines, speedrun, expandby):
 
@@ -5710,8 +5730,89 @@ def write_all_polyAs(settings):
     speedrun = True
     #speedrun = False
 
-    #merge_polyAs(settings, covr_more_than, minus, compartments, speedrun, expandby)
-    write_gff(settings, covr_more_than, minus, compartments, speedrun, expandby)
+    #gff_path = write_gff(settings, covr_more_than, minus, compartments, speedrun, expandby)
+
+    # make gff/bed files of all 3UTR ends and poly(A) ends from the Gencode
+    # annotation (obtained from EST data). Merge this information with the
+    # information from the poly(A) investigation.
+    gencode_path = get_gencode_ends()
+
+def get_gencode_ends():
+    """
+    Parse two Gencode files. One about poly(A) sites specifically, and one about
+    3UTR ends in general.
+
+    poly(A) sites:
+        1) get only the polyA_site entries
+        2) merge them with +/- 15 (slopbed + merge bed)
+
+    transcripts:
+        1) get only transcripts (not genes, exons, utrs)
+        2) get the transcript 3' ends
+        3) merge them with +/- 15
+        4) write to file (keep each transcript ID and gene ID)
+
+    Then you have to merge these two files. The output will be in terms of the
+    merged clusters. It will look like the transcript 3' end file but with
+    poly(A) evidence as an adjunct.
+
+    Return the path of this final merged object
+
+
+    UPDATE: this is not what Julien wants.
+    """
+
+    #### PolyA sites ####
+    polyA = BedTool('/home/jorgsk/phdproject/3UTR/gencode/gencode.v13.polyAs.gtf')
+
+    # 1) get only polyA_site entries 
+    polyA_pure = BedTool(e for e in polyA if e.fields[2] == 'polyA_site')
+
+    # 2) merge them +/- 15
+    merged_polyA = polyA_pure.slop(g=chromsizes('hg19'), b=15).merge(s=True,
+                                                                     n=True)
+
+    #### Transcript 3' end-sites ####
+    #ant = BedTool('/home/jorgsk/phdproject/3UTR/gencode/gencode.v13.annotation.gtf')
+    ant = BedTool('/home/jorgsk/phdproject/3UTR/gencode/gencode.v13.annotation_chr1.gtf')
+
+    # 1) get only transcripts
+    ts = BedTool(e for e in ant if e.fields[2] == 'transcript')
+
+    # 2) make a new entry from just the three prime end site
+    threEnd = '/home/jorgsk/phdproject/3UTR/gencode/transcript_ends.bed'
+    end_handle = open(threEnd, 'wb')
+
+    for entry in ts:
+
+        chrm, bs, ts, ts_beg, ts_end, dot, strand, dot, rest = entry.fields
+
+        restSplit = rest.split()
+
+        # extract the geneID and transcriptID
+        geneID, tsID = restSplit[1], restSplit[3]
+        geneID = geneID[1:-2]
+        tsID = tsID[1:-2]
+
+        name = '#'.join([geneID, tsID])
+
+        if strand == '+':
+            beg = ts_end
+            end = str(int(ts_end) + 1)
+
+        if strand == '-':
+            beg = ts_beg
+            end = str(int(ts_beg) + 1)
+
+        end_handle.write('\t'.join([chrm, beg, end, name, '.', strand]) + '\n')
+
+    end_handle.close()
+
+    # don't merge transcripts; you need the info on each one.
+    ts_ends = BedTool(threEnd)
+
+    #5) intersect with polyA file and create a final bed-entry from them
+
 
 def main():
     # The path to the directory the script is located in

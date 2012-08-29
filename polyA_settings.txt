@@ -1,8 +1,8 @@
 [DATASETS]
-# Provide paths to the RNA-seq read files. The files must be either gem-files,
-# zipped gem-files, bed-files, or zipped bedfiles. The extensions must thus be
-# either of: .map.gz, .gem.map.gz, .bed, or .bed.gz.
-# Avoid spaces and punctuation marks (.) in the filenames to aviod problems.
+# Link to a file that provides a mapping from labExpId to bam (now gem) file(s).
+# the file must be tab separated with the columns : labExpId, description,
+# paths (semicolon-separated full paths to map.gz files)
+dataset_mapping = post_project_files/id_descr_paths.tsv
 
 [ANNOTATION]
 # Put annotation_path = false if you don't want to use an annotation.
@@ -17,12 +17,7 @@
 # annotation_path = /users/rg/jskancke/phdproject/3UTR/gencode7/gencode7_annotation.gtf
 annotation_path = /home/jorgsk/phdproject/3UTR/gencode7/gencode7_annotation.gtf
 annotation_format = GENCODE
-# annotation_format = ENSEMBL
 
-# annotated_polyA_files = /users/rg/jskancke/phdproject/3UTR/the_project/source_bedfiles/polyAdb_gencode_merged.bed
-annotated_polyA_files = /home/jorgsk/phdproject/3UTR/the_project/source_bedfiles/polyAdb_gencode_merged.bed
-
-[SUPPLIED_3UTR_BEDFILE]
 [RESTRICT_READS]
 # Set RESTRICT_READS to the number of reads to grab from the datasets. This
 # option is primarily for debugging purposes.
@@ -40,6 +35,7 @@ only_chr1 = false
 # run with all chromosomes
 # only_chr1 = true
 
+[GEM_MAPPER]
 # NOTE: leve out the suffix of the index file!!
 # gem_mapper_index = /users/rg/atanzer/DATA/GEM_indices/Genomes/H.sapiens.genome.hg19.main
 gem_mapper_index = /home/jorgsk/phdproject/3UTR/mapping_files/gem/H.sapiens.genome.hg19.main

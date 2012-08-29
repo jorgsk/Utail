@@ -2078,8 +2078,8 @@ def read_is_noise(chrm, strand, beg, seq, at, tail_info, settings):
     likely it is that the reads follow each other. But this will have to do.
 
     However, keep in mind that you accept all kinds of reads, irrespective of
-    quality measure. God, to do this properly, you need to take qualities into
-    account ...
+    quality measure. To do this properly, you need to take qualities into
+    account.
     """
     frac = 0.3
     # get the sequences! note: the sequence fetcher automatically
@@ -3443,8 +3443,8 @@ def main():
     # function (called below). It also affects the 'temp' and 'output'
     # directories, respectively.
 
-    #DEBUGGING = True # warning... some stuff wasnt updated here
-    DEBUGGING = False
+    DEBUGGING = True # warning... some stuff wasnt updated here
+    #DEBUGGING = False
 
     # with this option, always remake the bedfiles
     rerun_annotation_parser = False
@@ -3535,13 +3535,13 @@ def piperunner(settings, annotation, simulate, DEBUGGING, beddir, tempdir,
             dset_id = dset_id + '_' + region
 
             # The arguments needed for the pipeline
-            arguments = (dset_id, dset_reads, tempdir, output_dir, settings,
-                         annotation, DEBUGGING, polyA_cache, here)
+            #arguments = (dset_id, dset_reads, tempdir, output_dir, settings,
+                         #annotation, DEBUGGING, polyA_cache, here)
 
             ###### FOR DEBUGGING ######
-            #akk = pipeline(*arguments)
-            ###########################
-            #debug()
+            akk = pipeline(*arguments)
+            ##########################
+            debug()
 
             result = my_pool.apply_async(pipeline, arguments)
             results.append(result)
