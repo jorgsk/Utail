@@ -3513,7 +3513,6 @@ def piperunner(settings, annotation, simulate, DEBUGGING, beddir, tempdir,
     # :/ more AD HOC! This time cufflinks
     annotation.cufflinksDict = annotation.get_cuff_dict()
 
-<<<<<<< HEAD
     # make a similar dictionary but for pet-reads
 
     # If this is true, the poly(A) reads will be saved after getting them. That
@@ -3522,8 +3521,6 @@ def piperunner(settings, annotation, simulate, DEBUGGING, beddir, tempdir,
     polyA_cache = True
     #polyA_cache = False # XX fix this sometime
 
-=======
->>>>>>> e70de7dc944db6552b2f0dd1771bf16b5fbd6b11
     # Extract the name of the bed-region you are checking for poly(A) reads
     # you might have to extract it differently, because 'intergenic' doesn't
     # have any exon or intron part to it.
@@ -3546,19 +3543,13 @@ def piperunner(settings, annotation, simulate, DEBUGGING, beddir, tempdir,
             dset_id = dset_id + '_' + region
 
             # The arguments needed for the pipeline
-            #arguments = (dset_id, dset_reads, tempdir, output_dir, settings,
-                         #annotation, DEBUGGING, polyA_cache, here)
+            arguments = (dset_id, dset_reads, tempdir, output_dir, settings,
+                         annotation, DEBUGGING, polyA_cache, here)
 
             ###### FOR DEBUGGING ######
-<<<<<<< HEAD
             #akk = pipeline(*arguments)
             ###########################
             #debug()
-=======
-            akk = pipeline(*arguments)
-            ##########################
-            debug()
->>>>>>> e70de7dc944db6552b2f0dd1771bf16b5fbd6b11
 
             result = my_pool.apply_async(pipeline, arguments)
             results.append(result)
