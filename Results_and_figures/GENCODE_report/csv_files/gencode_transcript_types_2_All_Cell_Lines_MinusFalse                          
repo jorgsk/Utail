@@ -1,6 +1,0 @@
-Type	#found	% of total	with PAS	with good PAS	mean_covr
-All	103	0.00	0.97	0.90	42
-Protein coding	74	0.00	0.96	0.86	43
-Processed transcript	10	0.00	1.00	1.00	50
-Retained intron	10	0.00	1.00	1.00	28
-Nonsense mediated decay	9	0.00	1.00	1.00	39
