@@ -1866,7 +1866,7 @@ def main():
         an_frmt = 'GENCODE'
         # save extensions to the 3UTR.
         extended_3utr(annotation)
-        #(transcripts, genes) = make_transcripts(annotation, an_frmt)
+        (transcripts, genes) = make_transcripts(annotation, an_frmt)
 
         #sizes1 = []
         #sizes2 = []
