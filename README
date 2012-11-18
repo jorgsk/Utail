@@ -1,86 +1,26 @@
-An outline of the project from March until the end in July.
+This file details the requirements and instructions for Utail -- a program that
+obtains poly(A) site information from RNA-seq data.
 
-Narrow down the focus. Set clear goals.
+Utail has the following requirements (version in parenthesis):
 
-First, an outline of the tool as it stands today.
+Python (2.6+)
+Numpy (1.5+)
+Scipy (0.9+)
+Matplotlib (1.0+)
+Bedtools (2.14+)
+Pybedtools (0.6+)
 
+Additionally, one requirement comes bundled:
+Pyfasta by Brent Pedersen
 
-0) The tool in one sentence:
+-----------------------------------------------------------------------
 
-	"Uses RNA-seq data to characterize transcript 3UTRs in terms of expression
-	level, length, and polyadenylation usage."
+To run Utail, simply type "python utail.py". Before running Utail, however, it
+is necessary to correctly configure the file UTR_SETTINGS. See UTR_SETTINGS for
+examples and further explanation.
 
-
-1) Who is interested in this tool?
-
-	* Those who want to study alternative polyadenylation with RNA-seq
-	* Those who want to study 3UTR-length variation between RNA-seq datasets
-	* Those who want to find novel polyadenylation sites in RNA-seq data
-
-
-2.1) Input -- required:
-
-	* RNA-seq reads -- raw or in .bed format
-	* GENCODE annotation OR self-annotated 3UTR in .bed format 
-	* Human genome in .fasta format
-
-
-2.2) Input -- optional	
-
-	* Poly(A) reads (can be gathered from raw RNA-seq reads)
-
-
-3.1) Output -- without poly(A) reads
-
-	* 3UTR end for each gene -- based on the epsilon parameter
-	* Length of 3UTR relative to the annotation.
-	* Coverage and RPKM for whole 3UTR
-	* Coverage before and after 3UTR end
-
-3.2) Extra output -- with poly(A) reads
-
-	* Putative TTS sites in 3UTR 
-		*  Evidence: poly(A) reads; coverage change around TTS site
-	* If annotation is provided, highlight poly(A) sites not found in the annotation
-
-
-4) Comparative methods -- using the output to say something interesting
-
-	* Output the genes that have different 3UTR expression
-	* Output list of genes that have different 3UTR lengths
-	* Output list of genes that use different poly(A) sites.
-
-
-5) Case study: Gingeras dataset. 
-
-	* Present the output in 4)
-	* Do genes with different 3UTR length in different compartments have smth
-	* in common?
-	* What miRNA binding sites are lost/found with different 3UTR length?
-	* what more?
-
-
-6) Timeline
-
-	* March/mid-April -> complete the code and streamline the command-line interface
-	* mid-April/mid-May -> case study Gingeras see 5)
-	* late-May/June -> document first the case study; then the program itself
-	* July -> submission?
-
-
-7) Publication general outline:
-
-	1) A tool for analyzing 3UTRs with RNA-seq
-	2) A case study using the Gingeras data
-
-
-Unresolved issues: 
-
-1) Paired end vs. non-paired. Should we use the information?
-	Status: I'm using it! Now I just have to 'not use' not paired end!
-	Solution: demand paired?
-
-2) Detection of novel poly(A) sites.
-	Solution: make bedfiles for the unambiguous parts of the genome
-
-
+After running Utail, the output will appear in the folder 'output'. This output
+can now be used to generate several figures that illustrate the data. To
+generate the figures, run the file 'results.py'. To decide which figure to run,
+you must edit the 'results.py' source code by commenting or un-commenting the
+function calls.

@@ -5782,11 +5782,12 @@ def write_all_polyAs(settings):
 
     expandby = 0
 
-    covr_more_than = 1 #
+    covr_more_than = 1 # minimum 2 in coverage
     compartments = ['Whole_Cell', 'Cytoplasm', 'Nucleus']
 
     speedrun = True
     #speedrun = False
+<<<<<<< HEAD
 
     #gff_path = write_gff(settings, covr_more_than, minus, compartments, speedrun, expandby)
 
@@ -5870,8 +5871,8 @@ def get_gencode_ends():
     ts_ends = BedTool(threEnd)
 
     #5) intersect with polyA file and create a final bed-entry from them
->>>>>>> e70de7dc944db6552b2f0dd1771bf16b5fbd6b11
 
+    # will be written in genome_wide_dir as all_polyA
     merge_polyAs(settings, covr_more_than, minus, compartments, speedrun, expandby)
 
 def main():
@@ -5885,7 +5886,7 @@ def main():
     settings = Settings(os.path.join(here, 'UTR_SETTINGS'), savedir, outputdir,
                         here, chr1=False)
 
-    gencode_report(settings, speedrun=False)
+    #gencode_report(settings, speedrun=False)
 
     # early, medium, late poly(A) in cytoplasm and nucleus
     #EML(settings)
@@ -5899,7 +5900,7 @@ def main():
     # NOTE must fix for individual cell lines
     #gencode_cufflinks_report(settings)
 
-    #write_all_polyAs(settings)
+    write_all_polyAs(settings)
 
     # Hagen's stuff
     #hagen(settings, speedrun=False) # negative results for your pA
