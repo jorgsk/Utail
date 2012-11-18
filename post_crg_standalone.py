@@ -9,9 +9,19 @@ import shutil
 import ConfigParser
 from multiprocessing import Pool
 from multiprocessing import cpu_count
-from operator import attrgetter
 
 import re
+from glob import glob
+
+from subprocess import Popen
+from subprocess import PIPE
+import time
+import math
+
+# Your own imports
+import annotation_parser as genome
+
+
 
 # only get the debug function if run from Ipython
 def run_from_ipython():
@@ -28,14 +38,6 @@ if run_from_ipython():
 else:
     def debug(): pass
 
-from subprocess import Popen
-from subprocess import PIPE
-import time
-import math
-
-# Your own imports
-import annotation_parser as genome
-
 class Settings(object):
     """
     An instance of this class holds all the settings parameters obtained from
@@ -43,7 +45,7 @@ class Settings(object):
     """
 
     def __init__(self, datasets, read_limit, max_cores, chr1, gem_index,
-                 hg_fasta):
+                 hg_fasta, override):
 
         self.datasets = datasets
         # these two might be included later
@@ -56,6 +58,7 @@ class Settings(object):
         self.gem_index = gem_index
 
         self.hgfasta_path = hg_fasta
+        self.override = override
 
     def DEBUGGING(self):
         """
@@ -64,10 +67,9 @@ class Settings(object):
         """
 
         self.chr1 = True
-        #self.chr1 = False
-        #self.read_limit = False
-        self.read_limit = 100000 # less than 10000 no reads map
+        self.read_limit = 1000000 # less than 10000 no reads map
         self.max_cores = 3
+        self.override = True
 
 def verify_access(f):
     """
@@ -111,7 +113,7 @@ def read_settings(settings_file):
     conf.read(settings_file)
 
     expected_fields = ['DATASETS', 'ANNOTATION', 'CPU_CORES', 'RESTRICT_READS',
-                       'CHROMOSOME1', 'GEM_MAPPER', 'HG19FASTA']
+                       'CHROMOSOME1', 'GEM_MAPPER', 'HG19FASTA', 'OVERRIDE']
 
     missing = set(conf.sections()) - set(expected_fields)
 
@@ -145,6 +147,9 @@ def read_settings(settings_file):
     # restrict to chromosome 1
     chr1 = conf.getboolean('CHROMOSOME1', 'only_chr1')
 
+    # the ovveride switch
+    override = conf.getboolean('OVERRIDE', 'override')
+
     # Get the gem_index_file
     gem_index = conf.get('GEM_MAPPER', 'gem_mapper_index')
 
@@ -154,7 +159,8 @@ def read_settings(settings_file):
     # you need the index file for the gem-mapper
     verify_access(gem_index+'.blf') # Check if is a file
 
-    return(datasets, read_limit, max_cores, chr1, gem_index, hg19_fasta)
+    return(datasets, read_limit, max_cores, chr1, gem_index, hg19_fasta,
+           override)
 
 def make_directories(here, dirnames, DEBUGGING):
     """
@@ -203,7 +209,6 @@ def run_dataset_map():
 
     2) make the labExpId -> datset mapping
     """
-    from glob import glob
 
     ging_folder = '/users/rg/dgonzalez/Projects/ENCODE/GingerasCarrie'
 
@@ -322,8 +327,9 @@ def main():
     # Set debugging mode. This affects the setting that are in the debugging
     # function (called below). It also affects the 'temp' and 'output'
     # directories, respectively.
-    DEBUGGING = True #
-    #DEBUGGING = False
+
+    #DEBUGGING = True #
+    DEBUGGING = False
 
     # The path to the directory the script is located in
     here = os.path.dirname(os.path.realpath(__file__))
@@ -343,6 +349,8 @@ def main():
     # just run chromosome 1 and only extract a tiny fraction of the total reads.
     if DEBUGGING:
         settings.DEBUGGING()
+        # only 3 datasets!
+        settings.datasets = dict(settings.datasets.items()[:3])
 
     # The program reads a lot of information from the annotation. The annotation
     # object will hold this information (file-paths and datastructures).
@@ -366,12 +374,12 @@ def main():
                      DEBUGGING, here)
 
         ###### FOR DEBUGGING ######
-        akk = pipeline(*arguments)
+        #akk = pipeline(*arguments)
         ##########################
-        debug()
+        #debug()
 
-        #result = my_pool.apply_async(pipeline, arguments)
-        #results.append(result)
+        result = my_pool.apply_async(pipeline, arguments)
+        results.append(result)
 
     my_pool.close()
     my_pool.join()
@@ -394,9 +402,10 @@ def pipeline(exp_id, dset_info, tempdir, output_dir, settings, DEBUGGING,
     # Give new names to some parameters to shorten the code
     read_limit = settings.read_limit
 
-    merged_info = exp_id + '__' + dset_info['description']
+    merged_info = exp_id + '_' + dset_info['description']
 
-    # the raw poly(A) reads
+
+    # path for the raw poly(A) reads
     putative_polyA_reads = os.path.join(tempdir, 'polyA_reads_'+merged_info+'.fa')
 
     if DEBUGGING:
@@ -408,12 +417,25 @@ def pipeline(exp_id, dset_info, tempdir, output_dir, settings, DEBUGGING,
     if not os.path.isdir(output_dir):
         os.makedirs(output_dir)
 
-    print('Obtaining unmapped reads from {0} ...\n'.format(exp_id))
-    all_reads = get_putative_polyA_reads(dset_info['paths'], exp_id, read_limit,
-                                         tempdir, putative_polyA_reads)
+    settings.override = False
 
-    # Extract info from reads
-    (total_nr_reads, total_nr_mapped_reads, acount, tcount) = all_reads
+    final_path = os.path.join(here, output_dir, 'polyA_site_'+merged_info+'.gff')
+    # if the final output file exists, don't run pipeline again, unless in
+    # DEBUGGING mode or the 'override' option is set.
+    if os.path.isfile(final_path) and (not DEBUGGING) and (not settings.override):
+        print('Skipping pipeline for {0} since output already exists. Set'\
+              ' override to true in the settings file to change'\
+              ' this.'.format(merged_info))
+        return
+
+    print('Obtaining unmapped reads from {0} ...\n'.format(merged_info))
+    print('NOTE! Skipping A-tailed reads, keeping only T-leading reads. '\
+          'This is because A-tailed poly(A) reads are very unlikely with only 75 bp read length')
+    bundle = get_putative_polyA_reads(dset_info['paths'], exp_id, read_limit,
+                                      tempdir, putative_polyA_reads)
+
+    # Extract info from bundled output
+    (total_nr_reads, total_nr_mapped_reads, acount, tcount) = bundle
 
     # PolyA pipeline: remove low-quality reads, remap, and -> .bed-format:
 
@@ -426,14 +448,65 @@ def pipeline(exp_id, dset_info, tempdir, output_dir, settings, DEBUGGING,
     print('Remapping poly(A)-reads for {0} + noise filtering...'.format(exp_id))
     polyA_bed_path = map_reads(processed_reads, avrg_read_len, settings)
 
-    # 3) Save the polyA_bed_path to the output dir
+    # 3) Make a path for the final output file
     polydone_path = os.path.splitext(os.path.split(putative_polyA_reads)[1])[0]
     polyA_processed = os.path.join(output_dir, polydone_path+\
-                                     '_processed_mapped.bed')
+                                     '_processed_mapped_collapsed.bed')
 
-    shutil.copyfile(polyA_bed_path, polyA_processed)
+    # 3) Collapse the reads which map to exactly the same coordinate by calling
+    # mergeBed -s -d -1 -score sum -i
+    command = "mergeBed -s -d -1 -scores sum -i {0}".format(polyA_bed_path)
 
-    debug()
+    p = Popen(command.split(), stdout=open(polyA_processed, 'wb'))
+    p.wait()
+
+    # 4) Convert the bed-file to a gff file for encode-submission purposes
+    convert2_gff(polyA_processed)
+
+def convert2_gff(polyA_processed):
+    """
+     Convert from bed:
+
+         chr, beg, end, name, score, strand
+
+     To gff:
+
+         chr, source, feature, beg, end, score, strand, frame (.),
+         group
+
+         source should be encodeRnaSeq
+         feature =polyadenylation_and_cleavage_site
+         group is just empty string
+
+    """
+    inpath = polyA_processed
+    dirname, infname = os.path.split(inpath)
+
+    outfname = 'polyA_site_'+ infname.split('_pro')[0].split('reads_')[1]+'.gff'
+    outpath = os.path.join(dirname, outfname)
+
+    in_handle = open(inpath, 'rb')
+    out_handle = open(outpath, 'wb')
+
+    source = 'encodeRnaSeq'
+    feature = 'polyA_site'
+
+    for line in in_handle:
+        chrm, beg, end, score, strand = line.split()
+
+        identifier = '_'.join([chrm, beg, end, strand])
+        coverage = score
+
+        attributes = '; '.join(['id {0}'.format(identifier),
+                                'coverage {0}'.format(coverage)])
+
+        outline = '\t'.join([chrm, source, feature, beg, end, strand,
+                                 '.', attributes])
+
+        out_handle.write(outline + '\n')
+
+    in_handle.close()
+    out_handle.close()
 
 def process_reads(pA_reads_path):
     """
@@ -533,8 +606,25 @@ def map_reads(processed_reads, avrg_read_len, settings):
                 noisecount += 1
                 continue
 
-            reads_file.write('\t'.join([chrom, beg, str(int(beg)+len(seq)), '.',
-                                      '.', strand]) + '\n')
+            # Determine the exact location of the cleavage and polyadenylation
+            #site. This can be inferred from the strand. It's always the
+            #opporite of the mapped strand if T-leaded and the same of A-leaded.
+            # the cleavage site is in the beginning if - strand and at the end
+            # if + strand.
+
+            # it came from the - strand
+            if (at == 'T' and strand == '+') or (at == 'A' and strand == '-'):
+                cleavage_pos = beg
+                real_strand = '-'
+
+            # it came from the + strand
+            if (at == 'T' and strand == '-') or (at == 'A' and strand == '+'):
+                cleavage_pos = str(int(beg)+len(seq)) # end
+                real_strand = '+'
+
+            reads_file.write('\t'.join([chrom, cleavage_pos,
+                                        str(int(cleavage_pos)+1), at, '1',
+                                        real_strand]) + '\n')
     # close file
     reads_file.close()
 
@@ -704,20 +794,23 @@ def get_putative_polyA_reads(dset_paths, exp_id, read_limit, tempdir, polyA_path
                     polyA_file.write(t_strip + ' T '+tail_rep+'\n')
                     tcount +=1
 
+            #XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX
+            # XXX OBS OMG! Skipping A-tailed reads since most will have
+            # T-tail!!!
             # Check for putative poly(A)-tail. Remove tail and write to file.
-            if (seq[-min_length:] == min_A) or (seq[-rd:].count('A') >=rd-1)\
-               or (seq[-2*rd:].count('A') >=2*rd-2):
+            #if (seq[-min_length:] == min_A) or (seq[-rd:].count('A') >=rd-1)\
+               #or (seq[-2*rd:].count('A') >=2*rd-2):
 
-                a_strip = strip_tailA(seq, trail_A, non_A, min_length, rd,
-                                      min_A)
-                striplen = len(a_strip)
-                if striplen > 25:
-                    seqlen = len(seq)
-                    tail = seq[-(seqlen-striplen):]
-                    tail_rep = ':'.join([l+'='+str(tail.count(l)) for
-                                         l in nucleotides])
-                    polyA_file.write(a_strip + ' A '+tail_rep+'\n')
-                    acount += 1
+                #a_strip = strip_tailA(seq, trail_A, non_A, min_length, rd,
+                                      #min_A)
+                #striplen = len(a_strip)
+                #if striplen > 25:
+                    #seqlen = len(seq)
+                    #tail = seq[-(seqlen-striplen):]
+                    #tail_rep = ':'.join([l+'='+str(tail.count(l)) for
+                                         #l in nucleotides])
+                    #polyA_file.write(a_strip + ' A '+tail_rep+'\n')
+                    #acount += 1
 
     polyA_file.close()
 

@@ -18,6 +18,13 @@ dataset_mapping = post_project_files/id_descr_paths.tsv
 annotation_path = /home/jorgsk/phdproject/3UTR/gencode7/gencode7_annotation.gtf
 annotation_format = GENCODE
 
+[OVERRIDE]
+# Normally the pipeline will not re-run if the final outputfile of the pipeline
+# exists. Set override = true to override this behavior. override is
+# automatically set to true when in debugging mode. Set override to true when
+# for some reason you want to rerun the pipeline for all input.
+override=true
+
 [RESTRICT_READS]
 # Set RESTRICT_READS to the number of reads to grab from the datasets. This
 # option is primarily for debugging purposes.
